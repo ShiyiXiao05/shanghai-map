@@ -1,4 +1,4 @@
-import { api, ApiError, getAccessCode, setAccessCode } from './api.js';
+import { api } from './api.js';
 import { loadAmap, createMapView } from './map.js';
 
 const CATEGORIES = [
@@ -10,36 +10,23 @@ const CATEGORIES = [
   { id: '其他', emoji: '✨', color: '#7a8a94' },
 ];
 
-/* 主题：色值见 css/style.css 的 html[data-theme] 块（来自 StudyPlan 的配色方案） */
+/* 主题：色值见 css/style.css 的 html[data-theme] 块（来自 StudyPlan 的配色方案）
+   地图统一使用高德标准浅色底图，保证路网文字清晰度，仅页面 UI 随主题变化 */
 const THEMES = {
   auto: { name: '🌗 自动（跟随系统）' },
-  celadon: { name: '🍵 青瓷', mapStyle: 'amap://styles/fresh' },
-  ink: { name: '🌑 墨夜', mapStyle: 'amap://styles/dark' },
-  berry: { name: '🫐 莓果暗', mapStyle: 'amap://styles/grape' },
-  onedark: { name: '💠 奥德暗', mapStyle: 'amap://styles/darkblue' },
-  pudding: { name: '🐾 布丁紫', mapStyle: 'amap://styles/grape' },
-  tokyo: { name: '🌃 东京夜', mapStyle: 'amap://styles/darkblue' },
+  celadon: { name: '🍵 青瓷' },
+  pudding: { name: '🐾 布丁紫' },
+  tokyo: { name: '🌃 东京夜' },
 };
 
 const THEME_KEY = 'wish-theme';
-
-function resolveThemeId(saved) {
-  if (saved !== 'auto' && THEMES[saved]) return saved;
-  return matchMedia('(prefers-color-scheme: dark)').matches ? 'tokyo' : 'celadon';
-}
-
-function applyTheme(saved, { persist } = {}) {
-  const themeId = resolveThemeId(saved);
-  document.documentElement.dataset.theme = themeId;
-  const mapStyle = THEMES[themeId]?.mapStyle;
-  if (mapStyle) state.mapView?.map.setMapStyle(mapStyle);
-  if (persist) localStorage.setItem(THEME_KEY, saved);
-  $('#theme-select').value = saved;
-}
-
+const MAPS_KEY = 'wish-maps';
+const CURRENT_MAP_KEY = 'wish-current-map';
 const NICKNAME_KEY = 'shanghai-wish-nickname';
+const NEW_MAP_OPTION = '__new__';
 
 const state = {
+  map: null, // { code, name }
   places: [],
   activeCategories: new Set(CATEGORIES.map((c) => c.id)),
   hideUnvisitedOnly: false,
@@ -67,12 +54,198 @@ function toast(message, type = 'info') {
   setTimeout(() => el.remove(), 2800);
 }
 
+/* ---------- 主题 ---------- */
+
+function resolveThemeId(saved) {
+  if (saved !== 'auto' && THEMES[saved]) return saved;
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'tokyo' : 'celadon';
+}
+
+function applyTheme(saved, { persist } = {}) {
+  document.documentElement.dataset.theme = resolveThemeId(saved);
+  if (persist) localStorage.setItem(THEME_KEY, saved);
+  $('#theme-select').value = saved;
+}
+
+function bindThemeSelect() {
+  const select = $('#theme-select');
+  for (const [id, theme] of Object.entries(THEMES)) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = theme.name;
+    select.appendChild(option);
+  }
+  select.value = localStorage.getItem(THEME_KEY) || 'auto';
+  select.addEventListener('change', () => applyTheme(select.value, { persist: true }));
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') applyTheme('auto');
+  });
+}
+
+/* ---------- 地图会话（邀请码） ---------- */
+
+function joinedMaps() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(MAPS_KEY) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((m) => m && m.code && m.name) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveJoinedMap(map) {
+  const maps = joinedMaps().filter((m) => m.code !== map.code);
+  maps.unshift(map);
+  localStorage.setItem(MAPS_KEY, JSON.stringify(maps));
+}
+
+function setCurrentMap(map) {
+  state.map = map;
+  saveJoinedMap(map);
+  localStorage.setItem(CURRENT_MAP_KEY, map.code);
+  history.replaceState(null, '', `?map=${encodeURIComponent(map.code)}`);
+  renderMapSelect();
+}
+
+function renderMapSelect() {
+  const select = $('#map-select');
+  select.replaceChildren();
+
+  if (state.map) {
+    const current = document.createElement('option');
+    current.value = state.map.code;
+    current.textContent = state.map.name;
+    select.appendChild(current);
+  }
+  for (const map of joinedMaps()) {
+    if (state.map && map.code === state.map.code) continue;
+    const option = document.createElement('option');
+    option.value = map.code;
+    option.textContent = map.name;
+    select.appendChild(option);
+  }
+  const newOption = document.createElement('option');
+  newOption.value = NEW_MAP_OPTION;
+  newOption.textContent = '＋ 新建 / 加入地图…';
+  newOption.className = 'map-new-option';
+  select.appendChild(newOption);
+}
+
+function showWelcome(show) {
+  $('#welcome').hidden = !show;
+}
+
+async function joinMap(code) {
+  const normalized = code.trim().toUpperCase();
+  if (!/^[A-Z0-9]{4,10}$/.test(normalized)) {
+    toast('邀请码格式不对，是 6 位字母数字', 'error');
+    return false;
+  }
+  let map;
+  try {
+    map = await api.getMap(normalized);
+  } catch (err) {
+    toast(err.status === 404 ? '邀请码不存在，检查一下' : `加入失败：${err.message}`, 'error');
+    return false;
+  }
+  setCurrentMap(map);
+  showWelcome(false);
+  await loadPlaces();
+  return true;
+}
+
+async function createMap(name, nickname) {
+  let map;
+  try {
+    map = await api.createMap({ name, createdBy: nickname });
+  } catch (err) {
+    toast(`创建失败：${err.message}`, 'error');
+    return;
+  }
+  setCurrentMap(map);
+  showWelcome(false);
+  $('#invite-code').textContent = map.code;
+  $('#map-created-dialog').showModal();
+  await loadPlaces();
+}
+
+function bindMapEntry() {
+  $('#form-create-map').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const name = form.elements.name.value.trim();
+    const nickname = form.elements.nickname.value.trim();
+    if (!name) return;
+    if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
+    form.reset();
+    await createMap(name, nickname);
+  });
+
+  $('#form-join-map').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const code = form.elements.code.value.trim();
+    if (!code) return;
+    form.reset();
+    await joinMap(code);
+  });
+
+  $('#map-select').addEventListener('change', async (event) => {
+    const value = event.target.value;
+    if (value === NEW_MAP_OPTION) {
+      renderMapSelect();
+      showWelcome(true);
+      return;
+    }
+    if (value && (!state.map || value !== state.map.code)) {
+      const map = joinedMaps().find((m) => m.code === value);
+      if (map) {
+        setCurrentMap(map);
+        state.mapView?.closeInfo();
+        await loadPlaces();
+      }
+    }
+  });
+
+  $('#btn-copy-link').addEventListener('click', async () => {
+    const link = `${location.origin}/?map=${state.map?.code ?? ''}`;
+    try {
+      await navigator.clipboard.writeText(`「${state.map?.name}」邀请码：${state.map?.code}\n${link}`);
+      toast('邀请码和链接已复制，发给同学吧');
+    } catch {
+      toast(link, 'error');
+    }
+  });
+  $('#btn-created-done').addEventListener('click', () => $('#map-created-dialog').close());
+}
+
+async function restoreMapSession() {
+  const fromUrl = new URLSearchParams(location.search).get('map');
+  if (fromUrl) {
+    if (await joinMap(fromUrl)) return;
+  }
+  const savedCode = localStorage.getItem(CURRENT_MAP_KEY);
+  const saved = joinedMaps().find((m) => m.code === savedCode) ?? joinedMaps()[0];
+  if (saved) {
+    setCurrentMap(saved);
+    await loadPlaces();
+    return;
+  }
+  showWelcome(true);
+}
+
 /* ---------- 数据加载与渲染 ---------- */
 
 async function loadPlaces() {
+  if (!state.map) return;
   try {
-    state.places = await api.listPlaces();
+    state.places = await api.listPlaces(state.map.code);
   } catch (err) {
+    if (err.status === 404) {
+      toast('这张地图不存在了，换一个邀请码吧', 'error');
+      showWelcome(true);
+      return;
+    }
     toast(`地点列表加载失败：${err.message}`, 'error');
     return;
   }
@@ -113,7 +286,7 @@ function renderList() {
   if (places.length === 0) {
     empty.hidden = false;
     empty.querySelector('.empty-title').textContent =
-      state.places.length === 0 ? '还没有标记任何地点' : '这个筛选下没有地点';
+      state.places.length === 0 ? '这张地图还没有地点' : '这个筛选下没有地点';
     return;
   }
   empty.hidden = true;
@@ -210,7 +383,7 @@ function renderChips() {
     chip.setAttribute('aria-pressed', String(state.activeCategories.has(category.id)));
     chip.style.setProperty('--chip-color', category.color);
     if (chip.getAttribute('aria-pressed') === 'true') {
-      chip.style.background = category.color;
+      chip.style.background = `color-mix(in srgb, ${category.color} 14%, var(--card))`;
     }
     chip.addEventListener('click', () => {
       if (state.activeCategories.has(category.id)) {
@@ -240,7 +413,6 @@ async function initMap() {
     await loadAmap(config);
     state.mapView = createMapView($('#map'));
     $('#map-fallback').hidden = true;
-    applyTheme(localStorage.getItem(THEME_KEY) || 'auto');
     renderMarkers();
   } catch (err) {
     showMapFallback();
@@ -263,83 +435,6 @@ function setPickMode(on) {
       handleMapPick(lng, lat);
     },
   });
-}
-
-/* ---------- 吸附选点 ---------- */
-
-let pendingPickCoords = null;
-
-function formatDistance(meters) {
-  if (!Number.isFinite(meters)) return '';
-  if (meters < 1000) return `${Math.round(meters)} 米`;
-  return `${(meters / 1000).toFixed(1)} 公里`;
-}
-
-async function handleMapPick(lng, lat) {
-  pendingPickCoords = { lng, lat };
-  state.mapView.showPickMarker([lng, lat]);
-
-  const dialog = $('#pick-dialog');
-  $('#pick-raw-hint').textContent = `你点击的位置：${lng.toFixed(5)}, ${lat.toFixed(5)}`;
-  const list = $('#pick-candidates');
-  const loading = document.createElement('div');
-  loading.className = 'pick-loading';
-  loading.textContent = '正在匹配附近的地点…';
-  list.replaceChildren(loading);
-  dialog.showModal();
-
-  let result = { formattedAddress: '', pois: [] };
-  try {
-    result = await state.mapView.reverseGeocode([lng, lat]);
-  } catch {
-    /* 匹配失败按无候选处理 */
-  }
-  if (!dialog.open) return;
-
-  if (result.pois.length === 0) {
-    const coords = pendingPickCoords;
-    closePickDialog();
-    openPlaceDialog({ coords, prefill: { address: result.formattedAddress } });
-    toast('附近没有匹配的地点，已用你点击的位置');
-    return;
-  }
-
-  list.replaceChildren();
-  for (const poi of result.pois) {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'pick-candidate';
-    const main = document.createElement('span');
-    const name = document.createElement('div');
-    name.className = 'candidate-name';
-    name.textContent = poi.name;
-    const addr = document.createElement('div');
-    addr.className = 'candidate-addr';
-    addr.textContent = poi.address;
-    main.append(name, addr);
-    const dist = document.createElement('span');
-    dist.className = 'candidate-distance';
-    dist.textContent = formatDistance(poi.distance);
-    row.append(main, dist);
-    row.addEventListener('click', () => {
-      closePickDialog();
-      state.mapView.map.setZoomAndCenter(16, [poi.lng, poi.lat]);
-      openPlaceDialog({
-        coords: { lng: poi.lng, lat: poi.lat },
-        prefill: { name: poi.name, address: poi.address },
-      });
-    });
-    list.appendChild(row);
-  }
-}
-
-function closePickDialog() {
-  $('#pick-dialog').close();
-}
-
-function cleanupPick() {
-  state.mapView?.clearPickMarker();
-  pendingPickCoords = null;
 }
 
 /* ---------- 搜索 ---------- */
@@ -468,6 +563,10 @@ function closePlaceDialog() {
 
 async function submitPlace(event) {
   event.preventDefault();
+  if (!state.map) {
+    showWelcome(true);
+    return;
+  }
   const form = event.currentTarget;
   const name = form.elements.name.value.trim();
   if (!name) {
@@ -481,30 +580,32 @@ async function submitPlace(event) {
     address: form.elements.address.value.trim(),
     added_by: form.elements.added_by.value.trim(),
   };
-  if (form.elements.added_by.value.trim()) {
-    localStorage.setItem(NICKNAME_KEY, form.elements.added_by.value.trim());
+  if (payload.added_by) {
+    localStorage.setItem(NICKNAME_KEY, payload.added_by);
   }
 
   try {
     if (editingId) {
-      await withAuthRetry(() =>
-        api.updatePlace(editingId, { ...payload, visited: form.elements.visited.checked })
-      );
+      await api.updatePlace(state.map.code, editingId, {
+        ...payload,
+        visited: form.elements.visited.checked,
+      });
       toast('已保存修改');
     } else {
       if (!dialogCoords) {
         toast('还没有选择位置：先搜索地点或在地图上选点', 'error');
         return;
       }
-      await withAuthRetry(() =>
-        api.createPlace({ ...payload, lng: dialogCoords.lng, lat: dialogCoords.lat })
-      );
+      await api.createPlace(state.map.code, {
+        ...payload,
+        lng: dialogCoords.lng,
+        lat: dialogCoords.lat,
+      });
       toast('已添加，出现在列表和地图上了');
     }
     closePlaceDialog();
     await loadPlaces();
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return;
     toast(`保存失败：${err.message}`, 'error');
   }
 }
@@ -512,89 +613,113 @@ async function submitPlace(event) {
 /* ---------- 编辑类操作 ---------- */
 
 async function toggleVisited(place) {
+  if (!state.map) return;
   try {
-    await withAuthRetry(() => api.updatePlace(place.id, { visited: !place.visited }));
+    await api.updatePlace(state.map.code, place.id, { visited: !place.visited });
     place.visited = !place.visited;
     renderAll();
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return;
     toast(`操作失败：${err.message}`, 'error');
   }
 }
 
 async function removePlace(place) {
+  if (!state.map) return;
   if (!confirm(`确定删除「${place.name}」吗？`)) return;
   try {
-    await withAuthRetry(() => api.deletePlace(place.id));
+    await api.deletePlace(state.map.code, place.id);
     toast(`已删除「${place.name}」`);
     await loadPlaces();
   } catch (err) {
-    if (err instanceof ApiError && err.status === 401) return;
     toast(`删除失败：${err.message}`, 'error');
   }
 }
 
-/* ---------- 口令 ---------- */
+/* ---------- 吸附选点 ---------- */
 
-let pendingCodeResolve = null;
+let pendingPickCoords = null;
 
-function promptForCode(hint) {
-  return new Promise((resolve, reject) => {
-    const dialog = $('#code-dialog');
-    dialog.querySelector('.dialog-hint').textContent =
-      hint ?? '添加和修改地点需要共享口令，问一下建站的同学就有。';
-    dialog.showModal();
-    dialog.querySelector('input[name="code"]').focus();
-    pendingCodeResolve = { resolve, reject };
-  });
+function formatDistance(meters) {
+  if (!Number.isFinite(meters)) return '';
+  if (meters < 1000) return `${Math.round(meters)} 米`;
+  return `${(meters / 1000).toFixed(1)} 公里`;
 }
 
-function bindCodeDialog() {
-  const dialog = $('#code-dialog');
-  dialog.addEventListener('close', () => {
-    if (dialog.returnValue !== 'ok' && pendingCodeResolve) {
-      pendingCodeResolve.reject(new ApiError(401, '未输入口令'));
-      pendingCodeResolve = null;
-    }
-  });
-  dialog.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const code = dialog.querySelector('input[name="code"]').value.trim();
-    if (!code) return;
-    setAccessCode(code);
-    dialog.returnValue = 'ok';
-    dialog.close();
-    if (pendingCodeResolve) {
-      pendingCodeResolve.resolve(code);
-      pendingCodeResolve = null;
-    }
-  });
-  $('#btn-code-cancel').addEventListener('click', () => dialog.close());
+async function handleMapPick(lng, lat) {
+  pendingPickCoords = { lng, lat };
+  state.mapView.showPickMarker([lng, lat]);
 
-  $('#btn-code').addEventListener('click', async () => {
-    try {
-      await promptForCode('输入新的编辑口令，保存后立即生效。');
-      toast('口令已更新');
-    } catch {
-      /* 取消 */
-    }
-  });
-}
+  const dialog = $('#pick-dialog');
+  $('#pick-raw-hint').textContent = `你点击的位置：${lng.toFixed(5)}, ${lat.toFixed(5)}`;
+  const list = $('#pick-candidates');
+  const loading = document.createElement('div');
+  loading.className = 'pick-loading';
+  loading.textContent = '正在匹配附近的地点…';
+  list.replaceChildren(loading);
+  dialog.showModal();
 
-async function withAuthRetry(action) {
+  let result = { formattedAddress: '', pois: [] };
   try {
-    return await action();
-  } catch (err) {
-    if (!(err instanceof ApiError) || err.status !== 401) throw err;
-    await promptForCode('口令错误或缺失，请重新输入编辑口令。');
-    return await action();
+    result = await state.mapView.reverseGeocode([lng, lat]);
+  } catch {
+    /* 匹配失败按无候选处理 */
   }
+  if (!dialog.open) return;
+
+  if (result.pois.length === 0) {
+    const coords = pendingPickCoords;
+    closePickDialog();
+    openPlaceDialog({ coords, prefill: { address: result.formattedAddress } });
+    toast('附近没有匹配的地点，已用你点击的位置');
+    return;
+  }
+
+  list.replaceChildren();
+  for (const poi of result.pois) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'pick-candidate';
+    const main = document.createElement('span');
+    const name = document.createElement('div');
+    name.className = 'candidate-name';
+    name.textContent = poi.name;
+    const addr = document.createElement('div');
+    addr.className = 'candidate-addr';
+    addr.textContent = poi.address;
+    main.append(name, addr);
+    const dist = document.createElement('span');
+    dist.className = 'candidate-distance';
+    dist.textContent = formatDistance(poi.distance);
+    row.append(main, dist);
+    row.addEventListener('click', () => {
+      closePickDialog();
+      state.mapView.map.setZoomAndCenter(16, [poi.lng, poi.lat]);
+      openPlaceDialog({
+        coords: { lng: poi.lng, lat: poi.lat },
+        prefill: { name: poi.name, address: poi.address },
+      });
+    });
+    list.appendChild(row);
+  }
+}
+
+function closePickDialog() {
+  $('#pick-dialog').close();
+}
+
+function cleanupPick() {
+  state.mapView?.clearPickMarker();
+  pendingPickCoords = null;
 }
 
 /* ---------- 启动 ---------- */
 
 function bindStaticEvents() {
   $('#btn-pick').addEventListener('click', () => {
+    if (!state.map) {
+      showWelcome(true);
+      return;
+    }
     if (!state.mapView) {
       toast('地图未启用，无法选点（需要配置高德 key）', 'error');
       return;
@@ -617,30 +742,14 @@ function bindStaticEvents() {
   });
 }
 
-function bindThemeSelect() {
-  const select = $('#theme-select');
-  for (const [id, theme] of Object.entries(THEMES)) {
-    const option = document.createElement('option');
-    option.value = id;
-    option.textContent = theme.name;
-    select.appendChild(option);
-  }
-  select.value = localStorage.getItem(THEME_KEY) || 'auto';
-  select.addEventListener('change', () => applyTheme(select.value, { persist: true }));
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') applyTheme('auto');
-  });
-}
-
 async function boot() {
   bindThemeSelect();
   fillCategorySelect();
   renderChips();
   bindStaticEvents();
   bindSearch();
-  bindCodeDialog();
-  if (getAccessCode()) $('#btn-code').textContent = '修改编辑口令';
-  await Promise.all([initMap(), loadPlaces()]);
+  bindMapEntry();
+  await Promise.all([initMap(), restoreMapSession()]);
 }
 
 boot();

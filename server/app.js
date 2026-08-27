@@ -1,7 +1,8 @@
 import express from 'express';
 import { createPlacesRouter } from './routes/places.js';
+import { createMapsRouter } from './routes/maps.js';
 
-export function buildApp({ store, accessCode, mapConfig }) {
+export function buildApp({ store, mapConfig }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '200kb' }));
@@ -17,7 +18,8 @@ export function buildApp({ store, accessCode, mapConfig }) {
     res.json({ key: mapConfig.key, securityJsCode: mapConfig.securityJsCode ?? '' });
   });
 
-  app.use('/api/places', createPlacesRouter({ store, accessCode }));
+  app.use('/api/maps', createMapsRouter({ store }));
+  app.use('/api/places', createPlacesRouter({ store }));
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: '接口不存在' });

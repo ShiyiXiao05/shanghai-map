@@ -1,25 +1,7 @@
-const CODE_STORAGE_KEY = 'shanghai-wish-access-code';
-
-export class ApiError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
-export function getAccessCode() {
-  return localStorage.getItem(CODE_STORAGE_KEY) ?? '';
-}
-
-export function setAccessCode(code) {
-  localStorage.setItem(CODE_STORAGE_KEY, code);
-}
-
-async function request(method, url, body) {
+async function request(method, url, { body, mapCode } = {}) {
   const headers = {};
   if (body !== undefined) headers['content-type'] = 'application/json';
-  const code = getAccessCode();
-  if (code) headers['x-access-code'] = code;
+  if (mapCode !== undefined) headers['x-map-code'] = mapCode;
 
   const res = await fetch(url, {
     method,
@@ -37,15 +19,22 @@ async function request(method, url, body) {
   }
 
   if (!res.ok) {
-    throw new ApiError(res.status, payload?.error ?? `请求失败（${res.status}）`);
+    const error = new Error(payload?.error ?? `请求失败（${res.status}）`);
+    error.status = res.status;
+    throw error;
   }
   return payload;
 }
 
 export const api = {
   mapConfig: () => request('GET', '/api/map-config'),
-  listPlaces: async () => (await request('GET', '/api/places')).places,
-  createPlace: (data) => request('POST', '/api/places', data),
-  updatePlace: (id, patch) => request('PUT', `/api/places/${id}`, patch),
-  deletePlace: (id) => request('DELETE', `/api/places/${id}`),
+  createMap: (data) => request('POST', '/api/maps', { body: data }),
+  getMap: (code) => request('GET', `/api/maps/${encodeURIComponent(code)}`),
+  listPlaces: async (mapCode) =>
+    (await request('GET', `/api/places?map=${encodeURIComponent(mapCode)}`)).places,
+  createPlace: (mapCode, data) =>
+    request('POST', '/api/places', { body: { ...data, map_code: mapCode } }),
+  updatePlace: (mapCode, id, patch) =>
+    request('PUT', `/api/places/${id}`, { body: patch, mapCode }),
+  deletePlace: (mapCode, id) => request('DELETE', `/api/places/${id}`, { mapCode }),
 };

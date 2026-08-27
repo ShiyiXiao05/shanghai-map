@@ -34,7 +34,7 @@ export function createMapView(container) {
     viewMode: '2D',
     zoom: 12,
     center: [121.4737, 31.2304],
-    mapStyle: 'amap://styles/whitesmoke',
+    mapStyle: 'amap://styles/normal',
   });
 
   let markers = [];

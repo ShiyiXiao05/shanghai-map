@@ -42,6 +42,10 @@
     </div>
 
     <aside class="side-panel" id="sidebar">
+      <div class="map-switcher">
+        <span class="map-switcher-label" aria-hidden="true">🗂️</span>
+        <select id="map-select" aria-label="切换地图"></select>
+      </div>
       <div class="filters">
         <div class="category-chips" id="category-chips" role="group" aria-label="按分类筛选"></div>
         <label class="unvisited-toggle">
@@ -57,7 +61,6 @@
       </div>
       <div class="sidebar-foot">
         <select id="theme-select" class="theme-select" aria-label="配色方案"></select>
-        <button id="btn-code" class="btn-link" type="button">修改编辑口令</button>
       </div>
     </aside>
 
@@ -122,22 +125,52 @@
     </div>
   </dialog>
 
-  <dialog id="code-dialog" class="dialog dialog-narrow">
-    <form id="code-form" method="dialog">
-      <h2>输入编辑口令</h2>
-      <p class="dialog-hint">添加和修改地点需要共享口令，问一下建站的同学就有。</p>
-      <label class="field">
-        <span>口令</span>
-        <input name="code" type="password" required autocomplete="off" />
-      </label>
+  <dialog id="map-created-dialog" class="dialog dialog-narrow">
+    <div class="pick-body">
+      <h2>地图创建好了 🎉</h2>
+      <p class="dialog-hint">把邀请码发给同学，输入同样的码就能一起标记这张地图。</p>
+      <div class="invite-code" id="invite-code">------</div>
       <div class="form-actions">
-        <button type="button" class="btn" id="btn-code-cancel">取消</button>
-        <button type="submit" class="btn btn-primary">确定</button>
+        <button type="button" class="btn" id="btn-copy-link">复制邀请链接</button>
+        <button type="button" class="btn btn-primary" id="btn-created-done">开始标记</button>
       </div>
-    </form>
+    </div>
   </dialog>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <div class="welcome" id="welcome" hidden>
+    <div class="welcome-card">
+      <div class="welcome-badge" aria-hidden="true">沪</div>
+      <h2 class="welcome-title">想去上海</h2>
+      <p class="welcome-sub">创建一张共享地图，和同学标记所有想去的地方</p>
+
+      <form id="form-create-map" class="welcome-form">
+        <label class="field">
+          <span>地图名称</span>
+          <input name="name" required maxlength="40" placeholder="比如：周末 citywalk" />
+        </label>
+        <label class="field">
+          <span>你的昵称</span>
+          <input name="nickname" maxlength="30" placeholder="同学怎么称呼你（选填）" />
+        </label>
+        <button type="submit" class="btn btn-primary welcome-btn">创建地图，生成邀请码</button>
+      </form>
+
+      <div class="welcome-divider"><span>或者</span></div>
+
+      <form id="form-join-map" class="welcome-form">
+        <label class="field">
+          <span>邀请码</span>
+          <input name="code" required maxlength="6" autocomplete="off"
+                 placeholder="同学分享的 6 位码" style="text-transform: uppercase" />
+        </label>
+        <button type="submit" class="btn welcome-btn">加入这张地图</button>
+      </form>
+
+      <p class="welcome-hint">原来标记过的地点在「SH2026」这张地图里</p>
+    </div>
+  </div>
 
   <script type="module" src="/js/app.js"></script>
 </body>

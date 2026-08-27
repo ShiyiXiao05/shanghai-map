@@ -4,8 +4,6 @@ import { newDb } from 'pg-mem';
 import { buildApp } from '../app.js';
 import { createPlaceStore } from '../store.js';
 
-const ACCESS_CODE = 'test-secret';
-
 async function startServer() {
   const db = newDb();
   const pgLib = db.adapters.createPg();
@@ -14,18 +12,17 @@ async function startServer() {
   await store.init();
   const app = buildApp({
     store,
-    accessCode: ACCESS_CODE,
     mapConfig: { key: 'test-key', securityJsCode: 'test-jscode' },
   });
   const server = app.listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const request = (method, path, { body, code } = {}) =>
+  const request = (method, path, { body, mapCode } = {}) =>
     fetch(base + path, {
       method,
       headers: {
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-        ...(code !== undefined ? { 'x-access-code': code } : {}),
+        ...(mapCode !== undefined ? { 'x-map-code': mapCode } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
@@ -42,7 +39,13 @@ const validPlace = {
   added_by: '小明',
 };
 
-describe('places API', () => {
+async function createMap(request, name = '周末 citywalk') {
+  const res = await request('POST', '/api/maps', { body: { name, createdBy: '小明' } });
+  assert.equal(res.status, 201);
+  return res.json();
+}
+
+describe('maps & places API', () => {
   let server;
   let request;
 
@@ -61,126 +64,135 @@ describe('places API', () => {
     assert.equal((await res.json()).ok, true);
   });
 
-  it('GET /api/places 初始为空列表', async () => {
-    const res = await request('GET', '/api/places');
+  it('初始地图 SH2026 随启动存在', async () => {
+    const res = await request('GET', '/api/maps/SH2026');
     assert.equal(res.status, 200);
-    assert.deepEqual((await res.json()).places, []);
+    const map = await res.json();
+    assert.equal(map.code, 'SH2026');
+    assert.ok(map.name.length > 0);
   });
 
-  it('POST /api/places 缺少口令返回 401', async () => {
-    const res = await request('POST', '/api/places', { body: validPlace });
-    assert.equal(res.status, 401);
+  it('POST /api/maps 创建地图并返回邀请码', async () => {
+    const map = await createMap(request, '毕业旅行');
+    assert.match(map.code, /^[A-Z2-9]{6}$/);
+    assert.equal(map.name, '毕业旅行');
+    assert.equal(map.created_by, '小明');
   });
 
-  it('POST /api/places 错误口令返回 401', async () => {
-    const res = await request('POST', '/api/places', { body: validPlace, code: 'wrong' });
-    assert.equal(res.status, 401);
+  it('GET /api/maps/:code 不存在返回 404', async () => {
+    const res = await request('GET', '/api/maps/NOPE00');
+    assert.equal(res.status, 404);
   });
 
-  it('POST /api/places 正确口令创建地点，返回 201 与完整记录', async () => {
-    const res = await request('POST', '/api/places', { body: validPlace, code: ACCESS_CODE });
+  it('GET /api/places 缺少 map 参数返回 400', async () => {
+    const res = await request('GET', '/api/places');
+    assert.equal(res.status, 400);
+  });
+
+  it('GET /api/places 邀请码无效返回 404', async () => {
+    const res = await request('GET', '/api/places?map=NOPE00');
+    assert.equal(res.status, 404);
+  });
+
+  it('POST /api/places 带有效邀请码创建地点', async () => {
+    const map = await createMap(request);
+    const res = await request('POST', '/api/places', {
+      body: { ...validPlace, map_code: map.code },
+    });
     assert.equal(res.status, 201);
     const place = await res.json();
+    assert.equal(place.name, '武康路');
     assert.equal(typeof place.id, 'number');
-    assert.equal(place.name, '武康路');
-    assert.equal(place.category, '景点');
-    assert.equal(place.visited, false);
-    assert.ok(place.created_at);
   });
 
-  it('POST /api/places 非法分类返回 400', async () => {
+  it('POST /api/places 邀请码无效返回 404', async () => {
     const res = await request('POST', '/api/places', {
-      body: { ...validPlace, category: '不存在' },
-      code: ACCESS_CODE,
-    });
-    assert.equal(res.status, 400);
-  });
-
-  it('POST /api/places 缺少名称返回 400', async () => {
-    const body = { ...validPlace };
-    delete body.name;
-    const res = await request('POST', '/api/places', { body, code: ACCESS_CODE });
-    assert.equal(res.status, 400);
-  });
-
-  it('POST /api/places 坐标越界返回 400', async () => {
-    const res = await request('POST', '/api/places', {
-      body: { ...validPlace, lat: 95 },
-      code: ACCESS_CODE,
-    });
-    assert.equal(res.status, 400);
-  });
-
-  it('POST /api/places 经度非数字返回 400', async () => {
-    const res = await request('POST', '/api/places', {
-      body: { ...validPlace, lng: 'abc' },
-      code: ACCESS_CODE,
-    });
-    assert.equal(res.status, 400);
-  });
-
-  it('GET /api/places 返回已创建的地点', async () => {
-    await request('POST', '/api/places', { body: validPlace, code: ACCESS_CODE });
-    const res = await request('GET', '/api/places');
-    const { places } = await res.json();
-    assert.equal(places.length, 1);
-    assert.equal(places[0].name, '武康路');
-  });
-
-  it('PUT /api/places/:id 修改描述并打卡', async () => {
-    const created = await (
-      await request('POST', '/api/places', { body: validPlace, code: ACCESS_CODE })
-    ).json();
-    const res = await request('PUT', `/api/places/${created.id}`, {
-      body: { description: '去过了，很舒服', visited: true },
-      code: ACCESS_CODE,
-    });
-    assert.equal(res.status, 200);
-    const place = await res.json();
-    assert.equal(place.description, '去过了，很舒服');
-    assert.equal(place.visited, true);
-    assert.equal(place.name, '武康路');
-  });
-
-  it('PUT /api/places/:id 不存在返回 404', async () => {
-    const res = await request('PUT', '/api/places/99999', {
-      body: { visited: true },
-      code: ACCESS_CODE,
+      body: { ...validPlace, map_code: 'NOPE00' },
     });
     assert.equal(res.status, 404);
   });
 
-  it('PUT /api/places/:id 没有可更新字段返回 400', async () => {
-    const res = await request('PUT', '/api/places/1', { body: {}, code: ACCESS_CODE });
-    assert.equal(res.status, 400);
+  it('两张地图的地点相互隔离', async () => {
+    const mapA = await createMap(request, '地图A');
+    const mapB = await createMap(request, '地图B');
+    await request('POST', '/api/places', { body: { ...validPlace, map_code: mapA.code } });
+    await request('POST', '/api/places', {
+      body: { ...validPlace, name: '外滩源', map_code: mapB.code },
+    });
+
+    const listA = await (await request('GET', `/api/places?map=${mapA.code}`)).json();
+    const listB = await (await request('GET', `/api/places?map=${mapB.code}`)).json();
+    assert.equal(listA.places.length, 1);
+    assert.equal(listA.places[0].name, '武康路');
+    assert.equal(listB.places.length, 1);
+    assert.equal(listB.places[0].name, '外滩源');
   });
 
-  it('PUT /api/places/:id 缺少口令返回 401', async () => {
-    const res = await request('PUT', '/api/places/1', { body: { visited: true } });
-    assert.equal(res.status, 401);
-  });
-
-  it('DELETE /api/places/:id 缺少口令返回 401', async () => {
-    const res = await request('DELETE', '/api/places/1');
-    assert.equal(res.status, 401);
-  });
-
-  it('DELETE /api/places/:id 正确口令删除，再删返回 404', async () => {
+  it('PUT 缺少邀请码头返回 400，错误邀请码返回 404，正确邀请码更新成功', async () => {
+    const map = await createMap(request);
     const created = await (
-      await request('POST', '/api/places', { body: validPlace, code: ACCESS_CODE })
+      await request('POST', '/api/places', { body: { ...validPlace, map_code: map.code } })
     ).json();
-    const res = await request('DELETE', `/api/places/${created.id}`, { code: ACCESS_CODE });
-    assert.equal(res.status, 204);
-    const again = await request('DELETE', `/api/places/${created.id}`, { code: ACCESS_CODE });
+
+    const missing = await request('PUT', `/api/places/${created.id}`, {
+      body: { visited: true },
+    });
+    assert.equal(missing.status, 400);
+
+    const wrong = await request('PUT', `/api/places/${created.id}`, {
+      body: { visited: true },
+      mapCode: 'ZZZZZ9',
+    });
+    assert.equal(wrong.status, 404);
+
+    const ok = await request('PUT', `/api/places/${created.id}`, {
+      body: { visited: true, description: '去过了' },
+      mapCode: map.code,
+    });
+    assert.equal(ok.status, 200);
+    const place = await ok.json();
+    assert.equal(place.visited, true);
+    assert.equal(place.description, '去过了');
+  });
+
+  it('DELETE 错误邀请码 404，正确邀请码删除后再删 404', async () => {
+    const map = await createMap(request);
+    const created = await (
+      await request('POST', '/api/places', { body: { ...validPlace, map_code: map.code } })
+    ).json();
+
+    const wrong = await request('DELETE', `/api/places/${created.id}`, { mapCode: 'ZZZZZ9' });
+    assert.equal(wrong.status, 404);
+
+    const ok = await request('DELETE', `/api/places/${created.id}`, { mapCode: map.code });
+    assert.equal(ok.status, 204);
+
+    const again = await request('DELETE', `/api/places/${created.id}`, { mapCode: map.code });
     assert.equal(again.status, 404);
+  });
+
+  it('非法输入仍返回 400（分类/名称/坐标）', async () => {
+    const map = await createMap(request);
+    const badCategory = await request('POST', '/api/places', {
+      body: { ...validPlace, map_code: map.code, category: '不存在' },
+    });
+    assert.equal(badCategory.status, 400);
+
+    const noName = await request('POST', '/api/places', {
+      body: { ...validPlace, name: '', map_code: map.code },
+    });
+    assert.equal(noName.status, 400);
+
+    const badCoord = await request('POST', '/api/places', {
+      body: { ...validPlace, lat: 95, map_code: map.code },
+    });
+    assert.equal(badCoord.status, 400);
   });
 
   it('GET /api/map-config 返回高德配置', async () => {
     const res = await request('GET', '/api/map-config');
     assert.equal(res.status, 200);
-    const config = await res.json();
-    assert.equal(config.key, 'test-key');
-    assert.equal(config.securityJsCode, 'test-jscode');
+    assert.equal((await res.json()).key, 'test-key');
   });
 
   it('未知 /api 路径返回 404 与 JSON 错误', async () => {

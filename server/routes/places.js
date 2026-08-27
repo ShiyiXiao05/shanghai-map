@@ -1,27 +1,7 @@
 import { Router } from 'express';
-import crypto from 'node:crypto';
 import { CATEGORIES } from '../store.js';
 
 const LIMITS = { name: 100, description: 500, address: 200, added_by: 30 };
-
-function codesMatch(received, expected) {
-  const a = Buffer.from(String(received));
-  const b = Buffer.from(String(expected));
-  if (a.length !== b.length || a.length === 0) return false;
-  return crypto.timingSafeEqual(a, b);
-}
-
-export function requireAccessCode(accessCode) {
-  return (req, res, next) => {
-    if (!accessCode) {
-      return res.status(500).json({ error: '服务端未配置 ACCESS_CODE，拒绝写入' });
-    }
-    if (!codesMatch(req.get('x-access-code') ?? '', accessCode)) {
-      return res.status(401).json({ error: '口令错误或缺失' });
-    }
-    next();
-  };
-}
 
 function readString(value, field, { fallback = '' } = {}) {
   if (value === undefined || value === null) {
@@ -108,49 +88,65 @@ function parseId(raw) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
-export function createPlacesRouter({ store, accessCode }) {
+export function createPlacesRouter({ store }) {
   const router = Router();
-  const requireCode = requireAccessCode(accessCode);
 
   router.get('/', async (req, res, next) => {
     try {
-      res.json({ places: await store.list() });
+      const code = (req.query.map ?? '').toString().trim().toUpperCase();
+      if (!code) return res.status(400).json({ error: '缺少 map 参数（邀请码）' });
+      if (!(await store.getMapByCode(code))) {
+        return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      }
+      res.json({ places: await store.listPlaces(code) });
     } catch (err) {
       next(err);
     }
   });
 
-  router.post('/', requireCode, async (req, res, next) => {
+  router.post('/', async (req, res, next) => {
     try {
+      const code = typeof req.body?.map_code === 'string' ? req.body.map_code.trim().toUpperCase() : '';
+      if (!code) return res.status(400).json({ error: '缺少邀请码（map_code）' });
+      if (!(await store.getMapByCode(code))) {
+        return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      }
       const checked = validatePlace(req.body, { partial: false });
       if (checked.error) return res.status(400).json({ error: checked.error });
-      const place = await store.create(checked.value);
+      const place = await store.create({ ...checked.value, map_code: code });
       res.status(201).json(place);
     } catch (err) {
       next(err);
     }
   });
 
-  router.put('/:id', requireCode, async (req, res, next) => {
+  const requireMapCode = (req, res, next) => {
+    const code = (req.get('x-map-code') ?? '').trim().toUpperCase();
+    if (!code) return res.status(400).json({ error: '缺少邀请码（x-map-code）' });
+    req.mapCode = code;
+    next();
+  };
+
+  router.put('/:id', requireMapCode, async (req, res, next) => {
     try {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
       const checked = validatePlace(req.body, { partial: true });
       if (checked.error) return res.status(400).json({ error: checked.error });
-      const place = await store.update(id, checked.value);
-      if (!place) return res.status(404).json({ error: '地点不存在' });
+      const place = await store.update(id, req.mapCode, checked.value);
+      if (!place) return res.status(404).json({ error: '地点不存在或邀请码不匹配' });
       res.json(place);
     } catch (err) {
       next(err);
     }
   });
 
-  router.delete('/:id', requireCode, async (req, res, next) => {
+  router.delete('/:id', requireMapCode, async (req, res, next) => {
     try {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
-      const removed = await store.remove(id);
-      if (!removed) return res.status(404).json({ error: '地点不存在' });
+      const removed = await store.remove(id, req.mapCode);
+      if (!removed) return res.status(404).json({ error: '地点不存在或邀请码不匹配' });
       res.status(204).end();
     } catch (err) {
       next(err);

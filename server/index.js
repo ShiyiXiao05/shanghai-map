@@ -26,7 +26,6 @@ await store.init();
 
 const app = buildApp({
   store,
-  accessCode: process.env.ACCESS_CODE,
   mapConfig: { key: process.env.AMAP_KEY, securityJsCode: process.env.AMAP_SECURITY_CODE },
 });
 app.use(express.static(publicDir));
