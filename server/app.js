@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import { createPlacesRouter } from './routes/places.js';
 import { createMapsRouter } from './routes/maps.js';
 import { createPhotosRouter } from './routes/photos.js';
@@ -7,6 +8,7 @@ import { createCommentsRouter } from './routes/comments.js';
 export function buildApp({ store, mapConfig }) {
   const app = express();
   app.disable('x-powered-by');
+  app.use(compression());
   // 3mb：照片上传的 base64 数据远大于普通 JSON 请求
   app.use(express.json({ limit: '3mb' }));
 

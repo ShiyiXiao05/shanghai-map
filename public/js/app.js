@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { loadAmap, createMapView } from './map.js';
 import { compressPhoto } from './photos.js';
+import { generatePoster } from './poster.js';
 
 // 深色霓虹底下用的亮色分类色板（色值与 css/style.css 的 --cat-* 保持一致）
 const CATEGORIES = [
@@ -36,6 +37,23 @@ function formatDate(iso) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function formatDateTime(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${formatDate(iso)} ${hh}:${mm}`;
+}
+
+function currentNickname() {
+  let who = localStorage.getItem(NICKNAME_KEY);
+  if (!who) {
+    who = prompt('你的昵称是？（用于记录是谁想去、谁留言）')?.trim();
+    if (who) localStorage.setItem(NICKNAME_KEY, who);
+  }
+  return who || null;
 }
 
 function toast(message, type = 'info') {
@@ -313,6 +331,22 @@ function renderList() {
       stamp.title = '已去过';
       head.appendChild(stamp);
     }
+    const wishBtn = document.createElement('button');
+    wishBtn.type = 'button';
+    wishBtn.className = 'wish-chip';
+    const myName = localStorage.getItem(NICKNAME_KEY) ?? '';
+    const wished = myName && place.wishes?.includes(myName);
+    wishBtn.classList.toggle('is-wished', Boolean(wished));
+    wishBtn.textContent = `${wished ? '♥' : '♡'} ${place.wishes?.length ?? 0}`;
+    wishBtn.title = place.wishes?.length
+      ? `${place.wishes.join('、')} 想去这里`
+      : '还没有人投票，点一下表达想去';
+    wishBtn.setAttribute('aria-label', '我也想去');
+    wishBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleWish(place);
+    });
+    head.appendChild(wishBtn);
 
     const actions = document.createElement('div');
     actions.className = 'place-actions';
@@ -593,25 +627,34 @@ async function submitPlace(event) {
 
   try {
     if (editingId) {
-      await api.updatePlace(state.map.code, editingId, {
+      const updated = await api.updatePlace(state.map.code, editingId, {
         ...payload,
         visited: form.elements.visited.checked,
       });
+      // 接口返回的是裸记录，保留本地计数与 wishes
+      const index = state.places.findIndex((p) => p.id === editingId);
+      if (index >= 0) state.places[index] = { ...state.places[index], ...updated };
       toast('已保存修改');
     } else {
       if (!dialogCoords) {
         toast('还没有选择位置：先搜索地点或在地图上选点', 'error');
         return;
       }
-      await api.createPlace(state.map.code, {
+      const created = await api.createPlace(state.map.code, {
         ...payload,
         lng: dialogCoords.lng,
         lat: dialogCoords.lat,
       });
+      state.places.unshift({
+        ...created,
+        photo_count: 0,
+        comment_count: 0,
+        wishes: [],
+      });
       toast('已添加，出现在列表和地图上了');
     }
     closePlaceDialog();
-    await loadPlaces();
+    renderAll();
   } catch (err) {
     toast(`保存失败：${err.message}`, 'error');
   }
@@ -633,14 +676,45 @@ async function toggleVisited(place) {
   }
 }
 
+/* ---------- 我也想去 ---------- */
+
+async function toggleWish(place) {
+  if (!state.map) return;
+  const who = currentNickname();
+  if (!who) return;
+  try {
+    const { wished, wishes } = await api.toggleWish(state.map.code, place.id, who);
+    place.wishes = wishes;
+    toast(wished ? `已标记「${place.name}」想去 ♥` : '已取消想去');
+    renderList();
+    if (detailPlace?.id === place.id) syncDetailWishes(place);
+  } catch (err) {
+    toast(`操作失败：${err.message}`, 'error');
+  }
+}
+
+function syncDetailWishes(place = detailPlace) {
+  if (!place) return;
+  const wishes = place.wishes ?? [];
+  const myName = localStorage.getItem(NICKNAME_KEY) ?? '';
+  const wished = Boolean(myName) && wishes.includes(myName);
+  const btn = $('#btn-detail-wish');
+  btn.textContent = wished ? '♥ 想去' : '♡ 想去';
+  btn.classList.toggle('is-wished', wished);
+  const wrap = $('#detail-wishes');
+  wrap.hidden = wishes.length === 0;
+  wrap.textContent = wishes.length ? `♥ ${wishes.join('、')} 想去这里` : '';
+}
+
 async function removePlace(place) {
   if (!state.map) return;
   if (!confirm(`确定删除「${place.name}」吗？照片和留言会一起删除。`)) return;
   try {
     await api.deletePlace(state.map.code, place.id);
     if (detailPlace?.id === place.id) closeDetail();
+    state.places = state.places.filter((p) => p.id !== place.id);
     toast(`已删除「${place.name}」`);
-    await loadPlaces();
+    renderAll();
   } catch (err) {
     toast(`删除失败：${err.message}`, 'error');
   }
@@ -649,6 +723,12 @@ async function removePlace(place) {
 /* ---------- 地点详情：照片与留言 ---------- */
 
 let detailPlace = null;
+
+// 写操作后就地更新计数并重渲染列表，避免整表拉取
+function bumpCount(place, field, delta) {
+  place[field] = Math.max(0, (place[field] ?? 0) + delta);
+  renderList();
+}
 
 function closeDetail() {
   $('#detail-dialog').close();
@@ -665,6 +745,7 @@ function syncDetailHeader() {
   desc.hidden = !place.description;
   desc.textContent = place.description ?? '';
   $('#btn-detail-toggle').textContent = place.visited ? '↩️ 取消打卡' : '✅ 打卡';
+  syncDetailWishes(place);
 }
 
 async function openDetail(place) {
@@ -692,7 +773,8 @@ async function refreshPhotos() {
     const cell = document.createElement('button');
     cell.type = 'button';
     cell.className = 'photo-cell';
-    cell.title = '查看大图';
+    const who = photo.added_by || '同学';
+    cell.title = `${who} · ${formatDateTime(photo.created_at)}`;
     const img = document.createElement('img');
     img.src = photo.thumb;
     img.alt = `${detailPlace.name}的照片`;
@@ -709,6 +791,7 @@ async function refreshPhotos() {
         return;
       }
       $('#lightbox-img').src = api.photoUrl(state.map.code, photo.id);
+      $('#lightbox-caption').textContent = `${detailPlace.name} · ${who} · ${formatDateTime(photo.created_at)}`;
       $('#lightbox').showModal();
     });
     grid.appendChild(cell);
@@ -721,7 +804,8 @@ async function deletePhoto(photoId) {
   try {
     await api.deletePhoto(state.map.code, photoId);
     toast('照片已删除');
-    await Promise.all([refreshPhotos(), loadPlaces()]);
+    await refreshPhotos();
+    bumpCount(detailPlace, 'photo_count', -1);
     syncDetailHeader();
   } catch (err) {
     toast(`删除失败：${err.message}`, 'error');
@@ -746,7 +830,8 @@ async function uploadPhotos(files) {
   }
   if (ok > 0) {
     toast(ok === 1 ? '照片已添加' : `已添加 ${ok} 张照片`);
-    await Promise.all([refreshPhotos(), loadPlaces()]);
+    await refreshPhotos();
+    bumpCount(detailPlace, 'photo_count', ok);
     syncDetailHeader();
   }
 }
@@ -797,7 +882,8 @@ async function deleteComment(commentId) {
   if (!confirm('删除这条留言？')) return;
   try {
     await api.deleteComment(state.map.code, commentId);
-    await Promise.all([refreshComments(), loadPlaces()]);
+    await refreshComments();
+    bumpCount(detailPlace, 'comment_count', -1);
   } catch (err) {
     toast(`删除失败：${err.message}`, 'error');
   }
@@ -835,7 +921,8 @@ function bindDetailDialog() {
         body,
       });
       input.value = '';
-      await Promise.all([refreshComments(), loadPlaces()]);
+      await refreshComments();
+      bumpCount(detailPlace, 'comment_count', 1);
     } catch (err) {
       toast(`发送失败：${err.message}`, 'error');
     }
@@ -953,6 +1040,144 @@ function bindStaticEvents() {
   });
 }
 
+/* ---------- 回忆时间线 ---------- */
+
+async function openMemories() {
+  if (!state.map) {
+    toast('先创建或加入一张地图', 'error');
+    return;
+  }
+  $('#memories-dialog').showModal();
+  let memories = [];
+  try {
+    memories = await api.memories(state.map.code);
+  } catch (err) {
+    toast(`回忆加载失败：${err.message}`, 'error');
+  }
+  renderMemories(memories);
+}
+
+function renderMemories(memories) {
+  const list = $('#memories-list');
+  list.replaceChildren();
+  $('#memories-empty').hidden = memories.length > 0;
+
+  let currentMonth = '';
+  for (const memory of memories) {
+    const date = memory.visited_at ? new Date(memory.visited_at) : null;
+    const monthKey = date ? `${date.getFullYear()}年${date.getMonth() + 1}月` : '更早';
+    if (monthKey !== currentMonth) {
+      currentMonth = monthKey;
+      const heading = document.createElement('h3');
+      heading.className = 'memory-month';
+      heading.textContent = monthKey;
+      list.appendChild(heading);
+    }
+
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'memory-card';
+
+    const strip = document.createElement('div');
+    strip.className = 'memory-photos';
+    if (memory.photos.length === 0) {
+      const placeholder = document.createElement('span');
+      placeholder.className = 'memory-no-photo';
+      placeholder.textContent = '📷';
+      strip.appendChild(placeholder);
+    } else {
+      for (const thumb of memory.photos) {
+        const img = document.createElement('img');
+        img.src = thumb;
+        img.alt = memory.name;
+        img.loading = 'lazy';
+        strip.appendChild(img);
+      }
+    }
+
+    const info = document.createElement('div');
+    info.className = 'memory-info';
+    const meta = categoryMeta(memory.category);
+    const nameLine = document.createElement('span');
+    nameLine.className = 'memory-name';
+    nameLine.textContent = `${meta.emoji} ${memory.name}`;
+    const sub = document.createElement('span');
+    sub.className = 'memory-sub';
+    sub.textContent = [
+      date ? formatDate(memory.visited_at) : '去过',
+      `${memory.added_by || '同学'} 标记`,
+    ].join(' · ');
+    info.append(nameLine, sub);
+
+    card.append(strip, info);
+    card.addEventListener('click', () => {
+      $('#memories-dialog').close();
+      const place = state.places.find((p) => p.id === memory.id);
+      if (place) openDetail(place);
+    });
+    list.appendChild(card);
+  }
+}
+
+/* ---------- 分享海报 ---------- */
+
+async function openPoster() {
+  if (!state.map) {
+    toast('先创建或加入一张地图', 'error');
+    return;
+  }
+  $('#poster-dialog').showModal();
+  await renderPoster();
+}
+
+async function renderPoster() {
+  const canvas = $('#poster-canvas');
+  let photos = [];
+  try {
+    photos = (await api.memories(state.map.code)).flatMap((m) => m.photos);
+  } catch {
+    /* 拿不到照片也照样生成 */
+  }
+  await generatePoster(canvas, {
+    mapName: state.map.name,
+    code: state.map.code,
+    places: state.places,
+    photos: photos.slice(0, 6),
+  });
+}
+
+function savePoster() {
+  const canvas = $('#poster-canvas');
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `魔都Explore-${state.map?.name ?? '地图'}.png`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+    toast('海报已保存，发给同学吧');
+  }, 'image/png');
+}
+
+function bindExtras() {
+  $('#btn-detail-wish').addEventListener('click', () => {
+    if (detailPlace) toggleWish(detailPlace);
+  });
+  $('#btn-memories').addEventListener('click', openMemories);
+  $('#btn-memories-close').addEventListener('click', () => $('#memories-dialog').close());
+  $('#btn-poster').addEventListener('click', openPoster);
+  $('#btn-poster-close').addEventListener('click', () => $('#poster-dialog').close());
+  $('#btn-poster-refresh').addEventListener('click', renderPoster);
+  $('#btn-poster-save').addEventListener('click', savePoster);
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('/sw.js').catch(() => {
+    /* 注册失败不影响功能 */
+  });
+}
+
 async function boot() {
   fillCategorySelect();
   renderChips();
@@ -960,6 +1185,8 @@ async function boot() {
   bindSearch();
   bindMapEntry();
   bindDetailDialog();
+  bindExtras();
+  registerServiceWorker();
   await Promise.all([initMap(), restoreMapSession()]);
 }
 

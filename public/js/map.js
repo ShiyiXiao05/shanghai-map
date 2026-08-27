@@ -37,7 +37,9 @@ export function createMapView(container) {
     mapStyle: 'amap://styles/dark',
   });
 
-  let markers = [];
+  // 差量维护标记：按 id 复用 Marker 对象，避免整组重建造成的闪烁
+  const markers = new Map();
+  let markerClickHandler = null;
   let infoWindow = null;
   let pickHandler = null;
 
@@ -47,19 +49,37 @@ export function createMapView(container) {
   }
 
   function setPlaces(places, categoryMeta, { onMarkerClick } = {}) {
-    markers.forEach((marker) => map.remove(marker));
-    markers = places.map((place) => {
+    markerClickHandler = onMarkerClick ?? null;
+    const visible = new Set(places.map((place) => place.id));
+    for (const [id, entry] of markers) {
+      if (!visible.has(id)) {
+        map.remove(entry.marker);
+        markers.delete(id);
+      }
+    }
+    for (const place of places) {
       const meta = categoryMeta(place.category);
+      const existing = markers.get(place.id);
+      if (existing) {
+        existing.place = place;
+        existing.marker.setContent(markerContent(place, meta));
+        existing.marker.setPosition([place.lng, place.lat]);
+        continue;
+      }
       const marker = new AMap.Marker({
         position: [place.lng, place.lat],
         content: markerContent(place, meta),
         anchor: 'center',
         title: place.name,
       });
-      marker.on('click', () => onMarkerClick?.(place));
+      const id = place.id;
+      marker.on('click', () => {
+        const entry = markers.get(id);
+        if (entry) markerClickHandler?.(entry.place);
+      });
       map.add(marker);
-      return marker;
-    });
+      markers.set(id, { marker, place });
+    }
   }
 
   function openInfo(place, categoryMeta, { onEdit, onDetail } = {}) {

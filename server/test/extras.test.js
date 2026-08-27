@@ -189,4 +189,104 @@ describe('photos & comments API', () => {
     const commentDel = await request('DELETE', `/api/comments/${comment.id}`, { mapCode: map.code });
     assert.equal(commentDel.status, 404);
   });
+
+  it('「我也想去」投票：切换、按昵称去重、列表携带 wishes、级联清理', async () => {
+    const { map, place } = await setupMapWithPlace(request);
+
+    const on = await request('POST', `/api/places/${place.id}/wish`, {
+      body: { map_code: map.code, who: '小明' },
+    });
+    assert.equal(on.status, 200);
+    assert.deepEqual(await on.json(), { wished: true, wishes: ['小明'] });
+
+    const again = await (
+      await request('POST', `/api/places/${place.id}/wish`, {
+        body: { map_code: map.code, who: '小红' },
+      })
+    ).json();
+    assert.equal(again.wished, true);
+    assert.deepEqual(again.wishes, ['小明', '小红']);
+
+    const off = await (
+      await request('POST', `/api/places/${place.id}/wish`, {
+        body: { map_code: map.code, who: '小明' },
+      })
+    ).json();
+    assert.equal(off.wished, false);
+    assert.deepEqual(off.wishes, ['小红']);
+
+    const list = await (await request('GET', `/api/places?map=${map.code}`)).json();
+    assert.deepEqual(list.places[0].wishes, ['小红']);
+
+    const noWho = await request('POST', `/api/places/${place.id}/wish`, {
+      body: { map_code: map.code },
+    });
+    assert.equal(noWho.status, 400);
+
+    const wrongCode = await request('POST', `/api/places/${place.id}/wish`, {
+      body: { map_code: 'ZZZZZ9', who: '小明' },
+    });
+    assert.equal(wrongCode.status, 404);
+
+    await request('DELETE', `/api/places/${place.id}`, { mapCode: map.code });
+    const afterDelete = await request('POST', `/api/places/${place.id}/wish`, {
+      body: { map_code: map.code, who: '小明' },
+    });
+    assert.equal(afterDelete.status, 404);
+  });
+
+  it('回忆时间线：打卡带 visited_at、取消清空、按时间倒序', async () => {
+    const { map } = await setupMapWithPlace(request);
+    const first = await (
+      await request('POST', '/api/places', {
+        body: { ...validPlace, name: '先去的', map_code: map.code },
+      })
+    ).json();
+    const second = await (
+      await request('POST', '/api/places', {
+        body: { ...validPlace, name: '后去的', map_code: map.code },
+      })
+    ).json();
+
+    const memoriesEmpty = await (await request('GET', `/api/maps/${map.code}/memories`)).json();
+    assert.equal(memoriesEmpty.memories.length, 0);
+
+    await request('PUT', `/api/places/${first.id}`, {
+      body: { visited: true },
+      mapCode: map.code,
+    });
+    // 确保两个 visited_at 可区分
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await request('PUT', `/api/places/${second.id}`, {
+      body: { visited: true },
+      mapCode: map.code,
+    });
+
+    const withPhoto = await (
+      await request('POST', `/api/places/${second.id}/photos`, {
+        body: { map_code: map.code, full: tinyPng, thumb: tinyPng },
+      })
+    ).json();
+
+    const memories = await (await request('GET', `/api/maps/${map.code}/memories`)).json();
+    assert.equal(memories.memories.length, 2);
+    assert.equal(memories.memories[0].name, '后去的');
+    assert.ok(Date.parse(memories.memories[0].visited_at) >= Date.parse(memories.memories[1].visited_at));
+    assert.equal(memories.memories[0].photos.length, 1);
+    assert.match(memories.memories[0].photos[0], /^data:image\/png;base64,/);
+    assert.equal(memories.memories[1].photos.length, 0);
+
+    await request('PUT', `/api/places/${first.id}`, {
+      body: { visited: false },
+      mapCode: map.code,
+    });
+    const afterUnvisit = await (await request('GET', `/api/maps/${map.code}/memories`)).json();
+    assert.equal(afterUnvisit.memories.length, 1);
+
+    const wrongMap = await request('GET', '/api/maps/NOPE00/memories');
+    assert.equal(wrongMap.status, 404);
+
+    const photoCached = await request('GET', `/api/photos/${withPhoto.id}?map=${map.code}`);
+    assert.equal(photoCached.status, 200); // LRU 缓存路径同样可取
+  });
 });

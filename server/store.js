@@ -39,11 +39,15 @@ export function createPlaceStore(pool) {
         visited BOOLEAN NOT NULL DEFAULT FALSE,
         map_code TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        visited_at TIMESTAMPTZ
       )
     `);
     await pool.query(
       'ALTER TABLE public.places ADD COLUMN IF NOT EXISTS map_code TEXT NOT NULL'
+    );
+    await pool.query(
+      'ALTER TABLE public.places ADD COLUMN IF NOT EXISTS visited_at TIMESTAMPTZ'
     );
     await pool.query(`
       CREATE TABLE IF NOT EXISTS place_photos (
@@ -67,6 +71,30 @@ export function createPlaceStore(pool) {
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS place_wishes (
+        id SERIAL PRIMARY KEY,
+        place_id INTEGER NOT NULL,
+        map_code TEXT NOT NULL,
+        who TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_wishes_place_who ON place_wishes (place_id, who)'
+    );
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_places_map_created ON public.places (map_code, created_at DESC)'
+    );
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_photos_place ON place_photos (place_id)'
+    );
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_comments_place ON place_comments (place_id)'
+    );
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_wishes_place ON place_wishes (place_id)'
+    );
   }
 
   async function createMap({ name, createdBy }) {
@@ -98,7 +126,7 @@ export function createPlaceStore(pool) {
     );
     if (rows.length === 0) return [];
     // 分组计数后内存合并，避免在每行上做关联子查询
-    const [photoRows, commentRows] = await Promise.all([
+    const [photoRows, commentRows, wishRows] = await Promise.all([
       pool.query(
         'SELECT place_id, count(*) AS n FROM place_photos WHERE map_code = $1 GROUP BY place_id',
         [mapCode]
@@ -107,13 +135,23 @@ export function createPlaceStore(pool) {
         'SELECT place_id, count(*) AS n FROM place_comments WHERE map_code = $1 GROUP BY place_id',
         [mapCode]
       ),
+      pool.query('SELECT place_id, who FROM place_wishes WHERE map_code = $1 ORDER BY id ASC', [
+        mapCode,
+      ]),
     ]);
     const photoCounts = new Map(photoRows.rows.map((r) => [r.place_id, Number(r.n)]));
     const commentCounts = new Map(commentRows.rows.map((r) => [r.place_id, Number(r.n)]));
+    const wishesByPlace = new Map();
+    for (const row of wishRows.rows) {
+      const list = wishesByPlace.get(row.place_id) ?? [];
+      list.push(row.who);
+      wishesByPlace.set(row.place_id, list);
+    }
     return rows.map((row) => ({
       ...row,
       photo_count: photoCounts.get(row.id) ?? 0,
       comment_count: commentCounts.get(row.id) ?? 0,
+      wishes: wishesByPlace.get(row.id) ?? [],
     }));
   }
 
@@ -150,6 +188,10 @@ export function createPlaceStore(pool) {
          address = COALESCE($6, address),
          added_by = COALESCE($7, added_by),
          visited = COALESCE($8, visited),
+         visited_at = CASE
+           WHEN COALESCE($8, visited) THEN COALESCE(visited_at, now())
+           ELSE NULL
+         END,
          updated_at = now()
        WHERE id = $9 AND map_code = $10
        RETURNING *`,
@@ -183,6 +225,11 @@ export function createPlaceStore(pool) {
       id,
       mapCode,
     ]);
+    await pool.query('DELETE FROM place_wishes WHERE place_id = $1 AND map_code = $2', [
+      id,
+      mapCode,
+    ]);
+    photoCache.clear(); // 级联删除绕过了 removePhoto，直接整表清空最稳妥
     return true;
   }
 
@@ -222,12 +269,38 @@ export function createPlaceStore(pool) {
     return rows[0];
   }
 
+  // 原图内容不可变，进程内 LRU；键含邀请码，避免绕过鉴权直接命中
+  const photoCache = new Map();
+  const PHOTO_CACHE_MAX = 200;
+
+  function cacheGet(key) {
+    if (!photoCache.has(key)) return null;
+    const entry = photoCache.get(key);
+    photoCache.delete(key);
+    photoCache.set(key, entry); // 重新插入到最新位置
+    return entry;
+  }
+
+  function cachePut(key, entry) {
+    if (photoCache.has(key)) photoCache.delete(key);
+    photoCache.set(key, entry);
+    if (photoCache.size > PHOTO_CACHE_MAX) {
+      photoCache.delete(photoCache.keys().next().value);
+    }
+  }
+
   async function getPhoto(id, mapCode) {
+    const key = `${id}:${mapCode}`;
+    const cached = cacheGet(key);
+    if (cached) return cached;
     const { rows } = await pool.query(
       'SELECT mime, full_b64 FROM place_photos WHERE id = $1 AND map_code = $2',
       [id, mapCode]
     );
-    return rows[0] ?? null;
+    if (!rows[0]) return null;
+    const entry = { mime: rows[0].mime, buf: Buffer.from(rows[0].full_b64, 'base64') };
+    cachePut(key, entry);
+    return entry;
   }
 
   async function removePhoto(id, mapCode) {
@@ -235,6 +308,7 @@ export function createPlaceStore(pool) {
       'DELETE FROM place_photos WHERE id = $1 AND map_code = $2 RETURNING id',
       [id, mapCode]
     );
+    if (rows.length > 0) photoCache.delete(`${id}:${mapCode}`);
     return rows.length > 0;
   }
 
@@ -263,6 +337,57 @@ export function createPlaceStore(pool) {
     return rows.length > 0;
   }
 
+  async function toggleWish(placeId, mapCode, who) {
+    const del = await pool.query(
+      'DELETE FROM place_wishes WHERE place_id = $1 AND map_code = $2 AND who = $3 RETURNING id',
+      [placeId, mapCode, who]
+    );
+    if (del.rows.length > 0) return { wished: false };
+    await pool.query(
+      'INSERT INTO place_wishes (place_id, map_code, who) VALUES ($1, $2, $3)',
+      [placeId, mapCode, who]
+    );
+    return { wished: true };
+  }
+
+  async function listWishes(placeId, mapCode) {
+    const { rows } = await pool.query(
+      'SELECT who FROM place_wishes WHERE place_id = $1 AND map_code = $2 ORDER BY id ASC',
+      [placeId, mapCode]
+    );
+    return rows.map((r) => r.who);
+  }
+
+  async function listMemories(mapCode) {
+    const { rows } = await pool.query(
+      `SELECT id, name, category, added_by, address, visited_at
+       FROM public.places
+       WHERE map_code = $1 AND visited = TRUE`,
+      [mapCode]
+    );
+    if (rows.length === 0) return [];
+    const photos = await pool.query(
+      'SELECT place_id, mime, thumb_b64 FROM place_photos WHERE map_code = $1 ORDER BY id ASC',
+      [mapCode]
+    );
+    const thumbsByPlace = new Map();
+    for (const row of photos.rows) {
+      const list = thumbsByPlace.get(row.place_id) ?? [];
+      if (list.length < 3) {
+        list.push(`data:${row.mime};base64,${row.thumb_b64}`);
+        thumbsByPlace.set(row.place_id, list);
+      }
+    }
+    const memories = rows.map((row) => ({
+      ...row,
+      photos: thumbsByPlace.get(row.id) ?? [],
+    }));
+    // visited_at 为空的旧数据排在最后；pg-mem 返回 Date 对象，须用 getTime 保留毫秒
+    const ts = (v) => (v instanceof Date ? v.getTime() : v ? Date.parse(v) : 0);
+    memories.sort((a, b) => ts(b.visited_at) - ts(a.visited_at));
+    return memories;
+  }
+
   return {
     init,
     createMap,
@@ -280,6 +405,9 @@ export function createPlaceStore(pool) {
     listComments,
     createComment,
     removeComment,
+    toggleWish,
+    listWishes,
+    listMemories,
   };
 }
 

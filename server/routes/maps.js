@@ -3,6 +3,18 @@ import { Router } from 'express';
 export function createMapsRouter({ store }) {
   const router = Router();
 
+  // 回忆时间线：已打卡地点 + 缩略图（要放在 /:code 之前定义更清晰）
+  router.get('/:code/memories', async (req, res, next) => {
+    try {
+      const code = (req.params.code ?? '').trim().toUpperCase();
+      const map = await store.getMapByCode(code);
+      if (!map) return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      res.json({ memories: await store.listMemories(code) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post('/', async (req, res, next) => {
     try {
       const body = typeof req.body === 'object' && req.body !== null ? req.body : {};

@@ -28,7 +28,15 @@ const app = buildApp({
   store,
   mapConfig: { key: process.env.AMAP_KEY, securityJsCode: process.env.AMAP_SECURITY_CODE },
 });
-app.use(express.static(publicDir));
+app.use(
+  express.static(publicDir, {
+    // HTML 保持协商缓存，其余静态资源走 1 小时强缓存
+    maxAge: '1h',
+    setHeaders(res, filePath) {
+      if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+    },
+  })
+);
 
 const port = Number(process.env.PORT) || 3000;
 

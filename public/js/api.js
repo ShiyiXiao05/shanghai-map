@@ -59,4 +59,8 @@ export const api = {
     request('POST', `/api/places/${placeId}/comments`, { body: { ...data, map_code: mapCode } }),
   deleteComment: (mapCode, commentId) =>
     request('DELETE', `/api/comments/${commentId}`, { mapCode }),
+  toggleWish: (mapCode, placeId, who) =>
+    request('POST', `/api/places/${placeId}/wish`, { body: { map_code: mapCode, who } }),
+  memories: async (mapCode) =>
+    (await request('GET', `/api/maps/${encodeURIComponent(mapCode)}/memories`)).memories,
 };

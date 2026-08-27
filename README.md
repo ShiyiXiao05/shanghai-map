@@ -11,14 +11,18 @@
 - 邀请码即权限：知道码才能看和编（读 `?map=`、写请求带码），无账号系统
 - 上海地图（高德深色底图）展示标记，按分类着色；搜索地点名或地图吸附选点（自动匹配附近地点）
 - 每个地点：名称、描述、分类（景点/美食/展馆/购物/娱乐/其他）、添加人昵称、时间
-- 地点详情：照片（客户端压缩上传，最多 9 张）与留言（280 字内），列表和信息窗显示 📷💬 角标
+- 地点详情：照片（客户端压缩上传，最多 9 张，带上传时间）与留言（280 字内）
+- 「我也想去」♥ 投票：按昵称去重，悬停看谁想去了
+- 📷 回忆时间线：已打卡地点按时间倒序串成足迹流
+- 🖼 分享海报：一键生成深色霓虹统计卡（含邀请码），保存后发群拉新
 - "已去过"圆圈打卡、分类筛选、地点列表与地图联动
+- PWA：可安装到主屏幕，静态资源离线缓存
 - 霓虹夜行主题：深夜蓝黑 + 品红→荧光青渐变，玻璃拟态浮层，移动端适配
 
 ## 技术栈
 
-- 前端：原生 HTML/CSS/JS + 高德地图 JS API 2.0（无构建，克隆即用）
-- 后端：Node.js + Express，`pg` 连接池，所有 SQL 静态字面量 + 参数绑定
+- 前端：原生 HTML/CSS/JS + 高德地图 JS API 2.0（无构建，克隆即用），PWA（manifest + Service Worker）
+- 后端：Node.js + Express，`pg` 连接池，所有 SQL 静态字面量 + 参数绑定；gzip 压缩、照片内存缓存与 DB 索引
 - 数据库：Neon 免费托管 Postgres（数据持久保存）
 - 部署：Render 免费 Web Service（后端同时托管前端静态页）
 
@@ -64,6 +68,10 @@ npm --prefix server run dev
 | GET | /api/places/:id/comments?map=码 | 留言列表 | query 传入 |
 | POST | /api/places/:id/comments | 发表留言（≤280 字） | body `map_code` |
 | DELETE | /api/comments/:id | 删除留言 | 头 `x-map-code` |
+| POST | /api/places/:id/wish | 「我也想去」投票（切换式） | body `map_code` |
+| GET | /api/maps/:code/memories | 回忆时间线（已打卡+缩略图） | — |
+
+地点列表每项附带 `photo_count` / `comment_count` / `wishes`（想去的昵称数组）。
 
 邀请码无效返回 404；前端已自动处理。
 
@@ -91,6 +99,7 @@ git push -u origin main
 5. 创建后等待部署完成，得到形如 `https://xxx.onrender.com` 的网址
 
 > 免费档服务 15 分钟无访问会休眠，下次首访约需 30–60 秒唤醒，属正常现象。
+> **消除冷启动（推荐）**：注册 [UptimeRobot](https://uptimerobot.com)（免费），添加一个 HTTP 监控，地址填 `https://你的域名/api/health`，间隔 10 分钟——服务将保持常驻，同学随点随开。
 > 若推送后网站没自动更新，控制台 Manual Deploy → Deploy latest commit。
 
 ### 第 3 步：分享

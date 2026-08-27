@@ -88,7 +88,7 @@ export function createPhotosRouter({ store }) {
       if (!photo) return res.status(404).json({ error: '照片不存在或邀请码不匹配' });
       res.set('Content-Type', photo.mime);
       res.set('Cache-Control', 'public, max-age=31536000, immutable');
-      res.send(Buffer.from(photo.full_b64, 'base64'));
+      res.send(photo.buf);
     } catch (err) {
       next(err);
     }

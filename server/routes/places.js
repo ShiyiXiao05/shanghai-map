@@ -120,6 +120,26 @@ export function createPlacesRouter({ store }) {
     }
   });
 
+  // 「我也想去」切换式投票
+  router.post('/:id/wish', async (req, res, next) => {
+    try {
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
+      const body = typeof req.body === 'object' && req.body !== null ? req.body : {};
+      const code = typeof body.map_code === 'string' ? body.map_code.trim().toUpperCase() : '';
+      if (!code) return res.status(400).json({ error: '缺少邀请码（map_code）' });
+      const who = typeof body.who === 'string' ? body.who.trim().slice(0, 30) : '';
+      if (!who) return res.status(400).json({ error: '需要昵称（who）才能投票' });
+      if (!(await store.getPlace(id, code))) {
+        return res.status(404).json({ error: '地点不存在或邀请码不匹配' });
+      }
+      const { wished } = await store.toggleWish(id, code, who);
+      res.json({ wished, wishes: await store.listWishes(id, code) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   const requireMapCode = (req, res, next) => {
     const code = (req.get('x-map-code') ?? '').trim().toUpperCase();
     if (!code) return res.status(400).json({ error: '缺少邀请码（x-map-code）' });
