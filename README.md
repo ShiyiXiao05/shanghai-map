@@ -1,6 +1,6 @@
-# 上海地点收藏地图 🗺️
+# 魔都·Explore 🌃
 
-和同学一起在地图上标记想去的上海地点：搜索定位、吸附选点、添加描述、分类管理、去过后打卡。**邀请码共享多地图**：每张地图有独立邀请码，同码即可共建。
+在魔都的夜色里，和同学一起标记想去的上海角落：搜索定位、吸附选点、添加描述、分类管理、去过后打卡，每个地点还能传照片、写留言。**邀请码共享多地图**：每张地图有独立邀请码，同码即可共建。
 
 > **线上地址**：https://shanghai-wish-map.onrender.com
 > 新访客在欢迎页「创建地图」拿邀请码，或输入同学的邀请码加入；邀请链接形如 `/?map=邀请码` 可直接打开。
@@ -9,11 +9,11 @@
 
 - 每张地图独立：创建即生成 6 位邀请码，侧栏切换器管理多张地图，地点互相隔离
 - 邀请码即权限：知道码才能看和编（读 `?map=`、写请求带码），无账号系统
-- 上海地图（高德）展示标记，按分类着色；搜索地点名或地图吸附选点（自动匹配附近地点）
+- 上海地图（高德深色底图）展示标记，按分类着色；搜索地点名或地图吸附选点（自动匹配附近地点）
 - 每个地点：名称、描述、分类（景点/美食/展馆/购物/娱乐/其他）、添加人昵称、时间
+- 地点详情：照片（客户端压缩上传，最多 9 张）与留言（280 字内），列表和信息窗显示 📷💬 角标
 - "已去过"圆圈打卡、分类筛选、地点列表与地图联动
-- 三套配色 + 自动跟随系统：青瓷（浅色）/ 布丁紫 / 东京夜，地图始终为清晰的标准底图
-- 移动端适配
+- 霓虹夜行主题：深夜蓝黑 + 品红→荧光青渐变，玻璃拟态浮层，移动端适配
 
 ## 技术栈
 
@@ -27,7 +27,7 @@
 前置：Node.js ≥ 20；地图和数据库的 key 见下方"准备工作"（不配置也能启动：数据库用内存模式、地图显示占位卡片）。
 
 ```bash
-git clone <仓库地址> && cd Shanghai
+git clone <仓库地址> && cd shanghai-map
 cp .env.example .env   # 编辑 .env 填入真实值
 npm --prefix server install
 npm --prefix server run dev
@@ -53,10 +53,17 @@ npm --prefix server run dev
 |---|---|---|---|
 | POST | /api/maps | 创建地图，返回邀请码 | — |
 | GET | /api/maps/:code | 校验邀请码 | — |
-| GET | /api/places?map=码 | 地点列表 | query 传入 |
+| GET | /api/places?map=码 | 地点列表（含照片/留言计数） | query 传入 |
 | POST | /api/places | 新增地点 | body `map_code` |
 | PUT | /api/places/:id | 编辑地点 | 头 `x-map-code` |
-| DELETE | /api/places/:id | 删除地点 | 头 `x-map-code` |
+| DELETE | /api/places/:id | 删除地点（级联清理照片留言） | 头 `x-map-code` |
+| GET | /api/places/:id/photos?map=码 | 照片列表（含缩略图） | query 传入 |
+| POST | /api/places/:id/photos | 上传照片（base64，≤9 张/地点） | body `map_code` |
+| GET | /api/photos/:id?map=码 | 照片原图（二进制） | query 传入 |
+| DELETE | /api/photos/:id | 删除照片 | 头 `x-map-code` |
+| GET | /api/places/:id/comments?map=码 | 留言列表 | query 传入 |
+| POST | /api/places/:id/comments | 发表留言（≤280 字） | body `map_code` |
+| DELETE | /api/comments/:id | 删除留言 | 头 `x-map-code` |
 
 邀请码无效返回 404；前端已自动处理。
 
@@ -97,9 +104,9 @@ server/   Express 后端（API + 静态托管）
   app.js        应用装配
   store.js      数据层（静态 SQL + 参数绑定、邀请码生成、生产连接池）
   env.js        dotenv 引导
-  routes/       maps（创建/校验）与 places（CRUD）路由
+  routes/       maps / places / photos / comments 路由
   test/         接口测试（node:test + pg-mem）
-public/   前端（index.html / css / js）
+public/   前端（index.html / css / js，js 含照片客户端压缩）
 docs/     设计文档
 render.yaml  Render 部署蓝图
 ```

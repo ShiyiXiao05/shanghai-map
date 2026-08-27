@@ -45,6 +45,28 @@ export function createPlaceStore(pool) {
     await pool.query(
       'ALTER TABLE public.places ADD COLUMN IF NOT EXISTS map_code TEXT NOT NULL'
     );
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS place_photos (
+        id SERIAL PRIMARY KEY,
+        place_id INTEGER NOT NULL,
+        map_code TEXT NOT NULL,
+        mime TEXT NOT NULL,
+        full_b64 TEXT NOT NULL,
+        thumb_b64 TEXT NOT NULL,
+        added_by TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS place_comments (
+        id SERIAL PRIMARY KEY,
+        place_id INTEGER NOT NULL,
+        map_code TEXT NOT NULL,
+        author TEXT NOT NULL DEFAULT '',
+        body TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
   }
 
   async function createMap({ name, createdBy }) {
@@ -74,7 +96,25 @@ export function createPlaceStore(pool) {
       'SELECT * FROM public.places WHERE map_code = $1 ORDER BY created_at DESC, id DESC',
       [mapCode]
     );
-    return rows;
+    if (rows.length === 0) return [];
+    // 分组计数后内存合并，避免在每行上做关联子查询
+    const [photoRows, commentRows] = await Promise.all([
+      pool.query(
+        'SELECT place_id, count(*) AS n FROM place_photos WHERE map_code = $1 GROUP BY place_id',
+        [mapCode]
+      ),
+      pool.query(
+        'SELECT place_id, count(*) AS n FROM place_comments WHERE map_code = $1 GROUP BY place_id',
+        [mapCode]
+      ),
+    ]);
+    const photoCounts = new Map(photoRows.rows.map((r) => [r.place_id, Number(r.n)]));
+    const commentCounts = new Map(commentRows.rows.map((r) => [r.place_id, Number(r.n)]));
+    return rows.map((row) => ({
+      ...row,
+      photo_count: photoCounts.get(row.id) ?? 0,
+      comment_count: commentCounts.get(row.id) ?? 0,
+    }));
   }
 
   async function create(data) {
@@ -134,10 +174,113 @@ export function createPlaceStore(pool) {
       'DELETE FROM public.places WHERE id = $1 AND map_code = $2 RETURNING id',
       [id, mapCode]
     );
+    if (rows.length === 0) return false;
+    await pool.query('DELETE FROM place_photos WHERE place_id = $1 AND map_code = $2', [
+      id,
+      mapCode,
+    ]);
+    await pool.query('DELETE FROM place_comments WHERE place_id = $1 AND map_code = $2', [
+      id,
+      mapCode,
+    ]);
+    return true;
+  }
+
+  async function getPlace(id, mapCode) {
+    const { rows } = await pool.query(
+      'SELECT * FROM public.places WHERE id = $1 AND map_code = $2',
+      [id, mapCode]
+    );
+    return rows[0] ?? null;
+  }
+
+  async function listPhotos(placeId, mapCode) {
+    const { rows } = await pool.query(
+      'SELECT id, mime, thumb_b64, added_by, created_at FROM place_photos WHERE place_id = $1 AND map_code = $2 ORDER BY id ASC',
+      [placeId, mapCode]
+    );
+    return rows.map(({ thumb_b64, mime, ...rest }) => ({
+      ...rest,
+      thumb: `data:${mime};base64,${thumb_b64}`,
+    }));
+  }
+
+  async function countPhotos(placeId, mapCode) {
+    const { rows } = await pool.query(
+      'SELECT count(*) AS n FROM place_photos WHERE place_id = $1 AND map_code = $2',
+      [placeId, mapCode]
+    );
+    return Number(rows[0].n);
+  }
+
+  async function createPhoto({ placeId, mapCode, mime, fullB64, thumbB64, addedBy }) {
+    const { rows } = await pool.query(
+      `INSERT INTO place_photos (place_id, map_code, mime, full_b64, thumb_b64, added_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [placeId, mapCode, mime, fullB64, thumbB64, addedBy ?? '']
+    );
+    return rows[0];
+  }
+
+  async function getPhoto(id, mapCode) {
+    const { rows } = await pool.query(
+      'SELECT mime, full_b64 FROM place_photos WHERE id = $1 AND map_code = $2',
+      [id, mapCode]
+    );
+    return rows[0] ?? null;
+  }
+
+  async function removePhoto(id, mapCode) {
+    const { rows } = await pool.query(
+      'DELETE FROM place_photos WHERE id = $1 AND map_code = $2 RETURNING id',
+      [id, mapCode]
+    );
     return rows.length > 0;
   }
 
-  return { init, createMap, getMapByCode, listPlaces, create, update, remove };
+  async function listComments(placeId, mapCode) {
+    const { rows } = await pool.query(
+      'SELECT id, author, body, created_at FROM place_comments WHERE place_id = $1 AND map_code = $2 ORDER BY created_at ASC, id ASC',
+      [placeId, mapCode]
+    );
+    return rows;
+  }
+
+  async function createComment({ placeId, mapCode, author, body }) {
+    const { rows } = await pool.query(
+      `INSERT INTO place_comments (place_id, map_code, author, body)
+       VALUES ($1, $2, $3, $4) RETURNING id, author, body, created_at`,
+      [placeId, mapCode, author ?? '', body]
+    );
+    return rows[0];
+  }
+
+  async function removeComment(id, mapCode) {
+    const { rows } = await pool.query(
+      'DELETE FROM place_comments WHERE id = $1 AND map_code = $2 RETURNING id',
+      [id, mapCode]
+    );
+    return rows.length > 0;
+  }
+
+  return {
+    init,
+    createMap,
+    getMapByCode,
+    listPlaces,
+    create,
+    update,
+    remove,
+    getPlace,
+    listPhotos,
+    countPhotos,
+    createPhoto,
+    getPhoto,
+    removePhoto,
+    listComments,
+    createComment,
+    removeComment,
+  };
 }
 
 function createProductionStore() {

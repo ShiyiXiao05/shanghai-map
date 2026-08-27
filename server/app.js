@@ -1,11 +1,14 @@
 import express from 'express';
 import { createPlacesRouter } from './routes/places.js';
 import { createMapsRouter } from './routes/maps.js';
+import { createPhotosRouter } from './routes/photos.js';
+import { createCommentsRouter } from './routes/comments.js';
 
 export function buildApp({ store, mapConfig }) {
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '200kb' }));
+  // 3mb：照片上传的 base64 数据远大于普通 JSON 请求
+  app.use(express.json({ limit: '3mb' }));
 
   app.get('/api/health', (req, res) => {
     res.json({ ok: true });
@@ -20,6 +23,8 @@ export function buildApp({ store, mapConfig }) {
 
   app.use('/api/maps', createMapsRouter({ store }));
   app.use('/api/places', createPlacesRouter({ store }));
+  app.use('/api', createPhotosRouter({ store }));
+  app.use('/api', createCommentsRouter({ store }));
 
   app.use('/api', (req, res) => {
     res.status(404).json({ error: '接口不存在' });

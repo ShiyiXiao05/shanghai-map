@@ -37,4 +37,26 @@ export const api = {
   updatePlace: (mapCode, id, patch) =>
     request('PUT', `/api/places/${id}`, { body: patch, mapCode }),
   deletePlace: (mapCode, id) => request('DELETE', `/api/places/${id}`, { mapCode }),
+  listPhotos: async (mapCode, placeId) =>
+    (
+      await request(
+        'GET',
+        `/api/places/${placeId}/photos?map=${encodeURIComponent(mapCode)}`
+      )
+    ).photos,
+  addPhoto: (mapCode, placeId, data) =>
+    request('POST', `/api/places/${placeId}/photos`, { body: { ...data, map_code: mapCode } }),
+  deletePhoto: (mapCode, photoId) => request('DELETE', `/api/photos/${photoId}`, { mapCode }),
+  photoUrl: (mapCode, photoId) => `/api/photos/${photoId}?map=${encodeURIComponent(mapCode)}`,
+  listComments: async (mapCode, placeId) =>
+    (
+      await request(
+        'GET',
+        `/api/places/${placeId}/comments?map=${encodeURIComponent(mapCode)}`
+      )
+    ).comments,
+  addComment: (mapCode, placeId, data) =>
+    request('POST', `/api/places/${placeId}/comments`, { body: { ...data, map_code: mapCode } }),
+  deleteComment: (mapCode, commentId) =>
+    request('DELETE', `/api/comments/${commentId}`, { mapCode }),
 };

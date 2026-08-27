@@ -3,18 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>想去上海 · 同学共享地点地图</title>
-  <meta name="description" content="和同学一起在地图上标记想去的上海地点" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%2314584a'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23f5f2ea' font-family='serif'%3E沪%3C/text%3E%3C/svg%3E" />
-  <script>
-    (function () {
-      var saved = localStorage.getItem('wish-theme') || 'auto';
-      var theme = saved === 'auto'
-        ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'tokyo' : 'celadon')
-        : saved;
-      document.documentElement.dataset.theme = theme;
-    })();
-  </script>
+  <title>魔都·Explore · 城市探索地图</title>
+  <meta name="description" content="在魔都的夜色里，和同学一起标记想去的上海角落：照片、留言、打卡" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23FF3D81'/%3E%3Cstop offset='1' stop-color='%2322D3EE'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='46' fill='url(%23g)'/%3E%3Cpath fill='%23070B16' transform='translate(50 50) scale(3.2) translate(-12 -12)' d='M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -23,10 +14,10 @@
 
     <header class="top-bar">
       <div class="brand">
-        <span class="brand-badge" aria-hidden="true">沪</span>
+        <span class="brand-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></span>
         <div class="brand-text">
-          <h1>想去上海</h1>
-          <p>同学共享 · 地点收藏</p>
+          <h1>魔都·Explore</h1>
+          <p>城市探索 · 地点收藏</p>
         </div>
       </div>
       <div class="search-wrap">
@@ -55,12 +46,10 @@
       </div>
       <ul class="place-list" id="place-list"></ul>
       <div class="empty-state" id="empty-state" hidden>
-        <p class="empty-icon" aria-hidden="true">🗺️</p>
+        <p class="empty-icon" aria-hidden="true">🌃</p>
         <p class="empty-title">还没有标记任何地点</p>
-        <p>用上方搜索，或在地图上点选一个位置，<br />把大家想去的地方都记下来。</p>
-      </div>
-      <div class="sidebar-foot">
-        <select id="theme-select" class="theme-select" aria-label="配色方案"></select>
+        <p class="empty-hint" id="empty-hint">用上方搜索，或在地图上点选一个位置，<br />把大家想去的地方都记下来。</p>
+        <button type="button" class="btn btn-primary" id="btn-empty-new" hidden>＋ 新建 / 加入地图</button>
       </div>
     </aside>
 
@@ -137,13 +126,53 @@
     </div>
   </dialog>
 
+  <dialog id="detail-dialog" class="dialog dialog-detail">
+    <div class="detail-body">
+      <header class="detail-head">
+        <div class="detail-title-group">
+          <h2 id="detail-title"></h2>
+          <p class="detail-meta" id="detail-meta"></p>
+        </div>
+        <button type="button" class="detail-close" id="btn-detail-close" aria-label="关闭">✕</button>
+      </header>
+      <p class="detail-desc" id="detail-desc" hidden></p>
+      <div class="detail-actions">
+        <button type="button" class="btn btn-small" id="btn-detail-toggle">✅ 打卡</button>
+        <button type="button" class="btn btn-small" id="btn-detail-edit">✏️ 编辑</button>
+      </div>
+      <section class="detail-section">
+        <div class="detail-section-head">
+          <h3>照片 <span class="detail-count" id="detail-photo-count"></span></h3>
+          <button type="button" class="btn btn-small" id="btn-add-photo">＋ 添加照片</button>
+          <input type="file" id="photo-input" accept="image/*" multiple hidden />
+        </div>
+        <div class="photo-grid" id="photo-grid"></div>
+        <p class="detail-empty" id="photo-empty">还没有照片，去过了就拍一张留个纪念吧</p>
+      </section>
+      <section class="detail-section">
+        <h3>留言</h3>
+        <ul class="comment-list" id="comment-list"></ul>
+        <p class="detail-empty" id="comment-empty">还没有留言，说点什么吧</p>
+        <form id="comment-form" class="comment-form">
+          <input id="comment-input" maxlength="280" placeholder="说点什么…" aria-label="留言内容" />
+          <button type="submit" class="btn btn-primary btn-small">发送</button>
+        </form>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="lightbox" class="lightbox">
+    <img id="lightbox-img" alt="地点照片" />
+  </dialog>
+
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
-  <div class="welcome" id="welcome" hidden>
-    <div class="welcome-card">
-      <div class="welcome-badge" aria-hidden="true">沪</div>
-      <h2 class="welcome-title">想去上海</h2>
-      <p class="welcome-sub">创建一张共享地图，和同学标记所有想去的地方</p>
+  <dialog id="map-entry-dialog" class="dialog dialog-map-entry">
+    <button type="button" class="map-entry-close" id="btn-map-entry-close" aria-label="关闭">✕</button>
+    <div class="map-entry-body">
+      <div class="welcome-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div>
+      <h2 class="welcome-title">魔都·Explore</h2>
+      <p class="welcome-sub">创建一张共享地图，或输入同学的邀请码加入</p>
 
       <form id="form-create-map" class="welcome-form">
         <label class="field">
@@ -168,7 +197,7 @@
         <button type="submit" class="btn welcome-btn">加入这张地图</button>
       </form>
     </div>
-  </div>
+  </dialog>
 
   <script type="module" src="/js/app.js"></script>
 </body>

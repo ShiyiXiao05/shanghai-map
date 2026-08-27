@@ -1,7 +1,7 @@
-# 上海地点收藏地图 — 设计文档
+# 魔都·Explore — 设计文档
 
 日期：2026-08-27
-状态：已上线（https://shanghai-wish-map.onrender.com，邀请码多地图模型）
+状态：已上线（https://shanghai-wish-map.onrender.com，邀请码多地图模型；2026-08-27 二次迭代：品牌更名「魔都·Explore」+ 霓虹夜行视觉 + 地点照片/留言）
 
 ## 1. 背景与目标
 
@@ -60,18 +60,35 @@ Neon 免费托管 Postgres（持久存储）
 
 约束：lng ∈ [-180,180]，lat ∈ [-90,90]，由应用层校验；category 由应用层枚举校验。
 
+二次迭代新增（同一 init() 幂等建表，无迁移工具）：
+
+表 `place_photos`：id、place_id、map_code、mime（webp/jpeg/png）、full_b64（展示图 ≤1.5MB）、thumb_b64（缩略图 ≤150KB）、added_by、created_at。每地点最多 9 张；照片在浏览器端 canvas 压缩（长边 1200px/240px，WebP 优先）后以 data URL 上传，Postgres 直接存 base64，不引入对象存储。
+
+表 `place_comments`：id、place_id、map_code、author（≤30 字）、body（1–280 字）、created_at。
+
+删除地点时级联清理其照片与留言；地点列表附带 photo_count / comment_count。
+
 ## 4. API
 
-所有 JSON。写操作（POST/PUT/DELETE）需请求头 `X-Access-Code` 与环境变量 `ACCESS_CODE` 一致，否则 401。读公开。
+所有 JSON（照片原图接口除外，返回二进制）。鉴权为邀请码模型：读操作通过 query `?map=码`，写操作通过 body `map_code` 或请求头 `x-map-code`，码无效或不匹配一律 404。
 
-- `GET /api/places` → `{ places: [...] }`，按 created_at 降序
+- `POST /api/maps` → 201 + `{ code, name, created_by }`
+- `GET /api/maps/:code` → 校验邀请码，不存在 404
+- `GET /api/places?map=码` → `{ places: [...] }`（含 photo_count / comment_count），按 created_at 降序
 - `POST /api/places` → 201 + 新建记录；校验 name 必填、category 枚举、坐标范围
 - `PUT /api/places/:id` → 200 + 更新后记录；`PATCH` 语义（未传字段不变）
-- `DELETE /api/places/:id` → 204；不存在返回 404
+- `DELETE /api/places/:id` → 204；级联删除照片与留言；不存在 404
+- `GET /api/places/:id/photos?map=码` → `{ photos: [{ id, thumb, added_by, created_at }] }`
+- `POST /api/places/:id/photos` → 201 + `{ id }`；校验 data URL 格式、体积、每地点 ≤9 张
+- `GET /api/photos/:id?map=码` → 照片原图二进制，`Cache-Control: immutable`
+- `DELETE /api/photos/:id` → 204
+- `GET /api/places/:id/comments?map=码` → `{ comments: [...] }`
+- `POST /api/places/:id/comments` → 201 + 留言记录；body 1–280 字
+- `DELETE /api/comments/:id` → 204
 - `GET /api/map-config` → `{ key, securityJsCode }`
 - `GET /api/health` → `{ ok: true }`
 
-错误统一 `{ error: "信息" }`；非法输入 400，未授权 401，不存在 404，数据库错误 500（不泄露细节）。
+错误统一 `{ error: "信息" }`；非法输入 400，未授权/码无效 404，数据库错误 500（不泄露细节）。
 
 ## 5. 前端
 

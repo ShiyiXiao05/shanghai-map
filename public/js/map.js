@@ -34,7 +34,7 @@ export function createMapView(container) {
     viewMode: '2D',
     zoom: 12,
     center: [121.4737, 31.2304],
-    mapStyle: 'amap://styles/normal',
+    mapStyle: 'amap://styles/dark',
   });
 
   let markers = [];
@@ -62,13 +62,17 @@ export function createMapView(container) {
     });
   }
 
-  function openInfo(place, categoryMeta, { onEdit } = {}) {
+  function openInfo(place, categoryMeta, { onEdit, onDetail } = {}) {
     closeInfo();
     const meta = categoryMeta(place.category);
     const desc = place.description
       ? `<p class="iw-desc">${escapeHtml(place.description)}</p>`
       : '';
     const visited = place.visited ? '<span class="stamp" title="已去过"></span>' : '';
+    const feedback = [
+      place.photo_count > 0 ? `📷 ${place.photo_count}` : '',
+      place.comment_count > 0 ? `💬 ${place.comment_count}` : '',
+    ].filter(Boolean).join(' ');
     const content = document.createElement('div');
     content.className = 'info-window';
     content.innerHTML = `
@@ -76,12 +80,20 @@ export function createMapView(container) {
       <p class="iw-title"><span>${meta.emoji} ${escapeHtml(place.name)}</span>${visited}</p>
       ${desc}
       <p class="iw-meta">${escapeHtml([place.added_by, place.address].filter(Boolean).join(' · '))}</p>
-      <p class="iw-meta"><a href="#" class="iw-edit" data-edit="${place.id}">编辑 / 删除</a></p>
+      <p class="iw-links">
+        <a href="#" class="iw-detail" data-detail="${place.id}">照片 · 留言${feedback ? `（${feedback}）` : ''}</a>
+        <span class="iw-sep">·</span>
+        <a href="#" class="iw-edit" data-edit="${place.id}">编辑 / 删除</a>
+      </p>
     `;
     content.querySelector('.iw-close').addEventListener('click', () => closeInfo());
     content.querySelector('[data-edit]').addEventListener('click', (event) => {
       event.preventDefault();
       onEdit?.(place);
+    });
+    content.querySelector('[data-detail]').addEventListener('click', (event) => {
+      event.preventDefault();
+      onDetail?.(place);
     });
     infoWindow = new AMap.InfoWindow({
       content,
