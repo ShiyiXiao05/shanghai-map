@@ -72,16 +72,23 @@ export function createMapView(container) {
     const content = document.createElement('div');
     content.className = 'info-window';
     content.innerHTML = `
+      <button type="button" class="iw-close" aria-label="关闭">✕</button>
       <p class="iw-title"><span>${meta.emoji} ${escapeHtml(place.name)}</span>${visited}</p>
       ${desc}
       <p class="iw-meta">${escapeHtml([place.added_by, place.address].filter(Boolean).join(' · '))}</p>
       <p class="iw-meta"><a href="#" class="iw-edit" data-edit="${place.id}">编辑 / 删除</a></p>
     `;
+    content.querySelector('.iw-close').addEventListener('click', () => closeInfo());
     content.querySelector('[data-edit]').addEventListener('click', (event) => {
       event.preventDefault();
       onEdit?.(place);
     });
-    infoWindow = new AMap.InfoWindow({ content, offset: new AMap.Pixel(0, -20) });
+    infoWindow = new AMap.InfoWindow({
+      content,
+      isCustom: true,
+      anchor: 'bottom-center',
+      offset: new AMap.Pixel(0, -18),
+    });
     infoWindow.open(map, [place.lng, place.lat]);
   }
 

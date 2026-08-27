@@ -2,13 +2,40 @@ import { api, ApiError, getAccessCode, setAccessCode } from './api.js';
 import { loadAmap, createMapView } from './map.js';
 
 const CATEGORIES = [
-  { id: '景点', emoji: '📍', color: '#3e6b4f' },
-  { id: '美食', emoji: '🍜', color: '#c96f2e' },
-  { id: '展馆', emoji: '🖼️', color: '#3b5ba5' },
-  { id: '购物', emoji: '🛍️', color: '#c13b6e' },
-  { id: '娱乐', emoji: '🎡', color: '#7b4fa6' },
-  { id: '其他', emoji: '✨', color: '#5c6b73' },
+  { id: '景点', emoji: '📍', color: '#3e8e63' },
+  { id: '美食', emoji: '🍜', color: '#d97b29' },
+  { id: '展馆', emoji: '🖼️', color: '#5b7fc4' },
+  { id: '购物', emoji: '🛍️', color: '#cc5f8f' },
+  { id: '娱乐', emoji: '🎡', color: '#9a6fc9' },
+  { id: '其他', emoji: '✨', color: '#7a8a94' },
 ];
+
+/* 主题：色值见 css/style.css 的 html[data-theme] 块（来自 StudyPlan 的配色方案） */
+const THEMES = {
+  auto: { name: '🌗 自动（跟随系统）' },
+  celadon: { name: '🍵 青瓷', mapStyle: 'amap://styles/fresh' },
+  ink: { name: '🌑 墨夜', mapStyle: 'amap://styles/dark' },
+  berry: { name: '🫐 莓果暗', mapStyle: 'amap://styles/grape' },
+  onedark: { name: '💠 奥德暗', mapStyle: 'amap://styles/darkblue' },
+  pudding: { name: '🐾 布丁紫', mapStyle: 'amap://styles/grape' },
+  tokyo: { name: '🌃 东京夜', mapStyle: 'amap://styles/darkblue' },
+};
+
+const THEME_KEY = 'wish-theme';
+
+function resolveThemeId(saved) {
+  if (saved !== 'auto' && THEMES[saved]) return saved;
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'tokyo' : 'celadon';
+}
+
+function applyTheme(saved, { persist } = {}) {
+  const themeId = resolveThemeId(saved);
+  document.documentElement.dataset.theme = themeId;
+  const mapStyle = THEMES[themeId]?.mapStyle;
+  if (mapStyle) state.mapView?.map.setMapStyle(mapStyle);
+  if (persist) localStorage.setItem(THEME_KEY, saved);
+  $('#theme-select').value = saved;
+}
 
 const NICKNAME_KEY = 'shanghai-wish-nickname';
 
@@ -213,6 +240,7 @@ async function initMap() {
     await loadAmap(config);
     state.mapView = createMapView($('#map'));
     $('#map-fallback').hidden = true;
+    applyTheme(localStorage.getItem(THEME_KEY) || 'auto');
     renderMarkers();
   } catch (err) {
     showMapFallback();
@@ -589,7 +617,23 @@ function bindStaticEvents() {
   });
 }
 
+function bindThemeSelect() {
+  const select = $('#theme-select');
+  for (const [id, theme] of Object.entries(THEMES)) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = theme.name;
+    select.appendChild(option);
+  }
+  select.value = localStorage.getItem(THEME_KEY) || 'auto';
+  select.addEventListener('change', () => applyTheme(select.value, { persist: true }));
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') applyTheme('auto');
+  });
+}
+
 async function boot() {
+  bindThemeSelect();
   fillCategorySelect();
   renderChips();
   bindStaticEvents();

@@ -6,6 +6,15 @@
   <title>想去上海 · 同学共享地点地图</title>
   <meta name="description" content="和同学一起在地图上标记想去的上海地点" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%2314584a'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle' fill='%23f5f2ea' font-family='serif'%3E沪%3C/text%3E%3C/svg%3E" />
+  <script>
+    (function () {
+      var saved = localStorage.getItem('wish-theme') || 'auto';
+      var theme = saved === 'auto'
+        ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'tokyo' : 'celadon')
+        : saved;
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -47,6 +56,7 @@
         <p>用上方搜索，或在地图上点选一个位置，<br />把大家想去的地方都记下来。</p>
       </div>
       <div class="sidebar-foot">
+        <select id="theme-select" class="theme-select" aria-label="配色方案"></select>
         <button id="btn-code" class="btn-link" type="button">修改编辑口令</button>
       </div>
     </aside>
