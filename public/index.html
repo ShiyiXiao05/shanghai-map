@@ -29,7 +29,7 @@
     </header>
 
     <div class="pick-hint" id="pick-hint" hidden>
-      在地图上点击一个位置来标记 · <button id="btn-pick-cancel" type="button">取消</button>
+      点击地图上的位置，会自动匹配附近的地点 · <button id="btn-pick-cancel" type="button">取消</button>
     </div>
 
     <aside class="side-panel" id="sidebar">
@@ -98,6 +98,18 @@
         <button type="submit" class="btn btn-primary" id="btn-place-save">保存</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="pick-dialog" class="dialog dialog-pick">
+    <div class="pick-body">
+      <h2>选一个准确的位置</h2>
+      <p class="dialog-hint" id="pick-raw-hint">你点击的位置：</p>
+      <div class="pick-candidates" id="pick-candidates"></div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btn-pick-cancel-dialog">取消</button>
+        <button type="button" class="btn btn-primary" id="btn-pick-raw">就用点击的位置</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog id="code-dialog" class="dialog dialog-narrow">

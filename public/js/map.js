@@ -126,5 +126,53 @@ export function createMapView(container) {
     });
   }
 
-  return { map, setPlaces, openInfo, closeInfo, focus, setPickMode, searchPois };
+  async function reverseGeocode(lnglat) {
+    await new Promise((resolve, reject) => {
+      if (AMap.Geocoder) return resolve();
+      AMap.plugin('AMap.Geocoder', (ok) => (ok === false ? reject(new Error('逆地理插件加载失败')) : resolve()));
+    });
+    const geocoder = new AMap.Geocoder({ city: '上海', extensions: 'all' });
+    return new Promise((resolve) => {
+      geocoder.getAddress(lnglat, (status, result) => {
+        if (status !== 'complete' || !result?.regeocode) {
+          resolve({ formattedAddress: '', pois: [] });
+          return;
+        }
+        const regeo = result.regeocode;
+        const pois = (regeo.pois ?? [])
+          .slice(0, 6)
+          .map((poi) => ({
+            name: poi.name ?? '',
+            address: poi.address || regeo.formattedAddress || '',
+            lng: Number(poi.location?.lng),
+            lat: Number(poi.location?.lat),
+            distance: Number(poi.distance),
+          }))
+          .filter((poi) => poi.name && Number.isFinite(poi.lng) && Number.isFinite(poi.lat));
+        resolve({ formattedAddress: regeo.formattedAddress ?? '', pois });
+      });
+    });
+  }
+
+  let pickMarker = null;
+
+  function showPickMarker(lnglat) {
+    clearPickMarker();
+    pickMarker = new AMap.Marker({
+      position: lnglat,
+      content: '<div class="pick-dot"></div>',
+      anchor: 'center',
+      zIndex: 130,
+    });
+    map.add(pickMarker);
+  }
+
+  function clearPickMarker() {
+    if (pickMarker) {
+      map.remove(pickMarker);
+      pickMarker = null;
+    }
+  }
+
+  return { map, setPlaces, openInfo, closeInfo, focus, setPickMode, searchPois, reverseGeocode, showPickMarker, clearPickMarker };
 }

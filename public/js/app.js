@@ -232,9 +232,86 @@ function setPickMode(on) {
   state.mapView?.setPickMode(on, {
     onPick: (lng, lat) => {
       setPickMode(false);
-      openPlaceDialog({ coords: { lng, lat } });
+      handleMapPick(lng, lat);
     },
   });
+}
+
+/* ---------- 吸附选点 ---------- */
+
+let pendingPickCoords = null;
+
+function formatDistance(meters) {
+  if (!Number.isFinite(meters)) return '';
+  if (meters < 1000) return `${Math.round(meters)} 米`;
+  return `${(meters / 1000).toFixed(1)} 公里`;
+}
+
+async function handleMapPick(lng, lat) {
+  pendingPickCoords = { lng, lat };
+  state.mapView.showPickMarker([lng, lat]);
+
+  const dialog = $('#pick-dialog');
+  $('#pick-raw-hint').textContent = `你点击的位置：${lng.toFixed(5)}, ${lat.toFixed(5)}`;
+  const list = $('#pick-candidates');
+  const loading = document.createElement('div');
+  loading.className = 'pick-loading';
+  loading.textContent = '正在匹配附近的地点…';
+  list.replaceChildren(loading);
+  dialog.showModal();
+
+  let result = { formattedAddress: '', pois: [] };
+  try {
+    result = await state.mapView.reverseGeocode([lng, lat]);
+  } catch {
+    /* 匹配失败按无候选处理 */
+  }
+  if (!dialog.open) return;
+
+  if (result.pois.length === 0) {
+    const coords = pendingPickCoords;
+    closePickDialog();
+    openPlaceDialog({ coords, prefill: { address: result.formattedAddress } });
+    toast('附近没有匹配的地点，已用你点击的位置');
+    return;
+  }
+
+  list.replaceChildren();
+  for (const poi of result.pois) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'pick-candidate';
+    const main = document.createElement('span');
+    const name = document.createElement('div');
+    name.className = 'candidate-name';
+    name.textContent = poi.name;
+    const addr = document.createElement('div');
+    addr.className = 'candidate-addr';
+    addr.textContent = poi.address;
+    main.append(name, addr);
+    const dist = document.createElement('span');
+    dist.className = 'candidate-distance';
+    dist.textContent = formatDistance(poi.distance);
+    row.append(main, dist);
+    row.addEventListener('click', () => {
+      closePickDialog();
+      state.mapView.map.setZoomAndCenter(16, [poi.lng, poi.lat]);
+      openPlaceDialog({
+        coords: { lng: poi.lng, lat: poi.lat },
+        prefill: { name: poi.name, address: poi.address },
+      });
+    });
+    list.appendChild(row);
+  }
+}
+
+function closePickDialog() {
+  $('#pick-dialog').close();
+}
+
+function cleanupPick() {
+  state.mapView?.clearPickMarker();
+  pendingPickCoords = null;
 }
 
 /* ---------- 搜索 ---------- */
@@ -497,6 +574,13 @@ function bindStaticEvents() {
     setPickMode(!state.pickMode);
   });
   $('#btn-pick-cancel').addEventListener('click', () => setPickMode(false));
+  $('#btn-pick-cancel-dialog').addEventListener('click', closePickDialog);
+  $('#btn-pick-raw').addEventListener('click', () => {
+    const coords = pendingPickCoords;
+    closePickDialog();
+    if (coords) openPlaceDialog({ coords });
+  });
+  $('#pick-dialog').addEventListener('close', cleanupPick);
   $('#btn-place-cancel').addEventListener('click', closePlaceDialog);
   $('#place-form').addEventListener('submit', submitPlace);
   $('#toggle-unvisited').addEventListener('change', (event) => {
