@@ -19,7 +19,7 @@
 
 ## 本地开发
 
-前置：Node.js ≥ 20，并准备两个免费账号的 key（见下方"准备工作"）。
+前置：Node.js ≥ 20；地图和数据库的 key 见下方"准备工作"（不配置也能启动：数据库用内存模式、地图显示占位卡片，方便先跑起来看界面）。
 
 ```bash
 git clone <仓库地址> && cd Shanghai
@@ -28,6 +28,8 @@ npm --prefix server install
 npm --prefix server run dev
 # 打开 http://localhost:3000
 ```
+
+> 没配 `DATABASE_URL` 时服务以内存数据库启动（重启数据清空，仅限本地体验）；没配 `AMAP_KEY` 时地图区域显示占位说明，列表和增删改功能照常。
 
 ### 准备工作（一次性，约 10 分钟）
 
@@ -89,6 +91,11 @@ git push -u origin main
 
 ```
 server/   Express 后端（API + 静态托管）
+  app.js        应用装配（路由、健康检查、配置下发）
+  store.js      数据层：静态 SQL + 参数绑定；生产连接池也从这里创建
+  env.js        dotenv 引导
+  routes/       地点 CRUD 路由与口令中间件
+  test/         接口测试（node:test + pg-mem）
 public/   前端（index.html / css / js）
 docs/     设计文档
 ```
