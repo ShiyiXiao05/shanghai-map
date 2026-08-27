@@ -15,8 +15,6 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
-      - key: ACCESS_CODE
-        sync: false
       - key: AMAP_KEY
         sync: false
       - key: AMAP_SECURITY_CODE

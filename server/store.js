@@ -6,7 +6,6 @@ export const CATEGORIES = ['景点', '美食', '展馆', '购物', '娱乐', '�
 
 // 去掉易混淆字符（0/O、1/I）的邀请码字母表
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-export const DEFAULT_MAP_CODE = 'SH2026';
 
 export function generateMapCode() {
   let code = '';
@@ -38,20 +37,13 @@ export function createPlaceStore(pool) {
         address TEXT NOT NULL DEFAULT '',
         added_by TEXT NOT NULL DEFAULT '',
         visited BOOLEAN NOT NULL DEFAULT FALSE,
-        map_code TEXT NOT NULL DEFAULT 'SH2026',
+        map_code TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
-    await pool.query(`
-      ALTER TABLE public.places ADD COLUMN IF NOT EXISTS map_code
-        TEXT NOT NULL DEFAULT 'SH2026'
-    `);
     await pool.query(
-      `INSERT INTO maps (code, name, created_by)
-       VALUES ($1, $2, 'system')
-       ON CONFLICT (code) DO NOTHING`,
-      [DEFAULT_MAP_CODE, '想去上海 · 主地图']
+      'ALTER TABLE public.places ADD COLUMN IF NOT EXISTS map_code TEXT NOT NULL'
     );
   }
 

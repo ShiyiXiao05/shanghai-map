@@ -1,29 +1,30 @@
 # 上海地点收藏地图 🗺️
 
-和同学一起在地图上标记想去的上海地点：搜索定位、添加描述、分类管理、去过后打卡。
+和同学一起在地图上标记想去的上海地点：搜索定位、吸附选点、添加描述、分类管理、去过后打卡。**邀请码共享多地图**：每张地图有独立邀请码，同码即可共建。
 
 > **线上地址**：https://shanghai-wish-map.onrender.com
-> 编辑口令见建站同学（Render 环境变量 `ACCESS_CODE`，可在控制台 Environment 标签查看或修改）。
-> 数据库：Neon 项目 Shanghai（misty-pine-71414268，production 分支）。
+> 新访客在欢迎页「创建地图」拿邀请码，或输入同学的邀请码加入；邀请链接形如 `/?map=邀请码` 可直接打开。
 
 ## 功能
 
-- 上海地图（高德）展示所有标记地点，按分类着色
-- 搜索地点名（如"武康路"）直接定位打标，或在地图上点选取点
+- 每张地图独立：创建即生成 6 位邀请码，侧栏切换器管理多张地图，地点互相隔离
+- 邀请码即权限：知道码才能看和编（读 `?map=`、写请求带码），无账号系统
+- 上海地图（高德）展示标记，按分类着色；搜索地点名或地图吸附选点（自动匹配附近地点）
 - 每个地点：名称、描述、分类（景点/美食/展馆/购物/娱乐/其他）、添加人昵称、时间
-- "已去过"打卡、分类筛选、地点列表与地图联动
-- 浏览无需口令；添加/编辑/删除需共享口令（防止公网上被乱改）
+- "已去过"圆圈打卡、分类筛选、地点列表与地图联动
+- 三套配色 + 自动跟随系统：青瓷（浅色）/ 布丁紫 / 东京夜，地图始终为清晰的标准底图
+- 移动端适配
 
 ## 技术栈
 
 - 前端：原生 HTML/CSS/JS + 高德地图 JS API 2.0（无构建，克隆即用）
-- 后端：Node.js + Express，`pg` 连接池，所有 SQL 参数化查询
+- 后端：Node.js + Express，`pg` 连接池，所有 SQL 静态字面量 + 参数绑定
 - 数据库：Neon 免费托管 Postgres（数据持久保存）
 - 部署：Render 免费 Web Service（后端同时托管前端静态页）
 
 ## 本地开发
 
-前置：Node.js ≥ 20；地图和数据库的 key 见下方"准备工作"（不配置也能启动：数据库用内存模式、地图显示占位卡片，方便先跑起来看界面）。
+前置：Node.js ≥ 20；地图和数据库的 key 见下方"准备工作"（不配置也能启动：数据库用内存模式、地图显示占位卡片）。
 
 ```bash
 git clone <仓库地址> && cd Shanghai
@@ -38,25 +39,26 @@ npm --prefix server run dev
 ### 准备工作（一次性，约 10 分钟）
 
 1. **数据库**：注册 [Neon](https://console.neon.tech)（免费、无需信用卡）→ 创建项目 → 复制 Connection string 填入 `.env` 的 `DATABASE_URL`
-2. **地图 key**：注册 [高德开放平台](https://console.amap.com)（需阿里云/淘宝账号）→ 创建应用 → 添加 Key，服务平台选 **Web端(JS API)** → 得到 key 与安全密钥，填入 `.env` 的 `AMAP_KEY`、`AMAP_SECURITY_CODE`；在 key 的域名白名单里加上 `localhost`
-3. **共享口令**：自定一个口令填入 `ACCESS_CODE`，告诉同学们
+2. **地图 key**：注册 [高德开放平台](https://console.amap.com)（需阿里云/淘宝账号）→ 创建应用 → 添加 Key，服务平台选 **Web端(JS API)** → 得到 key 与安全密钥，填入 `.env` 的 `AMAP_KEY`、`AMAP_SECURITY_CODE`
 
 ## 和同学协作
 
-- 使用网站：打开网址，输入共享口令即可添加地点
+- 把邀请码或邀请链接发给同学，他们在欢迎页输入即加入同一张地图
 - 修改代码：clone 仓库 → 本地跑起来 → 改 → push；小改动也可以直接在 GitHub 网页上编辑
 - 数据存在云端数据库，所有人共享同一份；代码仓库里没有数据
 
 ## API 一览
 
-| 方法 | 路径 | 说明 | 口令 |
+| 方法 | 路径 | 说明 | 邀请码 |
 |---|---|---|---|
-| GET | /api/places | 地点列表 | 不需要 |
-| POST | /api/places | 新增地点 | 需要 |
-| PUT | /api/places/:id | 编辑地点 | 需要 |
-| DELETE | /api/places/:id | 删除地点 | 需要 |
+| POST | /api/maps | 创建地图，返回邀请码 | — |
+| GET | /api/maps/:code | 校验邀请码 | — |
+| GET | /api/places?map=码 | 地点列表 | query 传入 |
+| POST | /api/places | 新增地点 | body `map_code` |
+| PUT | /api/places/:id | 编辑地点 | 头 `x-map-code` |
+| DELETE | /api/places/:id | 删除地点 | 头 `x-map-code` |
 
-写操作在请求头携带 `X-Access-Code: <口令>`。前端已自动处理。
+邀请码无效返回 404；前端已自动处理。
 
 ## 部署手册
 
@@ -71,35 +73,33 @@ git push -u origin main
 
 ### 第 2 步：Render 部署后端
 
-1. 注册/登录 [Render](https://render.com)（GitHub 账号即可，免费档无需信用卡）
+1. 注册/登录 [Render](https://render.com)（GitHub 账号即可，免费档无需信用卡），并在 GitHub 安装 Render App 时授权本仓库
 2. New → **Web Service** → 连接上面的 GitHub 仓库
 3. 配置：
    - Root Directory：`server`
    - Build Command：`npm install`
    - Start Command：`npm start`
    - Instance Type：Free
-4. Environment 中添加 4 个变量（与 `.env` 相同）：`DATABASE_URL`、`ACCESS_CODE`、`AMAP_KEY`、`AMAP_SECURITY_CODE`
+4. Environment 中添加 3 个变量（与 `.env` 相同）：`DATABASE_URL`、`AMAP_KEY`、`AMAP_SECURITY_CODE`
 5. 创建后等待部署完成，得到形如 `https://xxx.onrender.com` 的网址
 
 > 免费档服务 15 分钟无访问会休眠，下次首访约需 30–60 秒唤醒，属正常现象。
+> 若推送后网站没自动更新，控制台 Manual Deploy → Deploy latest commit。
 
-### 第 3 步：高德 key 域名白名单
+### 第 3 步：分享
 
-到高德控制台，编辑你的 Key，把 Render 域名（如 `xxx.onrender.com`）加入白名单，保存。本地开发用的 `localhost` 保留即可。
-
-### 第 4 步：分享
-
-把 `https://xxx.onrender.com` 和共享口令发给同学即可。
+把 `https://xxx.onrender.com` 发给同学，让他们创建/加入地图即可。
 
 ## 项目结构
 
 ```
 server/   Express 后端（API + 静态托管）
-  app.js        应用装配（路由、健康检查、配置下发）
-  store.js      数据层：静态 SQL + 参数绑定；生产连接池也从这里创建
+  app.js        应用装配
+  store.js      数据层（静态 SQL + 参数绑定、邀请码生成、生产连接池）
   env.js        dotenv 引导
-  routes/       地点 CRUD 路由与口令中间件
+  routes/       maps（创建/校验）与 places（CRUD）路由
   test/         接口测试（node:test + pg-mem）
 public/   前端（index.html / css / js）
 docs/     设计文档
+render.yaml  Render 部署蓝图
 ```

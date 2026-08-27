@@ -64,14 +64,6 @@ describe('maps & places API', () => {
     assert.equal((await res.json()).ok, true);
   });
 
-  it('初始地图 SH2026 随启动存在', async () => {
-    const res = await request('GET', '/api/maps/SH2026');
-    assert.equal(res.status, 200);
-    const map = await res.json();
-    assert.equal(map.code, 'SH2026');
-    assert.ok(map.name.length > 0);
-  });
-
   it('POST /api/maps 创建地图并返回邀请码', async () => {
     const map = await createMap(request, '毕业旅行');
     assert.match(map.code, /^[A-Z2-9]{6}$/);
