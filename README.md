@@ -2,6 +2,10 @@
 
 和同学一起在地图上标记想去的上海地点：搜索定位、添加描述、分类管理、去过后打卡。
 
+> **线上地址**：https://shanghai-wish-map.onrender.com
+> 编辑口令见建站同学（Render 环境变量 `ACCESS_CODE`，可在控制台 Environment 标签查看或修改）。
+> 数据库：Neon 项目 Shanghai（misty-pine-71414268，production 分支）。
+
 ## 功能
 
 - 上海地图（高德）展示所有标记地点，按分类着色
