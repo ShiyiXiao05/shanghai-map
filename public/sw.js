@@ -1,7 +1,7 @@
 /* 魔都·Explore Service Worker
    策略：核心静态资源预缓存 + stale-while-revalidate；API 一律走网络；跨域直通 */
 
-const CACHE_NAME = 'wishmap-static-v1';
+const CACHE_NAME = 'wishmap-static-v2';
 const CORE_ASSETS = [
   '/',
   '/css/style.css',
@@ -45,12 +45,14 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(request, { ignoreSearch: true });
+      // waitUntil 保证 respondWith 返回缓存后 SW 不被提前杀死，后台更新才能落盘
       const network = fetch(request)
         .then((response) => {
           if (response.ok) cache.put(request, response.clone());
           return response;
         })
         .catch(() => null);
+      event.waitUntil(network);
       // 有缓存先用缓存，同时后台更新；离线且无缓存时返回网络错误兜底
       return cached || (await network) || new Response('离线且无缓存', { status: 504 });
     })()

@@ -42,6 +42,20 @@ export function createMapView(container) {
   let markerClickHandler = null;
   let infoWindow = null;
   let pickHandler = null;
+  let hotId = null;
+
+  function setHotClass(id, on) {
+    const el = markers.get(id)?.marker.getElement();
+    el?.querySelector('.marker-chip')?.classList.toggle('is-hot', on);
+  }
+
+  // 列表悬停 ↔ 地图标记联动高亮
+  function highlight(id) {
+    if (hotId === id) return;
+    if (hotId !== null) setHotClass(hotId, false);
+    hotId = id ?? null;
+    if (hotId !== null) setHotClass(hotId, true);
+  }
 
   function markerContent(place, meta) {
     const visited = place.visited ? ' is-visited' : '';
@@ -55,6 +69,7 @@ export function createMapView(container) {
       if (!visible.has(id)) {
         map.remove(entry.marker);
         markers.delete(id);
+        if (hotId === id) hotId = null;
       }
     }
     for (const place of places) {
@@ -214,5 +229,5 @@ export function createMapView(container) {
     }
   }
 
-  return { map, setPlaces, openInfo, closeInfo, focus, setPickMode, searchPois, reverseGeocode, showPickMarker, clearPickMarker };
+  return { map, setPlaces, openInfo, closeInfo, focus, highlight, setPickMode, searchPois, reverseGeocode, showPickMarker, clearPickMarker };
 }

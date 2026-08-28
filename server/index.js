@@ -30,10 +30,13 @@ const app = buildApp({
 });
 app.use(
   express.static(publicDir, {
-    // HTML 保持协商缓存，其余静态资源走 1 小时强缓存
-    maxAge: '1h',
+    // HTML/SW/manifest 协商缓存；其余静态资源 10 分钟强缓存（发版后过期上限可控）
+    maxAge: '10m',
     setHeaders(res, filePath) {
-      if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+      const base = path.basename(filePath);
+      if (filePath.endsWith('.html') || base === 'sw.js' || base === 'manifest.webmanifest') {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
     },
   })
 );

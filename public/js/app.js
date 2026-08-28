@@ -16,6 +16,7 @@ const CATEGORIES = [
 const MAPS_KEY = 'wish-maps';
 const CURRENT_MAP_KEY = 'wish-current-map';
 const NICKNAME_KEY = 'shanghai-wish-nickname';
+const SORT_KEY = 'wish-sort';
 const NEW_MAP_OPTION = '__new__';
 
 const state = {
@@ -25,6 +26,8 @@ const state = {
   hideUnvisitedOnly: false,
   mapView: null,
   pickMode: false,
+  sort: localStorage.getItem(SORT_KEY) || 'newest',
+  loading: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -47,21 +50,61 @@ function formatDateTime(iso) {
   return `${formatDate(iso)} ${hh}:${mm}`;
 }
 
-function currentNickname() {
+async function currentNickname() {
   let who = localStorage.getItem(NICKNAME_KEY);
-  if (!who) {
-    who = prompt('你的昵称是？（用于记录是谁想去、谁留言）')?.trim();
-    if (who) localStorage.setItem(NICKNAME_KEY, who);
-  }
+  if (!who) who = await askNickname();
   return who || null;
 }
 
-function toast(message, type = 'info') {
+function toast(message, type = 'ok') {
+  const icons = { ok: '✓', error: '✕', info: 'ℹ' };
   const el = document.createElement('div');
-  el.className = `toast${type === 'error' ? ' toast-error' : ''}`;
-  el.textContent = message;
+  el.className = `toast toast-${type}`;
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.textContent = icons[type] ?? icons.info;
+  icon.setAttribute('aria-hidden', 'true');
+  el.appendChild(icon);
+  el.appendChild(document.createTextNode(message));
   $('#toasts').appendChild(el);
   setTimeout(() => el.remove(), 2800);
+}
+
+/* ---------- 自定义确认 / 昵称弹窗（替代原生 confirm/prompt） ---------- */
+
+function askConfirm({ title, message, okText = '确定', danger = false } = {}) {
+  return new Promise((resolve) => {
+    const dialog = $('#confirm-dialog');
+    const ok = $('#confirm-ok');
+    ok.textContent = okText;
+    ok.classList.toggle('btn-danger', danger);
+    $('#confirm-title').textContent = title;
+    $('#confirm-message').textContent = message ?? '';
+    dialog.returnValue = '';
+    const onClose = () => {
+      dialog.removeEventListener('close', onClose);
+      resolve(dialog.returnValue === 'ok');
+    };
+    dialog.addEventListener('close', onClose);
+    dialog.showModal();
+  });
+}
+
+function askNickname() {
+  return new Promise((resolve) => {
+    const dialog = $('#nickname-dialog');
+    const input = $('#nickname-input');
+    input.value = localStorage.getItem(NICKNAME_KEY) ?? '';
+    dialog.returnValue = '';
+    const onClose = () => {
+      dialog.removeEventListener('close', onClose);
+      const saved = dialog.returnValue === 'ok' ? input.value.trim() : '';
+      if (saved) localStorage.setItem(NICKNAME_KEY, saved);
+      resolve(saved || null);
+    };
+    dialog.addEventListener('close', onClose);
+    dialog.showModal();
+  });
 }
 
 /* ---------- 地图会话（邀请码） ---------- */
@@ -85,7 +128,9 @@ function setCurrentMap(map) {
   state.map = map;
   saveJoinedMap(map);
   localStorage.setItem(CURRENT_MAP_KEY, map.code);
-  history.replaceState(null, '', `?map=${encodeURIComponent(map.code)}`);
+  const url = new URL(location.href);
+  url.searchParams.set('map', map.code); // 保留 place 等其他参数，深链不丢
+  history.replaceState(null, '', url);
   renderMapSelect();
 }
 
@@ -198,6 +243,7 @@ function bindMapEntry() {
         setCurrentMap(map);
         state.mapView?.closeInfo();
         closeDetail();
+        syncUrlPlace(null); // 换地图后旧地点深链失效
         await loadPlaces();
       }
     }
@@ -239,9 +285,12 @@ async function loadPlaces() {
     renderAll();
     return;
   }
+  state.loading = true;
+  renderList(); // 先出骨架屏
   try {
     state.places = await api.listPlaces(state.map.code);
   } catch (err) {
+    state.loading = false;
     if (err.status === 404) {
       toast('这张地图不存在了，换一个邀请码吧', 'error');
       openMapEntry();
@@ -250,7 +299,24 @@ async function loadPlaces() {
     toast(`地点列表加载失败：${err.message}`, 'error');
     return;
   }
+  state.loading = false;
   renderAll();
+  tryOpenDetailFromUrl();
+}
+
+// ?map=码&place=id 深链：加载完直达地点详情
+function tryOpenDetailFromUrl() {
+  const id = Number(new URLSearchParams(location.search).get('place'));
+  if (!id) return;
+  const place = state.places.find((p) => p.id === id);
+  if (place) openDetail(place);
+}
+
+function syncUrlPlace(placeId) {
+  const url = new URL(location.href);
+  if (placeId == null) url.searchParams.delete('place');
+  else url.searchParams.set('place', String(placeId));
+  history.replaceState(null, '', url);
 }
 
 function renderAll() {
@@ -259,11 +325,20 @@ function renderAll() {
 }
 
 function filteredPlaces() {
-  return state.places.filter(
+  const filtered = state.places.filter(
     (place) =>
       state.activeCategories.has(place.category) &&
       !(state.hideUnvisitedOnly && place.visited)
   );
+  const sorted = [...filtered];
+  if (state.sort === 'name') {
+    sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
+  } else if (state.sort === 'wishes') {
+    sorted.sort((a, b) => (b.wishes?.length ?? 0) - (a.wishes?.length ?? 0));
+  } else {
+    sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }
+  return sorted;
 }
 
 function renderMarkers() {
@@ -282,22 +357,56 @@ function openInfoFor(place) {
   });
 }
 
+function renderSkeletons(list) {
+  list.replaceChildren();
+  for (let i = 0; i < 4; i += 1) {
+    const li = document.createElement('li');
+    li.className = 'skeleton-item';
+    const avatar = document.createElement('span');
+    avatar.className = 'sk sk-avatar';
+    const lines = document.createElement('div');
+    lines.className = 'sk-lines';
+    const line1 = document.createElement('span');
+    line1.className = 'sk sk-line w60';
+    const line2 = document.createElement('span');
+    line2.className = 'sk sk-line w85';
+    lines.append(line1, line2);
+    li.append(avatar, lines);
+    list.appendChild(li);
+  }
+}
+
 function renderList() {
   const list = $('#place-list');
+  const empty = $('#empty-state');
+  const newMapBtn = $('#btn-empty-new');
+  const countEl = $('#list-count');
+
+  if (state.loading) {
+    empty.hidden = true;
+    newMapBtn.hidden = true;
+    countEl.textContent = '加载中…';
+    renderSkeletons(list);
+    return;
+  }
+
   list.replaceChildren();
 
   const places = filteredPlaces();
-  const empty = $('#empty-state');
-  const newMapBtn = $('#btn-empty-new');
 
   if (!state.map) {
     empty.hidden = false;
+    countEl.textContent = '';
     empty.querySelector('.empty-title').textContent = '还没有加入地图';
     $('#empty-hint').textContent = '创建一张新地图，或用同学的邀请码加入';
     newMapBtn.hidden = false;
     return;
   }
   newMapBtn.hidden = true;
+  countEl.textContent =
+    places.length === state.places.length
+      ? `${state.places.length} 个地点`
+      : `${places.length} / ${state.places.length} 个地点`;
 
   if (places.length === 0) {
     empty.hidden = false;
@@ -400,6 +509,8 @@ function renderList() {
     item.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') focusPlace(place);
     });
+    item.addEventListener('mouseenter', () => state.mapView?.highlight(place.id));
+    item.addEventListener('mouseleave', () => state.mapView?.highlight(null));
 
     list.appendChild(item);
   }
@@ -481,6 +592,15 @@ function setPickMode(on) {
 /* ---------- 搜索 ---------- */
 
 let searchTimer = null;
+let searchIndex = -1;
+
+function moveSearchSelection(delta) {
+  const buttons = [...$('#search-suggest').querySelectorAll('button')];
+  if (buttons.length === 0) return;
+  searchIndex = (searchIndex + delta + buttons.length) % buttons.length;
+  buttons.forEach((btn, i) => btn.classList.toggle('is-active', i === searchIndex));
+  buttons[searchIndex].scrollIntoView({ block: 'nearest' });
+}
 
 function bindSearch() {
   const input = $('#search-input');
@@ -488,6 +608,7 @@ function bindSearch() {
 
   input.addEventListener('input', () => {
     clearTimeout(searchTimer);
+    searchIndex = -1;
     const keyword = input.value.trim();
     if (!keyword) {
       suggest.hidden = true;
@@ -497,7 +618,20 @@ function bindSearch() {
   });
 
   input.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveSearchSelection(1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveSearchSelection(-1);
+    } else if (event.key === 'Enter') {
+      const buttons = suggest.querySelectorAll('button');
+      if (buttons.length > 0) {
+        event.preventDefault();
+        buttons[Math.max(searchIndex, 0)].click();
+        searchIndex = -1;
+      }
+    } else if (event.key === 'Escape') {
       suggest.hidden = true;
       input.blur();
     }
@@ -626,6 +760,9 @@ async function submitPlace(event) {
     localStorage.setItem(NICKNAME_KEY, payload.added_by);
   }
 
+  const saveBtn = $('#btn-place-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '保存中…';
   try {
     if (editingId) {
       const updated = await api.updatePlace(state.map.code, editingId, {
@@ -658,6 +795,9 @@ async function submitPlace(event) {
     renderAll();
   } catch (err) {
     toast(`保存失败：${err.message}`, 'error');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '保存';
   }
 }
 
@@ -681,7 +821,7 @@ async function toggleVisited(place) {
 
 async function toggleWish(place) {
   if (!state.map) return;
-  const who = currentNickname();
+  const who = await currentNickname();
   if (!who) return;
   try {
     const { wished, wishes } = await api.toggleWish(state.map.code, place.id, who);
@@ -709,7 +849,13 @@ function syncDetailWishes(place = detailPlace) {
 
 async function removePlace(place) {
   if (!state.map) return;
-  if (!confirm(`确定删除「${place.name}」吗？照片和留言会一起删除。`)) return;
+  const confirmed = await askConfirm({
+    title: `删除「${place.name}」？`,
+    message: '照片和留言会一起删除，无法恢复。',
+    okText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
   try {
     await api.deletePlace(state.map.code, place.id);
     if (detailPlace?.id === place.id) closeDetail();
@@ -755,6 +901,7 @@ async function openDetail(place) {
   syncDetailHeader();
   $('#comment-input').value = '';
   $('#detail-dialog').showModal();
+  syncUrlPlace(place.id);
   await Promise.all([refreshPhotos(), refreshComments()]);
 }
 
@@ -802,7 +949,7 @@ async function refreshPhotos() {
 
 async function deletePhoto(photoId) {
   if (!state.map || !detailPlace) return;
-  if (!confirm('删除这张照片？')) return;
+  if (!(await askConfirm({ title: '删除这张照片？', okText: '删除', danger: true }))) return;
   try {
     await api.deletePhoto(state.map.code, photoId);
     toast('照片已删除');
@@ -881,7 +1028,7 @@ async function refreshComments() {
 
 async function deleteComment(commentId) {
   if (!state.map || !detailPlace) return;
-  if (!confirm('删除这条留言？')) return;
+  if (!(await askConfirm({ title: '删除这条留言？', okText: '删除', danger: true }))) return;
   try {
     await api.deleteComment(state.map.code, commentId);
     await refreshComments();
@@ -895,7 +1042,18 @@ function bindDetailDialog() {
   $('#btn-detail-close').addEventListener('click', closeDetail);
   $('#detail-dialog').addEventListener('close', () => {
     detailPlace = null;
-    $('#lightbox').close();
+    if ($('#lightbox').open) $('#lightbox').close(); // close() 对已关闭对话框会抛错
+    syncUrlPlace(null);
+  });
+  $('#btn-detail-share').addEventListener('click', async () => {
+    if (!detailPlace || !state.map) return;
+    const link = `${location.origin}/?map=${state.map.code}&place=${detailPlace.id}`;
+    try {
+      await navigator.clipboard.writeText(`「${detailPlace.name}」 ${link}`);
+      toast('地点链接已复制，发给同学直达这里');
+    } catch {
+      toast(link, 'info');
+    }
   });
   $('#btn-detail-edit').addEventListener('click', () => {
     if (!detailPlace) return;
@@ -917,6 +1075,8 @@ function bindDetailDialog() {
     const input = $('#comment-input');
     const body = input.value.trim();
     if (!body) return;
+    const sendBtn = event.currentTarget.querySelector('button[type="submit"]');
+    sendBtn.disabled = true;
     try {
       await api.addComment(state.map.code, detailPlace.id, {
         author: localStorage.getItem(NICKNAME_KEY) ?? '',
@@ -927,6 +1087,8 @@ function bindDetailDialog() {
       bumpCount(detailPlace, 'comment_count', 1);
     } catch (err) {
       toast(`发送失败：${err.message}`, 'error');
+    } finally {
+      sendBtn.disabled = false;
     }
   });
   $('#lightbox').addEventListener('click', () => {
@@ -1036,6 +1198,16 @@ function bindStaticEvents() {
   $('#btn-place-cancel').addEventListener('click', closePlaceDialog);
   $('#place-form').addEventListener('submit', submitPlace);
   $('#btn-empty-new').addEventListener('click', openMapEntry);
+  $('#sort-select').value = state.sort;
+  $('#sort-select').addEventListener('change', (event) => {
+    state.sort = event.target.value;
+    localStorage.setItem(SORT_KEY, state.sort);
+    renderAll();
+  });
+  $('#panel-handle').addEventListener('click', () => {
+    const collapsed = $('#sidebar').classList.toggle('is-collapsed');
+    $('#panel-handle').setAttribute('aria-expanded', String(!collapsed));
+  });
   $('#toggle-unvisited').addEventListener('change', (event) => {
     state.hideUnvisitedOnly = event.target.checked;
     renderAll();

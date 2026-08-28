@@ -36,6 +36,9 @@
     </div>
 
     <aside class="side-panel" id="sidebar">
+      <button type="button" class="panel-handle" id="panel-handle" aria-expanded="true" aria-label="收起或展开列表">
+        <span class="handle-bar" aria-hidden="true"></span>
+      </button>
       <div class="map-switcher">
         <span class="map-switcher-label" aria-hidden="true">🗂️</span>
         <select id="map-select" aria-label="切换地图"></select>
@@ -50,6 +53,14 @@
           <input type="checkbox" id="toggle-unvisited" />
           只看还没去的
         </label>
+      </div>
+      <div class="list-head">
+        <span class="list-count" id="list-count"></span>
+        <select id="sort-select" class="sort-select" aria-label="排序方式">
+          <option value="newest">最新添加</option>
+          <option value="name">按名称</option>
+          <option value="wishes">最想去</option>
+        </select>
       </div>
       <ul class="place-list" id="place-list"></ul>
       <div class="empty-state" id="empty-state" hidden>
@@ -147,6 +158,7 @@
         <button type="button" class="btn btn-small" id="btn-detail-toggle">✅ 打卡</button>
         <button type="button" class="btn btn-small" id="btn-detail-edit">✏️ 编辑</button>
         <button type="button" class="btn btn-small" id="btn-detail-wish">♡ 想去</button>
+        <button type="button" class="btn btn-small" id="btn-detail-share">🔗 分享</button>
       </div>
       <div class="detail-wishes" id="detail-wishes" hidden></div>
       <section class="detail-section">
@@ -246,6 +258,29 @@
         <button type="submit" class="btn welcome-btn">加入这张地图</button>
       </form>
     </div>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="dialog dialog-confirm">
+    <form method="dialog" class="confirm-body">
+      <h2 id="confirm-title">确认操作</h2>
+      <p class="dialog-hint" id="confirm-message"></p>
+      <div class="form-actions">
+        <button type="submit" value="cancel" class="btn">取消</button>
+        <button type="submit" value="ok" class="btn btn-danger" id="confirm-ok">确定</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="nickname-dialog" class="dialog dialog-narrow">
+    <form method="dialog" class="confirm-body">
+      <h2>你的昵称</h2>
+      <p class="dialog-hint">用来记录是谁想去、谁在留言，同学能看到是你</p>
+      <input id="nickname-input" class="nickname-input" maxlength="30" placeholder="比如：小明" autocomplete="off" />
+      <div class="form-actions">
+        <button type="submit" value="cancel" class="btn">跳过</button>
+        <button type="submit" value="ok" class="btn btn-primary">保存</button>
+      </div>
+    </form>
   </dialog>
 
   <script type="module" src="/js/app.js"></script>

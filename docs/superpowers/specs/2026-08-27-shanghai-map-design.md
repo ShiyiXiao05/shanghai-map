@@ -92,17 +92,18 @@ Neon 免费托管 Postgres（持久存储）
 
 ## 5. 前端
 
-文件：`public/index.html`、`public/css/style.css`、`public/js/{api,map,app}.js`（ES modules）。
+文件：`public/index.html`、`public/css/style.css`、`public/js/{api,map,app,photos,poster}.js`（ES modules）+ PWA（`manifest.webmanifest`、`sw.js`）。
 
 功能：
 
-1. 启动：拉取 map-config → 动态注入高德脚本 → 初始化地图（上海市区视野）→ 拉取地点列表渲染
-2. 地图：按分类着色的标记；点击开信息窗（名称/分类/描述/添加人/时间）
-3. 侧栏列表 ↔ 地图联动；分类筛选；显示已去过状态
-4. 添加：搜索框（AMap PlaceSearch）定位，或"点选模式"直接在地图上取点 → 表单（名称/描述/分类/昵称）→ POST
-5. 编辑 / 删除（confirm 确认）/ 打卡切换
-6. 口令首次写操作时询问，存 localStorage，可清除重设
-7. 移动端：侧栏折叠为可切换面板
+1. 启动：拉取 map-config → 动态注入高德脚本 → 初始化深色地图（上海市区视野）→ 骨架屏过渡后渲染列表；`?map=码&place=id` 深链直达地点详情
+2. 地图：按分类着色的标记（差量更新防闪烁），列表悬停联动高亮；点击开信息窗，点地图任意处关闭
+3. 侧栏列表 ↔ 地图联动；分类筛选 + 排序（最新/名称/最想去）+ 计数；显示打卡与 📷💬♥ 角标
+4. 添加：搜索框（AMap PlaceSearch，支持 ↑↓/Enter）或「点选模式」吸附取点 → 表单 → 提交（按钮忙碌态）
+5. 编辑 / 删除（自定义确认弹窗）/ 打卡（写入 visited_at 供回忆时间线排序）
+6. 详情对话框：照片九宫格 + 灯箱（含时间戳说明条）、留言、♥ 想去投票、🔗 复制地点深链
+7. 回忆时间线 / 分享海报 / 邀请码多地图切换器；移动端底部抽屉可收起
+8. 交互基座：自定义确认与昵称弹窗（无原生 confirm/prompt）、图标化 toast、对话框入场动效；SW 静态缓存（API 不缓存，后台更新挂 waitUntil 防卡缓存）
 
 ## 6. 测试
 
