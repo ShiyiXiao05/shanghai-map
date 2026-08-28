@@ -809,15 +809,19 @@ button { font: inherit; }
 
 .info-window .iw-close {
   position: absolute;
-  top: 8px;
-  right: 10px;
+  top: 4px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
   border: none;
   background: none;
   color: var(--ink-faint);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
-  padding: 2px;
+  padding: 0;
 }
 
 .info-window .iw-close:hover { color: var(--ink); }

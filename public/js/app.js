@@ -573,6 +573,7 @@ function fillCategorySelect() {
 function openPlaceDialog({ coords, prefill, editing } = {}) {
   const form = $('#place-form');
   form.reset();
+  state.mapView?.closeInfo(); // 打开表单时收起地图上的信息窗
   editingId = editing?.id ?? null;
   dialogCoords = coords ?? (editing ? { lng: editing.lng, lat: editing.lat } : null);
 
@@ -750,6 +751,7 @@ function syncDetailHeader() {
 
 async function openDetail(place) {
   detailPlace = place;
+  state.mapView?.closeInfo(); // 打开详情时收起地图上的信息窗
   syncDetailHeader();
   $('#comment-input').value = '';
   $('#detail-dialog').showModal();

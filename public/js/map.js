@@ -120,6 +120,7 @@ export function createMapView(container) {
       isCustom: true,
       anchor: 'bottom-center',
       offset: new AMap.Pixel(0, -18),
+      closeWhenClickMap: true,
     });
     infoWindow.open(map, [place.lng, place.lat]);
   }
