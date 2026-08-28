@@ -19,7 +19,7 @@ function parseId(raw) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
-export function createPhotosRouter({ store }) {
+export function createPhotosRouter({ store, uploader }) {
   const router = Router();
 
   // 列表含缩略图 data URL，供详情页直接渲染
@@ -56,13 +56,34 @@ export function createPhotosRouter({ store }) {
       if (full.bytes > MAX_FULL_BYTES) {
         return res.status(400).json({ error: '照片太大，压缩后需小于 1.5MB' });
       }
+      const addedBy =
+        typeof body.added_by === 'string' ? body.added_by.trim().slice(0, 30) : '';
+
+      // 配置了 CDN（Cloudinary）时上传原图、由 URL 派生缩略图；否则走数据库 base64
+      if (uploader?.configured) {
+        let uploaded;
+        try {
+          uploaded = await uploader.upload(body.full, { folder: 'shanghai-map' });
+        } catch (err) {
+          return res.status(502).json({ error: `照片上传失败：${err.message}` });
+        }
+        const photo = await store.createPhoto({
+          placeId: id,
+          mapCode: code,
+          mime: full.mime,
+          addedBy,
+          publicId: uploaded.publicId,
+          url: uploaded.url,
+          thumbUrl: uploaded.thumbUrl,
+        });
+        return res.status(201).json({ id: photo.id });
+      }
+
       const thumb = parseImageDataUrl(body.thumb, '缩略图');
       if (thumb.error) return res.status(400).json({ error: thumb.error });
       if (thumb.bytes > MAX_THUMB_BYTES) {
         return res.status(400).json({ error: '缩略图异常，请重试' });
       }
-      const addedBy =
-        typeof body.added_by === 'string' ? body.added_by.trim().slice(0, 30) : '';
       const photo = await store.createPhoto({
         placeId: id,
         mapCode: code,
@@ -77,7 +98,7 @@ export function createPhotosRouter({ store }) {
     }
   });
 
-  // 原图二进制输出；id 全局唯一且必须带对的邀请码，可长缓存
+  // 原图：CDN 照片 302 到 CDN；数据库存量照片输出二进制；可长缓存
   router.get('/photos/:id', async (req, res, next) => {
     try {
       const id = parseId(req.params.id);
@@ -86,6 +107,7 @@ export function createPhotosRouter({ store }) {
       if (!code) return res.status(400).json({ error: '缺少 map 参数（邀请码）' });
       const photo = await store.getPhoto(id, code);
       if (!photo) return res.status(404).json({ error: '照片不存在或邀请码不匹配' });
+      if (photo.url) return res.redirect(302, photo.url);
       res.set('Content-Type', photo.mime);
       res.set('Cache-Control', 'public, max-age=31536000, immutable');
       res.send(photo.buf);
@@ -102,6 +124,13 @@ export function createPhotosRouter({ store }) {
       if (!code) return res.status(400).json({ error: '缺少邀请码（x-map-code）' });
       const removed = await store.removePhoto(id, code);
       if (!removed) return res.status(404).json({ error: '照片不存在或邀请码不匹配' });
+      if (uploader?.configured && removed.public_id) {
+        try {
+          await uploader.destroy(removed.public_id);
+        } catch {
+          /* CDN 资源清理失败不阻塞删除记录 */
+        }
+      }
       res.status(204).end();
     } catch (err) {
       next(err);

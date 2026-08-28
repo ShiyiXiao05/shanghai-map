@@ -5,7 +5,7 @@ import { createMapsRouter } from './routes/maps.js';
 import { createPhotosRouter } from './routes/photos.js';
 import { createCommentsRouter } from './routes/comments.js';
 
-export function buildApp({ store, mapConfig }) {
+export function buildApp({ store, mapConfig, uploader }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(compression());
@@ -25,7 +25,7 @@ export function buildApp({ store, mapConfig }) {
 
   app.use('/api/maps', createMapsRouter({ store }));
   app.use('/api/places', createPlacesRouter({ store }));
-  app.use('/api', createPhotosRouter({ store }));
+  app.use('/api', createPhotosRouter({ store, uploader }));
   app.use('/api', createCommentsRouter({ store }));
 
   app.use('/api', (req, res) => {

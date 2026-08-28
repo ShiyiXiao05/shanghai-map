@@ -4,6 +4,7 @@ import express from 'express';
 import './env.js';
 import { buildApp } from './app.js';
 import { placeStore as productionStore, createPlaceStore } from './store.js';
+import { createCloudinaryUploader } from './uploader.js';
 
 async function resolveStore() {
   if (productionStore) return productionStore;
@@ -24,9 +25,15 @@ const publicDir = path.join(here, '..', 'public');
 const store = await resolveStore();
 await store.init();
 
+const uploader = createCloudinaryUploader(process.env.CLOUDINARY_URL);
+if (!uploader.configured) {
+  console.warn('未配置 CLOUDINARY_URL：照片将存入数据库（占用 Neon 存储，建议配置免费图床）');
+}
+
 const app = buildApp({
   store,
   mapConfig: { key: process.env.AMAP_KEY, securityJsCode: process.env.AMAP_SECURITY_CODE },
+  uploader,
 });
 app.use(
   express.static(publicDir, {

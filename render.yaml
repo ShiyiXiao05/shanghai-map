@@ -19,3 +19,5 @@ services:
         sync: false
       - key: AMAP_SECURITY_CODE
         sync: false
+      - key: CLOUDINARY_URL
+        sync: false

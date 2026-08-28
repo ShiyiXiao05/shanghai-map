@@ -47,6 +47,7 @@ npm --prefix server run dev
 
 1. **数据库**：注册 [Neon](https://console.neon.tech)（免费、无需信用卡）→ 创建项目 → 复制 Connection string 填入 `.env` 的 `DATABASE_URL`
 2. **地图 key**：注册 [高德开放平台](https://console.amap.com)（需阿里云/淘宝账号）→ 创建应用 → 添加 Key，服务平台选 **Web端(JS API)** → 得到 key 与安全密钥，填入 `.env` 的 `AMAP_KEY`、`AMAP_SECURITY_CODE`
+3. **图床（推荐）**：注册 [Cloudinary](https://console.cloudinary.com)（免费、无需信用卡）→ Dashboard 的 API Keys 复制 `CLOUDINARY_URL` 填入 `.env`。配置后照片存 CDN、数据库只存链接（不占 Neon 存储）；不配置则照片存数据库。存量照片迁移：`cd server && node scripts/migrate-photos.mjs`
 
 ## 和同学协作
 

@@ -55,12 +55,30 @@ export function createPlaceStore(pool) {
         place_id INTEGER NOT NULL,
         map_code TEXT NOT NULL,
         mime TEXT NOT NULL,
-        full_b64 TEXT NOT NULL,
-        thumb_b64 TEXT NOT NULL,
+        full_b64 TEXT NOT NULL DEFAULT '',
+        thumb_b64 TEXT NOT NULL DEFAULT '',
+        public_id TEXT NOT NULL DEFAULT '',
+        url TEXT NOT NULL DEFAULT '',
+        thumb_url TEXT NOT NULL DEFAULT '',
         added_by TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
+    await pool.query(
+      "ALTER TABLE place_photos ADD COLUMN IF NOT EXISTS full_b64 TEXT NOT NULL DEFAULT ''"
+    );
+    await pool.query(
+      "ALTER TABLE place_photos ADD COLUMN IF NOT EXISTS thumb_b64 TEXT NOT NULL DEFAULT ''"
+    );
+    await pool.query(
+      "ALTER TABLE place_photos ADD COLUMN IF NOT EXISTS public_id TEXT NOT NULL DEFAULT ''"
+    );
+    await pool.query(
+      "ALTER TABLE place_photos ADD COLUMN IF NOT EXISTS url TEXT NOT NULL DEFAULT ''"
+    );
+    await pool.query(
+      "ALTER TABLE place_photos ADD COLUMN IF NOT EXISTS thumb_url TEXT NOT NULL DEFAULT ''"
+    );
     await pool.query(`
       CREATE TABLE IF NOT EXISTS place_comments (
         id SERIAL PRIMARY KEY,
@@ -243,12 +261,13 @@ export function createPlaceStore(pool) {
 
   async function listPhotos(placeId, mapCode) {
     const { rows } = await pool.query(
-      'SELECT id, mime, thumb_b64, added_by, created_at FROM place_photos WHERE place_id = $1 AND map_code = $2 ORDER BY id ASC',
+      `SELECT id, mime, thumb_b64, thumb_url, added_by, created_at
+       FROM place_photos WHERE place_id = $1 AND map_code = $2 ORDER BY id ASC`,
       [placeId, mapCode]
     );
-    return rows.map(({ thumb_b64, mime, ...rest }) => ({
+    return rows.map(({ thumb_b64, thumb_url, mime, ...rest }) => ({
       ...rest,
-      thumb: `data:${mime};base64,${thumb_b64}`,
+      thumb: thumb_url || `data:${mime};base64,${thumb_b64}`,
     }));
   }
 
@@ -260,11 +279,22 @@ export function createPlaceStore(pool) {
     return Number(rows[0].n);
   }
 
-  async function createPhoto({ placeId, mapCode, mime, fullB64, thumbB64, addedBy }) {
+  async function createPhoto({ placeId, mapCode, mime, fullB64, thumbB64, addedBy, publicId, url, thumbUrl }) {
     const { rows } = await pool.query(
-      `INSERT INTO place_photos (place_id, map_code, mime, full_b64, thumb_b64, added_by)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [placeId, mapCode, mime, fullB64, thumbB64, addedBy ?? '']
+      `INSERT INTO place_photos
+         (place_id, map_code, mime, full_b64, thumb_b64, public_id, url, thumb_url, added_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [
+        placeId,
+        mapCode,
+        mime,
+        fullB64 ?? '',
+        thumbB64 ?? '',
+        publicId ?? '',
+        url ?? '',
+        thumbUrl ?? '',
+        addedBy ?? '',
+      ]
     );
     return rows[0];
   }
@@ -294,22 +324,24 @@ export function createPlaceStore(pool) {
     const cached = cacheGet(key);
     if (cached) return cached;
     const { rows } = await pool.query(
-      'SELECT mime, full_b64 FROM place_photos WHERE id = $1 AND map_code = $2',
+      'SELECT mime, full_b64, url FROM place_photos WHERE id = $1 AND map_code = $2',
       [id, mapCode]
     );
     if (!rows[0]) return null;
-    const entry = { mime: rows[0].mime, buf: Buffer.from(rows[0].full_b64, 'base64') };
+    const entry = rows[0].url
+      ? { url: rows[0].url }
+      : { mime: rows[0].mime, buf: Buffer.from(rows[0].full_b64, 'base64') };
     cachePut(key, entry);
     return entry;
   }
 
   async function removePhoto(id, mapCode) {
     const { rows } = await pool.query(
-      'DELETE FROM place_photos WHERE id = $1 AND map_code = $2 RETURNING id',
+      'DELETE FROM place_photos WHERE id = $1 AND map_code = $2 RETURNING id, public_id',
       [id, mapCode]
     );
     if (rows.length > 0) photoCache.delete(`${id}:${mapCode}`);
-    return rows.length > 0;
+    return rows[0] ?? null;
   }
 
   async function listComments(placeId, mapCode) {
