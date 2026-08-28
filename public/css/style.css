@@ -1,35 +1,35 @@
-/* ============ 魔都·Explore · 霓虹夜行 ============
-   双主题：默认浅色（青瓷），html[data-theme="tokyo"] 为霓虹夜行深色皮肤
-   （深夜蓝黑底 + 霓虹品红→荧光青渐变，玻璃拟态浮层）。
-   地图所有主题统一使用高德官方浅色底图（amap://styles/normal）。 */
+/* ============ 魔都·Explore · 主题系统 ============
+   默认浅色 + 雾灰 / 东京夜 / 墨蓝 / 微醺 共五套皮肤（html[data-theme] 切换），
+   另有「跟随系统」在浅色/东京夜之间自动切换。
+   每个主题绑定对应的高德官方底图风格（见 app.js THEMES 的 mapStyle）。 */
 
 :root {
-  --paper: #f2f6f5;
+  --paper: #f5f6f8;
   --card: #ffffff;
   --panel: rgba(255, 255, 255, 0.88);
-  --ink: #1f2d2a;
-  --ink-soft: #5b6f6b;
-  --line: #dde7e4;
-  --metro: #0f766e;
-  --metro-soft: rgba(15, 118, 110, 0.1);
-  --brick: #be4a43;
-  --toast-bg: #12312c;
-  --toast-ink: #eefaf6;
+  --ink: #232936;
+  --ink-soft: #626b7a;
+  --line: #e3e6eb;
+  --metro: #d6336c;
+  --metro-soft: rgba(214, 51, 108, 0.08);
+  --brick: #c2504a;
+  --toast-bg: #2a2230;
+  --toast-ink: #fdf3f8;
 
-  /* 浅色下的品牌渐变：青→湖蓝，光效柔化为投影 */
-  --neon-a: #0f766e;
-  --neon-b: #0891b2;
+  /* 浅色下的品牌渐变：玫红→青，与品牌标识一致 */
+  --neon-a: #e0447c;
+  --neon-b: #14b8c9;
   --neon-grad: linear-gradient(135deg, var(--neon-a), var(--neon-b));
-  --glow-pink: 0 6px 18px rgba(15, 118, 110, 0.18);
-  --glow-cyan: 0 4px 14px rgba(8, 145, 178, 0.15);
+  --glow-pink: 0 6px 18px rgba(224, 68, 124, 0.16);
+  --glow-cyan: 0 4px 14px rgba(20, 184, 201, 0.12);
 
   /* 派生色 */
   --ink-faint: color-mix(in srgb, var(--ink-soft) 62%, var(--paper));
   --panel-border: color-mix(in srgb, var(--ink) 10%, transparent);
   --brick-deep: color-mix(in srgb, var(--brick) 82%, black);
   --metro-soft-2: color-mix(in srgb, var(--metro) 8%, var(--card));
-  --shadow-card: 0 10px 34px rgba(10, 25, 22, 0.16);
-  --shadow-float: 0 6px 20px rgba(10, 25, 22, 0.18);
+  --shadow-card: 0 10px 34px rgba(30, 35, 50, 0.14);
+  --shadow-float: 0 6px 20px rgba(30, 35, 50, 0.16);
 
   --font-display: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", "Segoe UI", sans-serif;
@@ -60,6 +60,77 @@ html[data-theme="tokyo"] {
   --panel-border: color-mix(in srgb, var(--neon-b) 22%, transparent);
   --shadow-card: 0 12px 36px rgba(2, 6, 16, 0.55);
   --shadow-float: 0 6px 22px rgba(2, 6, 16, 0.6);
+}
+
+/* 🌫️ 雾灰：中性浅灰 + slate 强调，底图 grey */
+html[data-theme="grey"] {
+  --paper: #f2f3f5;
+  --card: #ffffff;
+  --panel: rgba(255, 255, 255, 0.9);
+  --ink: #24292f;
+  --ink-soft: #61696f;
+  --line: #e1e4e8;
+  --metro: #46586c;
+  --metro-soft: rgba(70, 88, 108, 0.08);
+  --brick: #c2504a;
+  --toast-bg: #24292f;
+  --toast-ink: #f5f6f8;
+
+  --neon-a: #57606a;
+  --neon-b: #2f8f83;
+  --neon-grad: linear-gradient(135deg, var(--neon-a), var(--neon-b));
+  --glow-pink: 0 6px 18px rgba(87, 96, 106, 0.16);
+  --glow-cyan: 0 4px 14px rgba(47, 143, 131, 0.12);
+}
+
+/* 🌌 墨蓝：深海军蓝 + 靛蓝荧光，底图 darkblue */
+html[data-theme="midnight"] {
+  --paper: #0b1226;
+  --card: #101a33;
+  --panel: rgba(10, 17, 36, 0.84);
+  --ink: #dce4ff;
+  --ink-soft: #8ea0d0;
+  --line: #24325c;
+  --metro: #6ea8ff;
+  --metro-soft: rgba(110, 168, 255, 0.13);
+  --brick: #ff8f6b;
+  --toast-bg: #dce4ff;
+  --toast-ink: #0b1226;
+
+  --neon-a: #6d5dff;
+  --neon-b: #2fd4ff;
+  --neon-grad: linear-gradient(135deg, var(--neon-a), var(--neon-b));
+  --glow-pink: 0 0 18px rgba(109, 93, 255, 0.32);
+  --glow-cyan: 0 0 16px rgba(47, 212, 255, 0.28);
+
+  --panel-border: color-mix(in srgb, var(--neon-b) 20%, transparent);
+  --shadow-card: 0 12px 36px rgba(1, 4, 12, 0.6);
+  --shadow-float: 0 6px 22px rgba(1, 4, 12, 0.65);
+}
+
+/* 🍷 微醺：暗酒红 + 玫瑰金强调，底图 wine */
+html[data-theme="wine"] {
+  --paper: #180a10;
+  --card: #221019;
+  --panel: rgba(28, 12, 20, 0.85);
+  --ink: #f6e3ec;
+  --ink-soft: #c79ab1;
+  --line: #462233;
+  --metro: #ff7fae;
+  --metro-soft: rgba(255, 127, 174, 0.12);
+  --brick: #ff9a5c;
+  --toast-bg: #f6e3ec;
+  --toast-ink: #180a10;
+
+  --neon-a: #ff3d81;
+  --neon-b: #ff9a5c;
+  --neon-grad: linear-gradient(135deg, var(--neon-a), var(--neon-b));
+  --glow-pink: 0 0 18px rgba(255, 61, 129, 0.3);
+  --glow-cyan: 0 0 16px rgba(255, 154, 92, 0.25);
+
+  --panel-border: color-mix(in srgb, var(--brick) 25%, transparent);
+  --shadow-card: 0 12px 36px rgba(8, 2, 5, 0.6);
+  --shadow-float: 0 6px 22px rgba(8, 2, 5, 0.65);
 }
 
 /* 分类数据色（深色底加亮，标记与筛选用；与 app.js CATEGORIES 一致） */
@@ -772,7 +843,7 @@ button { font: inherit; }
   place-items: center;
   background:
     repeating-linear-gradient(45deg, var(--paper) 0 24px,
-      #0d1326 24px 48px);
+      color-mix(in srgb, var(--ink) 5%, var(--paper)) 24px 48px);
   z-index: 10;
 }
 

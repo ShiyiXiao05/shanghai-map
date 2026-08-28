@@ -29,12 +29,12 @@ export function loadAmap({ key, securityJsCode }) {
   });
 }
 
-export function createMapView(container) {
+export function createMapView(container, { mapStyle = 'amap://styles/normal' } = {}) {
   const map = new AMap.Map(container, {
     viewMode: '2D',
     zoom: 12,
     center: [121.4737, 31.2304],
-    mapStyle: 'amap://styles/normal',
+    mapStyle,
   });
 
   // 差量维护标记：按 id 复用 Marker 对象，避免整组重建造成的闪烁
@@ -229,5 +229,10 @@ export function createMapView(container) {
     }
   }
 
-  return { map, setPlaces, openInfo, closeInfo, focus, highlight, setPickMode, searchPois, reverseGeocode, showPickMarker, clearPickMarker };
+  // 切换高德官方底图风格（normal/grey/dark/darkblue/wine 等），主题联动用
+  function setMapStyle(style) {
+    if (style) map.setMapStyle(style);
+  }
+
+  return { map, setPlaces, openInfo, closeInfo, focus, highlight, setMapStyle, setPickMode, searchPois, reverseGeocode, showPickMarker, clearPickMarker };
 }

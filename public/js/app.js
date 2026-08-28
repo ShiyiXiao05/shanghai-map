@@ -19,17 +19,26 @@ const NICKNAME_KEY = 'shanghai-wish-nickname';
 const SORT_KEY = 'wish-sort';
 const NEW_MAP_OPTION = '__new__';
 
-/* 配色主题：浅色 / 东京夜（霓虹夜行）；地图所有主题统一浅色底图 */
+/* 配色主题：每个主题一套页面色板 + 高德官方底图风格（mapStyle） */
 const THEMES = {
   auto: { name: '🌗 跟随系统' },
-  celadon: { name: '☀️ 浅色' },
-  tokyo: { name: '🌃 东京夜' },
+  celadon: { name: '☀️ 浅色', mapStyle: 'amap://styles/normal' },
+  grey: { name: '🌫️ 雾灰', mapStyle: 'amap://styles/grey' },
+  tokyo: { name: '🌃 东京夜', mapStyle: 'amap://styles/dark' },
+  midnight: { name: '🌌 墨蓝', mapStyle: 'amap://styles/darkblue' },
+  wine: { name: '🍷 微醺', mapStyle: 'amap://styles/wine' },
 };
 const THEME_KEY = 'wish-theme';
-const THEME_COLORS = { tokyo: '#0a0f1e', celadon: '#f2f6f5' };
+const THEME_COLORS = {
+  celadon: '#f5f6f8',
+  grey: '#f2f3f5',
+  tokyo: '#0a0f1e',
+  midnight: '#0b1226',
+  wine: '#180a10',
+};
 
 function resolveThemeId(saved) {
-  if (saved === 'tokyo' || saved === 'celadon') return saved;
+  if (saved && saved !== 'auto' && THEMES[saved]) return saved;
   return matchMedia('(prefers-color-scheme: dark)').matches ? 'tokyo' : 'celadon';
 }
 
@@ -37,9 +46,10 @@ function applyTheme(saved, { persist } = {}) {
   const themeId = resolveThemeId(saved);
   document.documentElement.dataset.theme = themeId;
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = THEME_COLORS[themeId];
+  if (meta) meta.content = THEME_COLORS[themeId] ?? '#f5f6f8';
   if (persist) localStorage.setItem(THEME_KEY, saved);
   $('#theme-select').value = saved;
+  state.mapView?.setMapStyle(THEMES[themeId].mapStyle);
 }
 
 function bindThemeSelect() {
@@ -602,7 +612,10 @@ async function initMap() {
   }
   try {
     await loadAmap(config);
-    state.mapView = createMapView($('#map'));
+    state.mapView = createMapView($('#map'), {
+      // 初始底图风格跟随当前主题，避免「先浅后深」闪一下
+      mapStyle: THEMES[resolveThemeId(localStorage.getItem(THEME_KEY))].mapStyle,
+    });
     $('#map-fallback').hidden = true;
     renderMarkers();
   } catch (err) {
