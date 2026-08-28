@@ -1,7 +1,7 @@
 /* 魔都·Explore Service Worker
    策略：核心静态资源预缓存 + stale-while-revalidate；API 一律走网络；跨域直通 */
 
-const CACHE_NAME = 'wishmap-static-v2';
+const CACHE_NAME = 'wishmap-static-v3';
 const CORE_ASSETS = [
   '/',
   '/css/style.css',
@@ -16,10 +16,18 @@ const CORE_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  // cache:'reload' 绕过浏览器 HTTP 强缓存，确保发版后拿到的一定是新资源
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(CORE_ASSETS))
+      .then((cache) =>
+        Promise.all(
+          CORE_ASSETS.map(async (url) => {
+            const response = await fetch(url, { cache: 'reload' });
+            if (response.ok) await cache.put(url, response);
+          })
+        )
+      )
       .then(() => self.skipWaiting())
   );
 });
