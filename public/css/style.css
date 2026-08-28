@@ -1369,6 +1369,43 @@ button { font: inherit; }
 
 .nickname-input:focus-visible { outline: 2px solid var(--metro); outline-offset: 1px; }
 
+/* ---------- 高德链接导入 ---------- */
+
+.import-input {
+  width: 100%;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--paper) 55%, var(--card));
+  color: var(--ink);
+  resize: vertical;
+  min-height: 84px;
+  margin-top: 4px;
+}
+
+.import-input:focus-visible { outline: 2px solid var(--metro); outline-offset: 1px; }
+
+.import-preview {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: var(--metro-soft);
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+/* 锚点形态的高德跳转按钮 */
+#btn-detail-amap {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 /* ---------- 移动端抽屉把手（桌面隐藏） ---------- */
 
 .panel-handle { display: none; }
@@ -1592,6 +1629,7 @@ button { font: inherit; }
   .search-wrap { order: 3; flex-basis: 100%; max-width: none; }
   .search-wrap input { min-height: 46px; }
 
+  #btn-import { order: 2; }
   #btn-pick { order: 2; margin-left: auto; }
 
   .side-panel {

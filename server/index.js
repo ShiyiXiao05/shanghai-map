@@ -37,11 +37,12 @@ const app = buildApp({
 });
 app.use(
   express.static(publicDir, {
-    // HTML/SW/manifest 协商缓存；其余静态资源 10 分钟强缓存（发版后过期上限可控）
-    maxAge: '10m',
+    // 页面与代码资源走 ETag 协商缓存（发布即生效，304 开销极小）；仅图标长缓存
+    etag: true,
     setHeaders(res, filePath) {
-      const base = path.basename(filePath);
-      if (filePath.endsWith('.html') || base === 'sw.js' || base === 'manifest.webmanifest') {
+      if (filePath.includes(`${path.sep}icons${path.sep}`)) {
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      } else {
         res.setHeader('Cache-Control', 'no-cache');
       }
     },

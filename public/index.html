@@ -39,6 +39,7 @@
                placeholder="搜索地点，比如「武康路」" aria-label="搜索地点" />
         <div id="search-suggest" class="search-suggest" hidden></div>
       </div>
+      <button id="btn-import" class="btn" type="button" title="粘贴高德分享链接或文本，导入地点">🔗 导入</button>
       <button id="btn-pick" class="btn btn-primary" type="button">＋ 地图选点</button>
     </header>
 
@@ -171,6 +172,7 @@
         <button type="button" class="btn btn-small" id="btn-detail-edit">✏️ 编辑</button>
         <button type="button" class="btn btn-small" id="btn-detail-wish">♡ 想去</button>
         <button type="button" class="btn btn-small" id="btn-detail-share">🔗 分享</button>
+        <a id="btn-detail-amap" class="btn btn-small" target="_blank" rel="noopener" hidden title="在高德地图中打开这个位置">🗺️ 高德</a>
       </div>
       <div class="detail-wishes" id="detail-wishes" hidden></div>
       <section class="detail-section">
@@ -270,6 +272,20 @@
         <button type="submit" class="btn welcome-btn">加入这张地图</button>
       </form>
     </div>
+  </dialog>
+
+  <dialog id="import-dialog" class="dialog">
+    <form id="import-form" class="confirm-body">
+      <h2>🔗 从高德导入</h2>
+      <p class="dialog-hint">把高德 App 分享出来的文本或链接粘贴到这里：支持带「位置：经度,纬度」的分享文本、uri.amap.com/marker 链接，或含【地点名】的分享文本。</p>
+      <textarea id="import-input" class="import-input" rows="4"
+        placeholder="例如：【武康路】我在这里，位置：121.4375,31.2054"></textarea>
+      <div id="import-preview" class="import-preview" hidden></div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btn-import-cancel">取消</button>
+        <button type="submit" class="btn btn-primary" id="btn-import-go">解析并导入</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="confirm-dialog" class="dialog dialog-confirm">

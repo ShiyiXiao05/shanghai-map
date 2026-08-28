@@ -932,6 +932,12 @@ function syncDetailHeader() {
   desc.textContent = place.description ?? '';
   $('#btn-detail-toggle').textContent = place.visited ? '↩️ 取消打卡' : '✅ 打卡';
   syncDetailWishes(place);
+  // 高德官方 URI API：桌面打开网页版，手机（callnative=1）尝试拉起高德 App
+  const amapLink = $('#btn-detail-amap');
+  amapLink.hidden = false;
+  amapLink.href =
+    `https://uri.amap.com/marker?position=${place.lng},${place.lat}` +
+    `&name=${encodeURIComponent(place.name)}&src=moduExplore&callnative=1&coordinate=gaode`;
 }
 
 async function openDetail(place) {
@@ -1212,6 +1218,116 @@ function cleanupPick() {
   pendingPickCoords = null;
 }
 
+/* ---------- 从高德分享导入 ---------- */
+
+// 解析高德分享文本/链接，返回：
+//   { lng, lat, name?, address? }  坐标齐全，可直接导入
+//   { keyword }                    只有名称，走搜索候选
+//   { error }                      无法解析（附指引）
+function parseAmapShare(raw) {
+  const text = (raw ?? '').trim();
+  if (!text) return { error: '还没有粘贴内容' };
+
+  // 1) uri.amap.com/marker?position=lng,lat&name=..&addr=..（官方 URI 链接，坐标为 GCJ-02）
+  const marker = text.match(/uri\.amap\.com\/marker\?([^\s"']+)/);
+  if (marker) {
+    const params = new URLSearchParams(marker[1].replace(/&amp;/g, '&'));
+    const [lngStr, latStr] = (params.get('position') ?? '').split(',');
+    const lng = Number(lngStr);
+    const lat = Number(latStr);
+    if (Number.isFinite(lng) && Number.isFinite(lat) && lng !== 0 && lat !== 0) {
+      return {
+        lng,
+        lat,
+        name: params.get('name')?.trim() ?? '',
+        address: params.get('addr')?.trim() ?? '',
+      };
+    }
+  }
+
+  // 2) 文本中的坐标对（高德分享常见「位置：121.4375,31.2054」，兼容中文逗号）
+  const coord = text.match(/(\d{1,3}\.\d{4,})\s*[,，]\s*(\d{1,2}\.\d{4,})/);
+  const bracket = text.match(/【(.+?)】|「(.+?)」|『(.+?)』/);
+  if (coord) {
+    const lng = Number(coord[1]);
+    const lat = Number(coord[2]);
+    if (Math.abs(lng) <= 180 && Math.abs(lat) <= 90) {
+      return { lng, lat, name: bracket?.[1] ?? bracket?.[2] ?? bracket?.[3] ?? '' };
+    }
+  }
+
+  // 3) 只有名称（【外滩源】等）→ 用名称搜索候选
+  const name = bracket?.[1] ?? bracket?.[2] ?? bracket?.[3];
+  if (name) return { keyword: name };
+
+  // 4) 纯地点页链接（只有 POI ID，拿不到坐标和名称）
+  if (/amap\.com\/(place|detail|p)\/[A-Za-z0-9]+/i.test(text)) {
+    return { error: '这个链接里只有地点编号。请粘贴高德 App 分享出来的完整文本（含地点名或「位置：经度,纬度」），或改用搜索。' };
+  }
+
+  return { error: '没有识别出坐标或地点名。确认粘贴的是高德 App 分享的文本/链接。' };
+}
+
+function showImportPreview(result) {
+  const box = $('#import-preview');
+  box.replaceChildren();
+  if (result.error) {
+    box.hidden = false;
+    box.textContent = `⚠️ ${result.error}`;
+    return;
+  }
+  box.hidden = false;
+  if (result.lng !== undefined) {
+    box.textContent = `✓ 已识别：${result.name || '未命名地点'}（${result.lng.toFixed(5)}, ${result.lat.toFixed(5)}）`;
+  } else {
+    box.textContent = `✓ 已识别地点名：${result.keyword}，稍后从搜索结果中选一个`;
+  }
+}
+
+function handleImportSubmit(event) {
+  event.preventDefault();
+  const result = parseAmapShare($('#import-input').value);
+  showImportPreview(result);
+  if (result.error) return;
+
+  $('#import-dialog').close();
+  $('#import-input').value = '';
+  $('#import-preview').hidden = true;
+
+  if (result.lng !== undefined) {
+    if (!state.map) {
+      openMapEntry();
+      return;
+    }
+    openPlaceDialog({
+      coords: { lng: result.lng, lat: result.lat },
+      prefill: { name: result.name ?? '', address: result.address ?? '' },
+    });
+    toast('已从高德导入位置，补全信息后保存');
+    return;
+  }
+
+  // 只有名称：塞进搜索框走候选选择流程
+  const input = $('#search-input');
+  input.value = result.keyword;
+  runSearch(result.keyword, $('#search-suggest'));
+  toast(`已用「${result.keyword}」搜索，点选结果完成导入`);
+}
+
+function bindImport() {
+  $('#btn-import').addEventListener('click', () => {
+    if (!state.map) {
+      openMapEntry();
+      return;
+    }
+    $('#import-input').value = '';
+    $('#import-preview').hidden = true;
+    $('#import-dialog').showModal();
+  });
+  $('#btn-import-cancel').addEventListener('click', () => $('#import-dialog').close());
+  $('#import-form').addEventListener('submit', handleImportSubmit);
+}
+
 /* ---------- 启动 ---------- */
 
 function bindStaticEvents() {
@@ -1397,6 +1513,7 @@ async function boot() {
   renderChips();
   bindStaticEvents();
   bindSearch();
+  bindImport();
   bindMapEntry();
   bindDetailDialog();
   bindExtras();
