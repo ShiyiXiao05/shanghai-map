@@ -5,12 +5,12 @@ import { generatePoster } from './poster.js';
 
 // 深色霓虹底下用的亮色分类色板（色值与 css/style.css 的 --cat-* 保持一致）
 const CATEGORIES = [
-  { id: '景点', emoji: '📍', color: '#34d399' },
-  { id: '美食', emoji: '🍜', color: '#fb923c' },
-  { id: '展馆', emoji: '🖼️', color: '#60a5fa' },
-  { id: '购物', emoji: '🛍️', color: '#f472b6' },
-  { id: '娱乐', emoji: '🎡', color: '#a78bfa' },
-  { id: '其他', emoji: '✨', color: '#94a3b8' },
+  { id: '景点', emoji: '📍', color: '#2fa877' },
+  { id: '美食', emoji: '🍜', color: '#e8862e' },
+  { id: '展馆', emoji: '🖼️', color: '#4d82d4' },
+  { id: '购物', emoji: '🛍️', color: '#e0568f' },
+  { id: '娱乐', emoji: '🎡', color: '#8e63d8' },
+  { id: '其他', emoji: '✨', color: '#7e8f9c' },
 ];
 
 const MAPS_KEY = 'wish-maps';
@@ -18,6 +18,45 @@ const CURRENT_MAP_KEY = 'wish-current-map';
 const NICKNAME_KEY = 'shanghai-wish-nickname';
 const SORT_KEY = 'wish-sort';
 const NEW_MAP_OPTION = '__new__';
+
+/* 配色主题：浅色 / 东京夜（霓虹夜行）；地图所有主题统一浅色底图 */
+const THEMES = {
+  auto: { name: '🌗 跟随系统' },
+  celadon: { name: '☀️ 浅色' },
+  tokyo: { name: '🌃 东京夜' },
+};
+const THEME_KEY = 'wish-theme';
+const THEME_COLORS = { tokyo: '#0a0f1e', celadon: '#f2f6f5' };
+
+function resolveThemeId(saved) {
+  if (saved === 'tokyo' || saved === 'celadon') return saved;
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'tokyo' : 'celadon';
+}
+
+function applyTheme(saved, { persist } = {}) {
+  const themeId = resolveThemeId(saved);
+  document.documentElement.dataset.theme = themeId;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = THEME_COLORS[themeId];
+  if (persist) localStorage.setItem(THEME_KEY, saved);
+  $('#theme-select').value = saved;
+}
+
+function bindThemeSelect() {
+  const select = $('#theme-select');
+  for (const [id, theme] of Object.entries(THEMES)) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = theme.name;
+    select.appendChild(option);
+  }
+  const stored = localStorage.getItem(THEME_KEY);
+  select.value = THEMES[stored] ? stored : 'auto';
+  select.addEventListener('change', () => applyTheme(select.value, { persist: true }));
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if ((localStorage.getItem(THEME_KEY) || 'auto') === 'auto') applyTheme('auto');
+  });
+}
 
 const state = {
   map: null, // { code, name }
@@ -1353,6 +1392,7 @@ function registerServiceWorker() {
 }
 
 async function boot() {
+  bindThemeSelect();
   fillCategorySelect();
   renderChips();
   bindStaticEvents();

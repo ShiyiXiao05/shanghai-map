@@ -34,7 +34,7 @@ export function createMapView(container) {
     viewMode: '2D',
     zoom: 12,
     center: [121.4737, 31.2304],
-    mapStyle: 'amap://styles/dark',
+    mapStyle: 'amap://styles/normal',
   });
 
   // 差量维护标记：按 id 复用 Marker 对象，避免整组重建造成的闪烁

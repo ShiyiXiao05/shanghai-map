@@ -1,8 +1,43 @@
 /* ============ 魔都·Explore · 霓虹夜行 ============
-   单一深色皮肤：深夜蓝黑底 + 霓虹品红→荧光青渐变，玻璃拟态浮层。
-   地图使用高德官方深色底图（amap://styles/dark）。 */
+   双主题：默认浅色（青瓷），html[data-theme="tokyo"] 为霓虹夜行深色皮肤
+   （深夜蓝黑底 + 霓虹品红→荧光青渐变，玻璃拟态浮层）。
+   地图所有主题统一使用高德官方浅色底图（amap://styles/normal）。 */
 
 :root {
+  --paper: #f2f6f5;
+  --card: #ffffff;
+  --panel: rgba(255, 255, 255, 0.88);
+  --ink: #1f2d2a;
+  --ink-soft: #5b6f6b;
+  --line: #dde7e4;
+  --metro: #0f766e;
+  --metro-soft: rgba(15, 118, 110, 0.1);
+  --brick: #be4a43;
+  --toast-bg: #12312c;
+  --toast-ink: #eefaf6;
+
+  /* 浅色下的品牌渐变：青→湖蓝，光效柔化为投影 */
+  --neon-a: #0f766e;
+  --neon-b: #0891b2;
+  --neon-grad: linear-gradient(135deg, var(--neon-a), var(--neon-b));
+  --glow-pink: 0 6px 18px rgba(15, 118, 110, 0.18);
+  --glow-cyan: 0 4px 14px rgba(8, 145, 178, 0.15);
+
+  /* 派生色 */
+  --ink-faint: color-mix(in srgb, var(--ink-soft) 62%, var(--paper));
+  --panel-border: color-mix(in srgb, var(--ink) 10%, transparent);
+  --brick-deep: color-mix(in srgb, var(--brick) 82%, black);
+  --metro-soft-2: color-mix(in srgb, var(--metro) 8%, var(--card));
+  --shadow-card: 0 10px 34px rgba(10, 25, 22, 0.16);
+  --shadow-float: 0 6px 20px rgba(10, 25, 22, 0.18);
+
+  --font-display: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+html[data-theme="tokyo"] {
   --paper: #0a0f1e;
   --card: #10182b;
   --panel: rgba(13, 20, 38, 0.82);
@@ -22,18 +57,9 @@
   --glow-pink: 0 0 18px rgba(255, 61, 129, 0.35);
   --glow-cyan: 0 0 16px rgba(34, 211, 238, 0.3);
 
-  /* 派生色 */
-  --ink-faint: color-mix(in srgb, var(--ink-soft) 62%, var(--paper));
   --panel-border: color-mix(in srgb, var(--neon-b) 22%, transparent);
-  --brick-deep: color-mix(in srgb, var(--brick) 82%, black);
-  --metro-soft-2: color-mix(in srgb, var(--metro) 8%, var(--card));
   --shadow-card: 0 12px 36px rgba(2, 6, 16, 0.55);
   --shadow-float: 0 6px 22px rgba(2, 6, 16, 0.6);
-
-  --font-display: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Segoe UI", sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Segoe UI", sans-serif;
 }
 
 /* 分类数据色（深色底加亮，标记与筛选用；与 app.js CATEGORIES 一致） */
