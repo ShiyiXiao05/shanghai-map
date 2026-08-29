@@ -56,6 +56,7 @@
       <div class="map-switcher">
         <span class="map-switcher-label" aria-hidden="true">🗂️</span>
         <select id="map-select" aria-label="切换地图"></select>
+        <button type="button" class="btn btn-small" id="btn-map-settings" title="地图设置：改名 / 换邀请码 / 删除">⚙️</button>
       </div>
       <div class="side-actions">
         <button type="button" class="btn btn-small" id="btn-memories">📷 回忆</button>
@@ -149,7 +150,7 @@
 
   <dialog id="map-created-dialog" class="dialog dialog-narrow">
     <div class="pick-body">
-      <h2>地图创建好了 🎉</h2>
+      <h2 id="map-created-title">地图创建好了 🎉</h2>
       <p class="dialog-hint">把邀请码发给同学，输入同样的码就能一起标记这张地图。</p>
       <div class="invite-code" id="invite-code">------</div>
       <div class="form-actions">
@@ -290,6 +291,37 @@
         <button type="submit" class="btn btn-primary" id="btn-import-go">解析并导入</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="map-settings-dialog" class="dialog dialog-narrow">
+    <div class="confirm-body">
+      <h2>地图设置</h2>
+      <label class="field">
+        <span>地图名称</span>
+        <input id="map-name-input" maxlength="40" autocomplete="off" />
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary btn-small" id="btn-map-rename">保存名称</button>
+      </div>
+      <div class="settings-divider"></div>
+      <div class="settings-row">
+        <div class="settings-text">
+          <b>换邀请码</b>
+          <p class="settings-hint">旧邀请码立即失效，已分享的链接将无法打开这张地图</p>
+        </div>
+        <button type="button" class="btn btn-small" id="btn-map-rekey">换码</button>
+      </div>
+      <div class="settings-row">
+        <div class="settings-text">
+          <b>删除地图</b>
+          <p class="settings-hint">地点、照片、留言一并删除，无法恢复</p>
+        </div>
+        <button type="button" class="btn btn-small btn-danger" id="btn-map-delete">删除</button>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btn-map-settings-close">关闭</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog id="confirm-dialog" class="dialog dialog-confirm">

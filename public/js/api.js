@@ -66,4 +66,8 @@ export const api = {
   togglePublic: (mapCode, placeId) =>
     request('POST', `/api/places/${placeId}/public`, { body: { map_code: mapCode } }),
   publicPlaces: async () => (await request('GET', '/api/public/places')).places,
+  renameMap: (mapCode, name) =>
+    request('PUT', `/api/maps/${encodeURIComponent(mapCode)}`, { body: { name } }),
+  rekeyMap: (mapCode) => request('POST', `/api/maps/${encodeURIComponent(mapCode)}/rekey`),
+  deleteMap: (mapCode) => request('DELETE', `/api/maps/${encodeURIComponent(mapCode)}`),
 };

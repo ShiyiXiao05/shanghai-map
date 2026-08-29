@@ -290,8 +290,36 @@ describe('photos & comments API', () => {
     assert.equal(photoCached.status, 200); // LRU 缓存路径同样可取
   });
 
-  it('公共广场：公开开关、聚合视图不泄露邀请码、删除后移除', async () => {
+  it('地图管理：改名、换邀请码（权限重置）、删除级联', async () => {
     const { map, place } = await setupMapWithPlace(request);
+
+    // 改名：成功 + 空名 400
+    const ren = await request('PUT', `/api/maps/${map.code}`, { body: { name: '新名字' } });
+    assert.equal(ren.status, 200);
+    assert.equal((await ren.json()).name, '新名字');
+    assert.equal(
+      (await request('PUT', `/api/maps/${map.code}`, { body: { name: '   ' } })).status,
+      400
+    );
+
+    // 换码：新码可用、地点随迁、旧码作废
+    const re = await request('POST', `/api/maps/${map.code}/rekey`);
+    assert.equal(re.status, 200);
+    const newCode = (await re.json()).code;
+    assert.notEqual(newCode, map.code);
+    assert.match(newCode, /^[A-Z2-9]{6}$/);
+    assert.equal((await request('GET', `/api/maps/${map.code}`)).status, 404);
+    const moved = await (await request('GET', `/api/places?map=${newCode}`)).json();
+    assert.equal(moved.places.length, 1);
+
+    // 删除：地图与子数据一起消失
+    assert.equal((await request('DELETE', `/api/maps/${newCode}`)).status, 204);
+    assert.equal((await request('GET', `/api/maps/${newCode}`)).status, 404);
+    assert.equal((await request('GET', `/api/places?map=${newCode}`)).status, 404);
+    assert.equal(place.id > 0, true);
+  });
+
+  it('公共广场：公开开关、聚合视图不泄露邀请码、删除后移除', async () => {    const { map, place } = await setupMapWithPlace(request);
     const second = await (
       await request('POST', '/api/places', {
         body: { ...validPlace, name: '未公开的', map_code: map.code },

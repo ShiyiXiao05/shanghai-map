@@ -296,6 +296,7 @@ async function createMap(name, nickname) {
   }
   setCurrentMap(map);
   closeMapEntry();
+  $('#map-created-title').textContent = '地图创建好了 🎉';
   $('#invite-code').textContent = map.code;
   $('#map-created-dialog').showModal();
   await loadPlaces();
@@ -1447,6 +1448,91 @@ function bindImport() {
   $('#import-form').addEventListener('submit', handleImportSubmit);
 }
 
+/* ---------- 地图设置：改名 / 换邀请码 / 删除 ---------- */
+
+function forgetMap(code) {
+  localStorage.setItem(MAPS_KEY, JSON.stringify(joinedMaps().filter((m) => m.code !== code)));
+  if (localStorage.getItem(CURRENT_MAP_KEY) === code) {
+    localStorage.removeItem(CURRENT_MAP_KEY);
+  }
+}
+
+function openMapSettings() {
+  if (!state.map || isPublicView()) {
+    toast('公共广场没有设置，先选择一张自己的地图', 'info');
+    return;
+  }
+  $('#map-name-input').value = state.map.name;
+  $('#map-settings-dialog').showModal();
+}
+
+async function renameCurrentMap() {
+  if (!state.map || isPublicView()) return;
+  const name = $('#map-name-input').value.trim();
+  if (!name) {
+    toast('地图名称不能为空', 'error');
+    return;
+  }
+  try {
+    await api.renameMap(state.map.code, name);
+    state.map.name = name;
+    saveJoinedMap(state.map);
+    renderMapSelect();
+    toast('地图名称已更新');
+    $('#map-settings-dialog').close();
+  } catch (err) {
+    toast(`保存失败：${err.message}`, 'error');
+  }
+}
+
+async function rekeyCurrentMap() {
+  if (!state.map || isPublicView()) return;
+  const confirmed = await askConfirm({
+    title: '更换邀请码？',
+    message: '旧邀请码立即失效，之前分享的链接和邀请码都无法再打开这张地图。',
+    okText: '换码',
+  });
+  if (!confirmed) return;
+  try {
+    const newMap = await api.rekeyMap(state.map.code);
+    forgetMap(state.map.code);
+    setCurrentMap(newMap);
+    $('#map-settings-dialog').close();
+    $('#map-created-title').textContent = '邀请码已更换 🔑';
+    $('#invite-code').textContent = newMap.code;
+    $('#map-created-dialog').showModal();
+  } catch (err) {
+    toast(`换码失败：${err.message}`, 'error');
+  }
+}
+
+async function deleteCurrentMap() {
+  if (!state.map || isPublicView()) return;
+  const confirmed = await askConfirm({
+    title: `删除地图「${state.map.name}」？`,
+    message: '所有地点、照片、留言会一并删除，无法恢复。请确认这是你想要的操作。',
+    okText: '永久删除',
+    danger: true,
+  });
+  if (!confirmed) return;
+  try {
+    await api.deleteMap(state.map.code);
+    forgetMap(state.map.code);
+    toast(`已删除「${state.map.name}」`);
+    enterPublicMap();
+  } catch (err) {
+    toast(`删除失败：${err.message}`, 'error');
+  }
+}
+
+function bindMapSettings() {
+  $('#btn-map-settings').addEventListener('click', openMapSettings);
+  $('#btn-map-settings-close').addEventListener('click', () => $('#map-settings-dialog').close());
+  $('#btn-map-rename').addEventListener('click', renameCurrentMap);
+  $('#btn-map-rekey').addEventListener('click', rekeyCurrentMap);
+  $('#btn-map-delete').addEventListener('click', deleteCurrentMap);
+}
+
 /* ---------- 启动 ---------- */
 
 function bindStaticEvents() {
@@ -1625,6 +1711,7 @@ async function boot() {
   bindSearch();
   bindImport();
   bindMapEntry();
+  bindMapSettings();
   bindDetailDialog();
   bindExtras();
   registerServiceWorker();

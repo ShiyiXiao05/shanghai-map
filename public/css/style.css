@@ -646,6 +646,42 @@ button { font: inherit; }
 
 .map-switcher-label { font-size: 15px; }
 
+#btn-map-settings {
+  flex: none;
+  padding: 6px 9px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ---------- 地图设置弹窗 ---------- */
+
+.settings-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 18px 0 6px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.settings-text { min-width: 0; }
+
+.settings-text b { font-size: 13.5px; }
+
+.settings-hint {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  line-height: 1.55;
+}
+
+.settings-row .btn { flex: none; }
+
 /* 侧栏功能入口（回忆 / 海报） */
 
 .side-actions {
@@ -1245,7 +1281,17 @@ button { font: inherit; }
   line-height: 1.7;
 }
 
-.detail-actions { display: flex; gap: 8px; margin-top: 14px; }
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap; /* 放不下的按钮整颗换到下一行 */
+  gap: 7px;
+  margin-top: 14px;
+}
+
+/* 单颗按钮内禁止折行（否则「打卡」变「打/卡」竖排） */
+.detail-actions .btn {
+  white-space: nowrap;
+}
 
 #btn-detail-wish.is-wished {
   color: var(--brick);

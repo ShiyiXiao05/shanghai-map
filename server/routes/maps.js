@@ -40,5 +40,45 @@ export function createMapsRouter({ store }) {
     }
   });
 
+  // 以下地图管理操作均以「持有邀请码」为权限（与整体模型一致）
+
+  router.put('/:code', async (req, res, next) => {
+    try {
+      const code = (req.params.code ?? '').trim().toUpperCase();
+      const body = typeof req.body === 'object' && req.body !== null ? req.body : {};
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name) return res.status(400).json({ error: '地图名称不能为空' });
+      if (name.length > 40) return res.status(400).json({ error: '地图名称不能超过 40 字' });
+      const map = await store.renameMap(code, name);
+      if (!map) return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      res.json(map);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 换邀请码（权限重置）：旧码立即失效
+  router.post('/:code/rekey', async (req, res, next) => {
+    try {
+      const code = (req.params.code ?? '').trim().toUpperCase();
+      const map = await store.rekeyMap(code);
+      if (!map) return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      res.json(map);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/:code', async (req, res, next) => {
+    try {
+      const code = (req.params.code ?? '').trim().toUpperCase();
+      const removed = await store.deleteMap(code);
+      if (!removed) return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  });
+
   return router;
 }

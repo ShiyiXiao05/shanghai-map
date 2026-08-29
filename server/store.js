@@ -143,6 +143,58 @@ export function createPlaceStore(pool) {
     return rows[0] ?? null;
   }
 
+  async function renameMap(code, name) {
+    const { rows } = await pool.query(
+      'UPDATE maps SET name = $2 WHERE code = $1 RETURNING code, name, created_by',
+      [code, name]
+    );
+    return rows[0] ?? null;
+  }
+
+  // 换邀请码（权限重置）：子表 map_code 一并迁移；唯一冲突时迁回旧码并重试
+  async function rekeyMap(code) {
+    const CHILD_TABLES = ['public.places', 'place_photos', 'place_comments', 'place_wishes'];
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const newCode = generateMapCode();
+      if (newCode === code) continue;
+      try {
+        for (const table of CHILD_TABLES) {
+          await pool.query(`UPDATE ${table} SET map_code = $1 WHERE map_code = $2`, [
+            newCode,
+            code,
+          ]);
+        }
+        const { rows } = await pool.query(
+          'UPDATE maps SET code = $1 WHERE code = $2 RETURNING code, name, created_by',
+          [newCode, code]
+        );
+        if (rows[0]) return rows[0];
+        return null; // 地图不存在
+      } catch (err) {
+        // 新码撞唯一约束：把子表迁回旧码后重试
+        for (const table of CHILD_TABLES) {
+          await pool.query(`UPDATE ${table} SET map_code = $1 WHERE map_code = $2`, [
+            code,
+            newCode,
+          ]);
+        }
+        if (attempt === 4) throw err;
+      }
+    }
+    throw new Error('邀请码生成失败，请重试');
+  }
+
+  async function deleteMap(code) {
+    const { rows } = await pool.query('DELETE FROM maps WHERE code = $1 RETURNING code', [code]);
+    if (rows.length === 0) return false;
+    await pool.query('DELETE FROM public.places WHERE map_code = $1', [code]);
+    await pool.query('DELETE FROM place_photos WHERE map_code = $1', [code]);
+    await pool.query('DELETE FROM place_comments WHERE map_code = $1', [code]);
+    await pool.query('DELETE FROM place_wishes WHERE map_code = $1', [code]);
+    photoCache.clear();
+    return true;
+  }
+
   async function listPlaces(mapCode) {
     const { rows } = await pool.query(
       'SELECT * FROM public.places WHERE map_code = $1 ORDER BY created_at DESC, id DESC',
@@ -469,6 +521,9 @@ export function createPlaceStore(pool) {
     init,
     createMap,
     getMapByCode,
+    renameMap,
+    rekeyMap,
+    deleteMap,
     listPlaces,
     create,
     update,
