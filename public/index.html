@@ -172,12 +172,14 @@
       <div class="detail-actions">
         <button type="button" class="btn btn-small" id="btn-detail-toggle">✅ 打卡</button>
         <button type="button" class="btn btn-small" id="btn-detail-edit">✏️ 编辑</button>
+        <button type="button" class="btn btn-small" id="btn-detail-public" hidden>🌍 公开</button>
         <button type="button" class="btn btn-small" id="btn-detail-wish">♡ 想去</button>
         <button type="button" class="btn btn-small" id="btn-detail-share">🔗 分享</button>
         <a id="btn-detail-amap" class="btn btn-small" target="_blank" rel="noopener" hidden title="在高德地图中打开这个位置">🗺️ 高德</a>
       </div>
       <div class="detail-wishes" id="detail-wishes" hidden></div>
-      <section class="detail-section">
+      <p class="detail-readonly" id="detail-readonly" hidden>🌍 来自公共广场 · 只读，互动请到地点所在的地图</p>
+      <section class="detail-section" id="section-photos">
         <div class="detail-section-head">
           <h3>照片 <span class="detail-count" id="detail-photo-count"></span></h3>
           <button type="button" class="btn btn-small" id="btn-add-photo">＋ 添加照片</button>
@@ -186,7 +188,7 @@
         <div class="photo-grid" id="photo-grid"></div>
         <p class="detail-empty" id="photo-empty">还没有照片，去过了就拍一张留个纪念吧</p>
       </section>
-      <section class="detail-section">
+      <section class="detail-section" id="section-comments">
         <h3>留言</h3>
         <ul class="comment-list" id="comment-list"></ul>
         <p class="detail-empty" id="comment-empty">还没有留言，说点什么吧</p>

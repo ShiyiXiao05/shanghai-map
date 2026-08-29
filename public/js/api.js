@@ -63,4 +63,7 @@ export const api = {
     request('POST', `/api/places/${placeId}/wish`, { body: { map_code: mapCode, who } }),
   memories: async (mapCode) =>
     (await request('GET', `/api/maps/${encodeURIComponent(mapCode)}/memories`)).memories,
+  togglePublic: (mapCode, placeId) =>
+    request('POST', `/api/places/${placeId}/public`, { body: { map_code: mapCode } }),
+  publicPlaces: async () => (await request('GET', '/api/public/places')).places,
 };

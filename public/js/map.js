@@ -146,7 +146,9 @@ export function createMapView(container, { mapStyle = 'amap://styles/normal' } =
   }
 
   function focus(place) {
-    map.setZoomAndCenter(15, [place.lng, place.lat]);
+    // immediately=true：带动画的缩放+平移同时插值会把屏外点落在屏幕边缘，
+    // 直接定位保证侧栏第一次点击就把地点带到画面中心
+    map.setZoomAndCenter(15, [place.lng, place.lat], true);
   }
 
   function setPickMode(on, { onPick } = {}) {

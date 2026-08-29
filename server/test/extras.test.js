@@ -289,4 +289,59 @@ describe('photos & comments API', () => {
     const photoCached = await request('GET', `/api/photos/${withPhoto.id}?map=${map.code}`);
     assert.equal(photoCached.status, 200); // LRU 缓存路径同样可取
   });
+
+  it('公共广场：公开开关、聚合视图不泄露邀请码、删除后移除', async () => {
+    const { map, place } = await setupMapWithPlace(request);
+    const second = await (
+      await request('POST', '/api/places', {
+        body: { ...validPlace, name: '未公开的', map_code: map.code },
+      })
+    ).json();
+
+    // 默认未公开：公共广场为空
+    const empty = await (await request('GET', '/api/public/places')).json();
+    assert.equal(empty.places.length, 0);
+
+    // 缺邀请码 400、错邀请码 404
+    const noCode = await request('POST', `/api/places/${place.id}/public`, { body: {} });
+    assert.equal(noCode.status, 400);
+    const wrongCode = await request('POST', `/api/places/${place.id}/public`, {
+      body: { map_code: 'ZZZZZ9' },
+    });
+    assert.equal(wrongCode.status, 404);
+
+    // 公开 → 出现在公共广场；不泄露 map_code；计数与愿望一并返回
+    const on = await request('POST', `/api/places/${place.id}/public`, {
+      body: { map_code: map.code },
+    });
+    assert.equal(on.status, 200);
+    assert.deepEqual(await on.json(), { is_public: true });
+
+    const list = await (await request('GET', '/api/public/places')).json();
+    assert.equal(list.places.length, 1);
+    const pub = list.places[0];
+    assert.equal(pub.name, validPlace.name);
+    assert.equal('map_code' in pub, false);
+    assert.equal(pub.wishes.length, 0);
+
+    // 地点自身列表带 is_public 标记
+    const own = await (await request('GET', `/api/places?map=${map.code}`)).json();
+    const ownFirst = own.places.find((p) => p.id === place.id);
+    assert.equal(ownFirst.is_public, true);
+    assert.equal(own.places.find((p) => p.id === second.id).is_public, false);
+
+    // 取消公开 → 从公共广场消失；再公开再取消
+    const off = await (
+      await request('POST', `/api/places/${place.id}/public`, { body: { map_code: map.code } })
+    ).json();
+    assert.deepEqual(off, { is_public: false });
+    const emptyAgain = await (await request('GET', '/api/public/places')).json();
+    assert.equal(emptyAgain.places.length, 0);
+
+    // 删除地点后不应残留
+    await request('POST', `/api/places/${place.id}/public`, { body: { map_code: map.code } });
+    await request('DELETE', `/api/places/${place.id}`, { mapCode: map.code });
+    const afterDelete = await (await request('GET', '/api/public/places')).json();
+    assert.equal(afterDelete.places.length, 0);
+  });
 });

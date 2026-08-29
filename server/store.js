@@ -49,6 +49,12 @@ export function createPlaceStore(pool) {
     await pool.query(
       'ALTER TABLE public.places ADD COLUMN IF NOT EXISTS visited_at TIMESTAMPTZ'
     );
+    await pool.query(
+      'ALTER TABLE public.places ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE'
+    );
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_places_public ON public.places (is_public) WHERE is_public'
+    );
     await pool.query(`
       CREATE TABLE IF NOT EXISTS place_photos (
         id SERIAL PRIMARY KEY,
@@ -369,6 +375,45 @@ export function createPlaceStore(pool) {
     return rows.length > 0;
   }
 
+  // 公共广场：所有勾选公开的地点聚合。绝不返回 map_code，避免泄露各地图邀请码
+  async function listPublicPlaces() {
+    const { rows } = await pool.query(
+      `SELECT id, name, description, category, lng, lat, address, added_by,
+              visited, created_at, updated_at, visited_at, is_public
+       FROM public.places
+       WHERE is_public = TRUE
+       ORDER BY created_at DESC, id DESC`
+    );
+    if (rows.length === 0) return [];
+    const [photoRows, commentRows, wishRows] = await Promise.all([
+      pool.query('SELECT place_id, count(*) AS n FROM place_photos GROUP BY place_id'),
+      pool.query('SELECT place_id, count(*) AS n FROM place_comments GROUP BY place_id'),
+      pool.query('SELECT place_id, who FROM place_wishes ORDER BY id ASC'),
+    ]);
+    const photoCounts = new Map(photoRows.rows.map((r) => [r.place_id, Number(r.n)]));
+    const commentCounts = new Map(commentRows.rows.map((r) => [r.place_id, Number(r.n)]));
+    const wishesByPlace = new Map();
+    for (const row of wishRows.rows) {
+      const list = wishesByPlace.get(row.place_id) ?? [];
+      list.push(row.who);
+      wishesByPlace.set(row.place_id, list);
+    }
+    return rows.map((row) => ({
+      ...row,
+      photo_count: photoCounts.get(row.id) ?? 0,
+      comment_count: commentCounts.get(row.id) ?? 0,
+      wishes: wishesByPlace.get(row.id) ?? [],
+    }));
+  }
+
+  async function togglePublic(id, mapCode) {
+    const { rows } = await pool.query(
+      'UPDATE public.places SET is_public = NOT is_public, updated_at = now() WHERE id = $1 AND map_code = $2 RETURNING is_public',
+      [id, mapCode]
+    );
+    return rows[0] ?? null;
+  }
+
   async function toggleWish(placeId, mapCode, who) {
     const del = await pool.query(
       'DELETE FROM place_wishes WHERE place_id = $1 AND map_code = $2 AND who = $3 RETURNING id',
@@ -399,14 +444,14 @@ export function createPlaceStore(pool) {
     );
     if (rows.length === 0) return [];
     const photos = await pool.query(
-      'SELECT place_id, mime, thumb_b64 FROM place_photos WHERE map_code = $1 ORDER BY id ASC',
+      'SELECT place_id, thumb_url, thumb_b64, mime FROM place_photos WHERE map_code = $1 ORDER BY id ASC',
       [mapCode]
     );
     const thumbsByPlace = new Map();
     for (const row of photos.rows) {
       const list = thumbsByPlace.get(row.place_id) ?? [];
       if (list.length < 3) {
-        list.push(`data:${row.mime};base64,${row.thumb_b64}`);
+        list.push(row.thumb_url || `data:${row.mime};base64,${row.thumb_b64}`);
         thumbsByPlace.set(row.place_id, list);
       }
     }
@@ -440,6 +485,8 @@ export function createPlaceStore(pool) {
     toggleWish,
     listWishes,
     listMemories,
+    listPublicPlaces,
+    togglePublic,
   };
 }
 

@@ -28,6 +28,15 @@ export function buildApp({ store, mapConfig, uploader }) {
   app.use('/api', createPhotosRouter({ store, uploader }));
   app.use('/api', createCommentsRouter({ store }));
 
+  // 公共广场：无需邀请码的只读聚合（不含 map_code，不泄露各地图邀请码）
+  app.get('/api/public/places', async (req, res, next) => {
+    try {
+      res.json({ places: await store.listPublicPlaces() });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.use('/api', (req, res) => {
     res.status(404).json({ error: '接口不存在' });
   });

@@ -18,6 +18,7 @@ const CURRENT_MAP_KEY = 'wish-current-map';
 const NICKNAME_KEY = 'shanghai-wish-nickname';
 const SORT_KEY = 'wish-sort';
 const NEW_MAP_OPTION = '__new__';
+const PUBLIC_OPTION = '__public__';
 
 /* 配色主题：每个主题一套页面色板 + 高德官方底图风格（mapStyle） */
 const THEMES = {
@@ -119,6 +120,24 @@ function toast(message, type = 'ok') {
   setTimeout(() => el.remove(), 2800);
 }
 
+function isPublicView() {
+  return Boolean(state.map?.isPublic);
+}
+
+// 需要真实地图（有邀请码）的操作入口守卫；公共广场只读
+function requireRealMap() {
+  if (!state.map) {
+    openMapEntry();
+    return false;
+  }
+  if (isPublicView()) {
+    toast('公共广场是只读的，先创建或加入一张地图', 'info');
+    openMapEntry();
+    return false;
+  }
+  return true;
+}
+
 /* ---------- 自定义确认 / 昵称弹窗（替代原生 confirm/prompt） ---------- */
 
 function askConfirm({ title, message, okText = '确定', danger = false } = {}) {
@@ -175,17 +194,42 @@ function saveJoinedMap(map) {
 
 function setCurrentMap(map) {
   state.map = map;
-  saveJoinedMap(map);
-  localStorage.setItem(CURRENT_MAP_KEY, map.code);
+  if (!map.isPublic) {
+    saveJoinedMap(map);
+    localStorage.setItem(CURRENT_MAP_KEY, map.code);
+  }
   const url = new URL(location.href);
-  url.searchParams.set('map', map.code); // 保留 place 等其他参数，深链不丢
+  if (map.isPublic) {
+    url.searchParams.delete('map'); // 公共广场不写邀请码参数
+    url.searchParams.delete('place');
+  } else {
+    url.searchParams.set('map', map.code); // 保留 place 等其他参数，深链不丢
+  }
   history.replaceState(null, '', url);
   renderMapSelect();
+}
+
+// 进入公共广场（默认地图）：聚合所有勾选公开的地点，只读
+function enterPublicMap() {
+  state.map = { code: PUBLIC_OPTION, name: '公共广场', isPublic: true };
+  state.mapView?.closeInfo();
+  closeDetail();
+  closeMapEntry();
+  syncUrlPlace(null);
+  renderMapSelect();
+  loadPlaces();
 }
 
 function renderMapSelect() {
   const select = $('#map-select');
   select.replaceChildren();
+
+  // 公共广场固定在首位
+  const publicOption = document.createElement('option');
+  publicOption.value = PUBLIC_OPTION;
+  publicOption.textContent = '🌍 公共广场';
+  if (isPublicView()) publicOption.selected = true;
+  select.appendChild(publicOption);
 
   if (!state.map) {
     const placeholder = document.createElement('option');
@@ -194,10 +238,11 @@ function renderMapSelect() {
     placeholder.disabled = true;
     placeholder.selected = true;
     select.appendChild(placeholder);
-  } else {
+  } else if (!isPublicView()) {
     const current = document.createElement('option');
     current.value = state.map.code;
     current.textContent = state.map.name;
+    current.selected = true;
     select.appendChild(current);
   }
   for (const map of joinedMaps()) {
@@ -286,6 +331,10 @@ function bindMapEntry() {
       openMapEntry();
       return;
     }
+    if (value === PUBLIC_OPTION) {
+      if (!isPublicView()) enterPublicMap();
+      return;
+    }
     if (value && (!state.map || value !== state.map.code)) {
       const map = joinedMaps().find((m) => m.code === value);
       if (map) {
@@ -322,9 +371,8 @@ async function restoreMapSession() {
     await loadPlaces();
     return;
   }
-  // 首访或清空过会话：直接进地图页空状态，不弹任何整页引导
-  renderMapSelect();
-  renderAll();
+  // 无会话（新访客/清过存储）：默认进公共广场
+  enterPublicMap();
 }
 
 /* ---------- 数据加载与渲染 ---------- */
@@ -337,7 +385,9 @@ async function loadPlaces() {
   state.loading = true;
   renderList(); // 先出骨架屏
   try {
-    state.places = await api.listPlaces(state.map.code);
+    state.places = isPublicView()
+      ? await api.publicPlaces()
+      : await api.listPlaces(state.map.code);
   } catch (err) {
     state.loading = false;
     if (err.status === 404) {
@@ -504,7 +554,7 @@ function renderList() {
       event.stopPropagation();
       toggleWish(place);
     });
-    head.appendChild(wishBtn);
+    if (!isPublicView()) head.appendChild(wishBtn); // 公共广场只读
 
     const actions = document.createElement('div');
     actions.className = 'place-actions';
@@ -514,6 +564,13 @@ function renderList() {
     btnToggle.setAttribute('aria-label', btnToggle.title);
     btnToggle.textContent = place.visited ? '↩️' : '✅';
     btnToggle.addEventListener('click', () => toggleVisited(place));
+    const btnPublic = document.createElement('button');
+    btnPublic.type = 'button';
+    btnPublic.textContent = '🌍';
+    btnPublic.title = place.is_public ? '从公共广场撤下' : '公开到公共广场（所有人可见）';
+    btnPublic.setAttribute('aria-label', btnPublic.title);
+    btnPublic.classList.toggle('is-public', Boolean(place.is_public));
+    btnPublic.addEventListener('click', () => togglePublic(place));
     const btnDetail = document.createElement('button');
     btnDetail.type = 'button';
     btnDetail.title = '照片与留言';
@@ -532,7 +589,14 @@ function renderList() {
     btnDelete.setAttribute('aria-label', '删除');
     btnDelete.textContent = '🗑️';
     btnDelete.addEventListener('click', () => removePlace(place));
-    actions.append(btnToggle, btnDetail, btnEdit, btnDelete);
+    actions.append(btnToggle, btnPublic, btnDetail, btnEdit, btnDelete);
+    if (isPublicView()) {
+      // 公共广场只读：仅保留查看详情入口
+      btnToggle.remove();
+      btnPublic.remove();
+      btnEdit.remove();
+      btnDelete.remove();
+    }
 
     const metaLine = document.createElement('div');
     metaLine.className = 'place-meta';
@@ -553,10 +617,20 @@ function renderList() {
 
     item.addEventListener('click', (event) => {
       if (event.target.closest('.place-actions')) return;
+      if (isPublicView()) {
+        openDetail(place); // 公共广场只读：点条目直接看详情
+        return;
+      }
       focusPlace(place);
     });
     item.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') focusPlace(place);
+      if (event.key === 'Enter') {
+        if (isPublicView()) {
+          openDetail(place);
+          return;
+        }
+        focusPlace(place);
+      }
     });
     item.addEventListener('mouseenter', () => state.mapView?.highlight(place.id));
     item.addEventListener('mouseleave', () => state.mapView?.highlight(null));
@@ -725,10 +799,11 @@ async function runSearch(keyword, suggest) {
       addr.textContent = poi.address || poi.pname + poi.cityname + poi.adname;
       btn.append(name, addr);
       btn.addEventListener('click', () => {
+        if (!requireRealMap()) return;
         suggest.hidden = true;
         $('#search-input').value = '';
         const { lng, lat } = poi.location;
-        state.mapView.map.setZoomAndCenter(15, [lng, lat]);
+        state.mapView.map.setZoomAndCenter(15, [lng, lat], true);
         openPlaceDialog({
           coords: { lng, lat },
           prefill: { name: poi.name, address: poi.address ?? '' },
@@ -791,10 +866,7 @@ function closePlaceDialog() {
 
 async function submitPlace(event) {
   event.preventDefault();
-  if (!state.map) {
-    openMapEntry();
-    return;
-  }
+  if (!requireRealMap()) return;
   const form = event.currentTarget;
   const name = form.elements.name.value.trim();
   if (!name) {
@@ -919,6 +991,21 @@ async function removePlace(place) {
   }
 }
 
+/* ---------- 公开到公共广场 ---------- */
+
+async function togglePublic(place) {
+  if (!state.map || isPublicView()) return;
+  try {
+    const { is_public } = await api.togglePublic(state.map.code, place.id);
+    place.is_public = is_public;
+    toast(is_public ? `「${place.name}」已公开到公共广场 🌍` : `「${place.name}」已从公共广场撤下`);
+    renderList();
+    if (detailPlace?.id === place.id) syncDetailHeader();
+  } catch (err) {
+    toast(`操作失败：${err.message}`, 'error');
+  }
+}
+
 /* ---------- 地点详情：照片与留言 ---------- */
 
 let detailPlace = null;
@@ -945,6 +1032,14 @@ function syncDetailHeader() {
   desc.textContent = place.description ?? '';
   $('#btn-detail-toggle').textContent = place.visited ? '↩️ 取消打卡' : '✅ 打卡';
   syncDetailWishes(place);
+  // 公开开关（公共广场只读视图下由 openDetail 统一隐藏）
+  const pubBtn = $('#btn-detail-public');
+  pubBtn.hidden = isPublicView();
+  pubBtn.textContent = place.is_public ? '🌐 取消公开' : '🌍 公开';
+  pubBtn.classList.toggle('is-public', Boolean(place.is_public));
+  pubBtn.title = place.is_public
+    ? '从公共广场撤下这个地点'
+    : '公开后所有人都能在公共广场看到这个地点';
   // 高德官方 URI API：桌面打开网页版，手机（callnative=1）尝试拉起高德 App
   const amapLink = $('#btn-detail-amap');
   amapLink.hidden = false;
@@ -960,6 +1055,20 @@ async function openDetail(place) {
   $('#comment-input').value = '';
   $('#detail-dialog').showModal();
   syncUrlPlace(place.id);
+  if (isPublicView()) {
+    // 公共广场只读：互动按钮与照片/留言区需要邀请码，统一隐藏
+    for (const id of ['btn-detail-toggle', 'btn-detail-edit', 'btn-detail-wish', 'btn-detail-share', 'btn-detail-public']) {
+      $(`#${id}`).hidden = true;
+    }
+    $('#detail-wishes').hidden = true;
+    $('#section-photos').hidden = true;
+    $('#section-comments').hidden = true;
+    $('#detail-readonly').hidden = false;
+    return;
+  }
+  $('#detail-readonly').hidden = true;
+  $('#section-photos').hidden = false;
+  $('#section-comments').hidden = false;
   await Promise.all([refreshPhotos(), refreshComments()]);
 }
 
@@ -1212,7 +1321,7 @@ async function handleMapPick(lng, lat) {
     row.append(main, dist);
     row.addEventListener('click', () => {
       closePickDialog();
-      state.mapView.map.setZoomAndCenter(16, [poi.lng, poi.lat]);
+      state.mapView.map.setZoomAndCenter(16, [poi.lng, poi.lat], true);
       openPlaceDialog({
         coords: { lng: poi.lng, lat: poi.lat },
         prefill: { name: poi.name, address: poi.address },
@@ -1329,10 +1438,7 @@ function handleImportSubmit(event) {
 
 function bindImport() {
   $('#btn-import').addEventListener('click', () => {
-    if (!state.map) {
-      openMapEntry();
-      return;
-    }
+    if (!requireRealMap()) return;
     $('#import-input').value = '';
     $('#import-preview').hidden = true;
     $('#import-dialog').showModal();
@@ -1345,10 +1451,7 @@ function bindImport() {
 
 function bindStaticEvents() {
   $('#btn-pick').addEventListener('click', () => {
-    if (!state.map) {
-      openMapEntry();
-      return;
-    }
+    if (!requireRealMap()) return;
     if (!state.mapView) {
       toast('地图未启用，无法选点（需要配置高德 key）', 'error');
       return;
@@ -1385,10 +1488,7 @@ function bindStaticEvents() {
 /* ---------- 回忆时间线 ---------- */
 
 async function openMemories() {
-  if (!state.map) {
-    toast('先创建或加入一张地图', 'error');
-    return;
-  }
+  if (!requireRealMap()) return;
   $('#memories-dialog').showModal();
   let memories = [];
   try {
@@ -1464,10 +1564,7 @@ function renderMemories(memories) {
 /* ---------- 分享海报 ---------- */
 
 async function openPoster() {
-  if (!state.map) {
-    toast('先创建或加入一张地图', 'error');
-    return;
-  }
+  if (!requireRealMap()) return;
   $('#poster-dialog').showModal();
   await renderPoster();
 }

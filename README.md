@@ -7,6 +7,7 @@
 
 ## 功能
 
+- **🌍 公共广场**：无需邀请码的默认地图，聚合所有人勾选「公开」的地点（只读，不泄露各地图邀请码）
 - 每张地图独立：创建即生成 6 位邀请码，侧栏切换器管理多张地图，地点互相隔离
 - 邀请码即权限：知道码才能看和编（读 `?map=`、写请求带码），无账号系统
 - 上海地图（高德深色底图）展示标记，按分类着色；搜索地点名或地图吸附选点（自动匹配附近地点）
@@ -76,6 +77,8 @@ npm --prefix server run dev
 | DELETE | /api/comments/:id | 删除留言 | 头 `x-map-code` |
 | POST | /api/places/:id/wish | 「我也想去」投票（切换式） | body `map_code` |
 | GET | /api/maps/:code/memories | 回忆时间线（已打卡+缩略图） | — |
+| GET | /api/public/places | 公共广场（所有人可见的公开地点聚合，只读） | — |
+| POST | /api/places/:id/public | 公开 / 取消公开到公共广场（切换式） | body `map_code` |
 
 地点列表每项附带 `photo_count` / `comment_count` / `wishes`（想去的昵称数组）。
 

@@ -140,6 +140,22 @@ export function createPlacesRouter({ store }) {
     }
   });
 
+  // 公开/取消公开到公共广场
+  router.post('/:id/public', async (req, res, next) => {
+    try {
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
+      const body = typeof req.body === 'object' && req.body !== null ? req.body : {};
+      const code = typeof body.map_code === 'string' ? body.map_code.trim().toUpperCase() : '';
+      if (!code) return res.status(400).json({ error: '缺少邀请码（map_code）' });
+      const result = await store.togglePublic(id, code);
+      if (!result) return res.status(404).json({ error: '地点不存在或邀请码不匹配' });
+      res.json({ is_public: result.is_public });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   const requireMapCode = (req, res, next) => {
     const code = (req.get('x-map-code') ?? '').trim().toUpperCase();
     if (!code) return res.status(400).json({ error: '缺少邀请码（x-map-code）' });
