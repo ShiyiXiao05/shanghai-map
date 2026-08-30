@@ -737,11 +737,12 @@ function bindSearch() {
     clearTimeout(searchTimer);
     searchIndex = -1;
     const keyword = input.value.trim();
-    if (!keyword) {
+    // 至少 2 字才搜 + 500ms 防抖：打字过程的中间态不消耗高德搜索配额
+    if (keyword.length < 2) {
       suggest.hidden = true;
       return;
     }
-    searchTimer = setTimeout(() => runSearch(keyword, suggest), 300);
+    searchTimer = setTimeout(() => runSearch(keyword, suggest), 500);
   });
 
   input.addEventListener('keydown', (event) => {
@@ -778,7 +779,21 @@ async function runSearch(keyword, suggest) {
   try {
     pois = await state.mapView.searchPois(keyword);
   } catch (err) {
-    toast(`搜索失败：${err.message}`, 'error');
+    suggest.replaceChildren();
+    const box = document.createElement('div');
+    box.className = 'suggest-empty';
+    if (err.message.includes('USER_DAILY_QUERY_OVER_LIMIT')) {
+      const line1 = document.createElement('div');
+      line1.textContent = '⚠️ 今日搜索次数已用完（高德免费额度，每天零点恢复）';
+      const line2 = document.createElement('div');
+      line2.textContent = '可以先「＋ 地图选点」点图选位置，或「🔗 导入」粘贴高德分享链接';
+      line2.style.marginTop = '6px';
+      box.append(line1, line2);
+    } else {
+      box.textContent = `搜索失败：${err.message}`;
+    }
+    suggest.appendChild(box);
+    suggest.hidden = false;
     return;
   }
   suggest.replaceChildren();
@@ -1290,8 +1305,11 @@ async function handleMapPick(lng, lat) {
   let result = { formattedAddress: '', pois: [] };
   try {
     result = await state.mapView.reverseGeocode([lng, lat]);
-  } catch {
-    /* 匹配失败按无候选处理 */
+  } catch (err) {
+    if (err.message.includes('USER_DAILY_QUERY_OVER_LIMIT')) {
+      toast('地址匹配今日额度已用完，已直接用你点击的位置', 'info');
+    }
+    /* 其他失败按无候选处理 */
   }
   if (!dialog.open) return;
 

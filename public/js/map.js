@@ -172,12 +172,16 @@ export function createMapView(container, { mapStyle = 'amap://styles/normal' } =
       AMap.plugin('AMap.PlaceSearch', (ok) => (ok === false ? reject(new Error('搜索插件加载失败')) : resolve()));
     });
     const placeSearch = new AMap.PlaceSearch({ city: '上海', citylimit: true, pageSize: 8 });
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       placeSearch.search(keyword, (status, result) => {
         if (status === 'complete') {
           resolve(result.poiList?.pois ?? []);
+        } else if (status === 'error') {
+          // 高德错误码直接透出（如 USER_DAILY_QUERY_OVER_LIMIT），别静默成"没有找到"
+          const code = typeof result === 'string' ? result : result?.info ?? '';
+          reject(new Error(code || 'SEARCH_ERROR'));
         } else {
-          resolve([]);
+          resolve([]); // no_data
         }
       });
     });
@@ -189,24 +193,27 @@ export function createMapView(container, { mapStyle = 'amap://styles/normal' } =
       AMap.plugin('AMap.Geocoder', (ok) => (ok === false ? reject(new Error('逆地理插件加载失败')) : resolve()));
     });
     const geocoder = new AMap.Geocoder({ city: '上海', extensions: 'all' });
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       geocoder.getAddress(lnglat, (status, result) => {
-        if (status !== 'complete' || !result?.regeocode) {
+        if (status === 'complete' && result?.regeocode) {
+          const regeo = result.regeocode;
+          const pois = (regeo.pois ?? [])
+            .slice(0, 6)
+            .map((poi) => ({
+              name: poi.name ?? '',
+              address: poi.address || regeo.formattedAddress || '',
+              lng: Number(poi.location?.lng),
+              lat: Number(poi.location?.lat),
+              distance: Number(poi.distance),
+            }))
+            .filter((poi) => poi.name && Number.isFinite(poi.lng) && Number.isFinite(poi.lat));
+          resolve({ formattedAddress: regeo.formattedAddress ?? '', pois });
+        } else if (status === 'error') {
+          const code = typeof result === 'string' ? result : '';
+          reject(new Error(code || 'REGEO_ERROR'));
+        } else {
           resolve({ formattedAddress: '', pois: [] });
-          return;
         }
-        const regeo = result.regeocode;
-        const pois = (regeo.pois ?? [])
-          .slice(0, 6)
-          .map((poi) => ({
-            name: poi.name ?? '',
-            address: poi.address || regeo.formattedAddress || '',
-            lng: Number(poi.location?.lng),
-            lat: Number(poi.location?.lat),
-            distance: Number(poi.distance),
-          }))
-          .filter((poi) => poi.name && Number.isFinite(poi.lng) && Number.isFinite(poi.lat));
-        resolve({ formattedAddress: regeo.formattedAddress ?? '', pois });
       });
     });
   }
