@@ -1,0 +1,196 @@
+.page {
+  min-height: 100vh;
+  background: var(--paper);
+  padding: 24rpx 28rpx calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.head {
+  background: var(--card);
+  border-radius: 24rpx;
+  padding: 28rpx;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.emoji {
+  font-size: 36rpx;
+}
+
+.name {
+  font-size: 38rpx;
+  font-weight: 700;
+  flex: 1;
+}
+
+.visited {
+  font-size: 22rpx;
+  color: var(--brick);
+}
+
+.meta-row {
+  margin-top: 10rpx;
+}
+
+.meta {
+  font-size: 22rpx;
+  color: var(--ink-faint);
+}
+
+.desc {
+  margin-top: 16rpx;
+  font-size: 27rpx;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+.wish-row {
+  margin-top: 14rpx;
+  font-size: 23rpx;
+  color: var(--brick);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 20rpx;
+}
+
+.public-tip {
+  margin-top: 20rpx;
+  font-size: 23rpx;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.section {
+  margin-top: 26rpx;
+  background: var(--card);
+  border-radius: 24rpx;
+  padding: 24rpx;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 27rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.btn-mini {
+  padding: 8rpx 20rpx;
+  font-size: 24rpx;
+}
+
+.photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.photo-cell {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+}
+
+.photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 14rpx;
+}
+
+.photo-del {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid var(--line);
+}
+
+.comment-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-author {
+  font-size: 22rpx;
+  color: var(--metro);
+  margin-right: 10rpx;
+}
+
+.comment-body {
+  font-size: 26rpx;
+  word-break: break-all;
+}
+
+.comment-del {
+  color: var(--ink-faint);
+  font-size: 22rpx;
+  padding: 6rpx;
+}
+
+.comment-form {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.comment-input {
+  flex: 1;
+  background: var(--paper);
+  border: 1rpx solid var(--line);
+  border-radius: 999rpx;
+  padding: 14rpx 24rpx;
+  font-size: 27rpx;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-bottom: 24rpx;
+}
+
+.label {
+  font-size: 24rpx;
+  color: var(--ink-soft);
+}
+
+.input {
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  font-size: 30rpx;
+}
+
+.textarea {
+  min-height: 140rpx;
+}
+
+.picker-value {
+  color: var(--ink);
+}

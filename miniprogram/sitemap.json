@@ -1,0 +1,9 @@
+{
+  "desc": "魔都·Explore：和同学一起在地图上标记想去的上海角落",
+  "rules": [
+    {
+      "action": "allow",
+      "page": "*"
+    }
+  ]
+}

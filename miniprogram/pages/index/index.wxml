@@ -1,0 +1,86 @@
+<view class="page">
+  <!-- 图标生成用隐藏 canvas -->
+  <canvas type="2d" id="icon-factory" class="icon-factory"></canvas>
+
+  <!-- 自定义导航栏 -->
+  <view class="nav" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-row">
+      <view class="nav-title" bindtap="goMapEntry">
+        <text class="nav-name">{{mapName}}</text>
+        <text class="nav-switch">切换 ▾</text>
+      </view>
+      <view class="nav-actions">
+        <view class="nav-btn" bindtap="goMemories">📷</view>
+        <view class="nav-btn nav-btn-primary" bindtap="goSearch">＋ 标记</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 地图 -->
+  <map
+    id="mainMap"
+    class="map"
+    longitude="{{longitude}}"
+    latitude="{{latitude}}"
+    scale="12"
+    markers="{{markers}}"
+    enable-poi="{{true}}"
+    show-location="{{false}}"
+    bindmarkertap="onMarkerTap"
+  ></map>
+
+  <!-- 底部列表面板 -->
+  <view class="panel">
+    <view class="filters">
+      <scroll-view scroll-x class="chips-scroll">
+        <view class="chips">
+          <view
+            wx:for="{{categories}}"
+            wx:key="id"
+            class="chip {{activeCategories.indexOf(item.id) !== -1 ? 'chip-on' : ''}}"
+            style="{{activeCategories.indexOf(item.id) !== -1 ? 'background:' + item.color + '1f; border-color:' + item.color : ''}}"
+            data-id="{{item.id}}"
+            bindtap="toggleCategory"
+          >{{item.emoji}} {{item.id}}</view>
+        </view>
+      </scroll-view>
+      <view class="filters-row">
+        <label class="toggle">
+          <switch checked="{{hideVisitedOnly}}" bindchange="toggleHideVisited" color="#0f766e" />
+          <text>只看还没去的</text>
+        </label>
+        <picker range="{{['最新添加', '按名称', '最想去']}}" value="{{0}}" bindchange="onSortChange">
+          <text class="sort">排序 ▾</text>
+        </picker>
+      </view>
+    </view>
+
+    <scroll-view scroll-y class="place-scroll">
+      <view wx:if="{{filtered.length === 0 && !loading}}" class="empty">
+        <text class="empty-icon">🌃</text>
+        <text>{{places.length === 0 ? '这张地图还没有地点' : '这个筛选下没有地点'}}</text>
+        <view class="btn btn-primary" wx:if="{{!isPublicView}}" bindtap="goSearch">＋ 搜索添加地点</view>
+        <view class="btn" wx:else bindtap="enterEntry">创建 / 加入地图</view>
+      </view>
+      <view
+        wx:for="{{filtered}}"
+        wx:key="id"
+        class="place-item"
+        data-id="{{item.id}}"
+        bindtap="onTapPlace"
+      >
+        <view class="place-emoji" style="background: {{item.emojiColor}}22; border-color: {{item.emojiColor}}55;">{{item.emoji}}</view>
+        <view class="place-main">
+          <view class="place-name">
+            {{item.name}}
+            <text wx:if="{{item.visited}}" class="visited-dot">●</text>
+          </view>
+          <view class="place-meta ellipsis">
+            {{item.category}}{{item.added_by ? ' · ' + item.added_by : ''}}{{item.photo_count ? ' · 📷' + item.photo_count : ''}}{{item.comment_count ? ' · 💬' + item.comment_count : ''}}
+          </view>
+        </view>
+        <view class="place-wish" wx:if="{{item.wishCount > 0}}">♡ {{item.wishCount}}</view>
+      </view>
+    </scroll-view>
+  </view>
+</view>

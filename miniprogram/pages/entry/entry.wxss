@@ -1,0 +1,114 @@
+.page {
+  min-height: 100vh;
+  background: var(--paper);
+  padding: 40rpx 32rpx calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.title {
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.hint {
+  font-size: 24rpx;
+  color: var(--ink-soft);
+}
+
+.map-item {
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  border-radius: 20rpx;
+  padding: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.map-item-on {
+  border-color: var(--metro);
+}
+
+.map-name {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.map-code {
+  font-size: 24rpx;
+  color: var(--ink-faint);
+  letter-spacing: 2rpx;
+}
+
+.empty {
+  padding: 60rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  color: var(--ink-soft);
+  font-size: 26rpx;
+}
+
+.empty-sub {
+  font-size: 22rpx;
+  color: var(--ink-faint);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.label {
+  font-size: 24rpx;
+  color: var(--ink-soft);
+}
+
+.input {
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  font-size: 30rpx;
+}
+
+.input-code {
+  letter-spacing: 8rpx;
+  text-transform: uppercase;
+}
+
+.actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 10rpx;
+}
+
+.actions .btn {
+  flex: 1;
+}
+
+.created {
+  align-items: center;
+  text-align: center;
+  padding-top: 60rpx;
+}
+
+.invite-code {
+  font-size: 72rpx;
+  font-weight: 800;
+  letter-spacing: 12rpx;
+  color: var(--metro);
+  background: var(--metro-soft);
+  border-radius: 20rpx;
+  padding: 30rpx 0;
+  width: 100%;
+  box-sizing: border-box;
+}

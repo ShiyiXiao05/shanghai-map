@@ -1,0 +1,2 @@
+.page { padding: 40rpx; }
+.tip { color: var(--ink-faint); font-size: 26rpx; }

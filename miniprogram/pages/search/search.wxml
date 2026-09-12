@@ -1,0 +1,4 @@
+<view class="page">
+  <input class="input" placeholder="搜索地点，比如「武康路」" value="{{keyword}}" bindinput="onInput" focus />
+  <view class="tip">{{tip}}</view>
+</view>

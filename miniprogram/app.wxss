@@ -1,0 +1,77 @@
+/* 全局样式：浅色（默认）/ 深色（东京夜）双主题，跟随系统 */
+
+page {
+  --paper: #f2f6f5;
+  --card: #ffffff;
+  --ink: #1f2d2a;
+  --ink-soft: #5b6f6b;
+  --ink-faint: #93a39d;
+  --line: #dde7e4;
+  --metro: #0f766e;
+  --metro-soft: rgba(15, 118, 110, 0.1);
+  --brick: #be4a43;
+  --neon-a: #0f766e;
+  --neon-b: #0891b2;
+  --grad: linear-gradient(135deg, var(--neon-a), var(--neon-b));
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 28rpx;
+}
+
+@media (prefers-color-scheme: dark) {
+  page {
+    --paper: #0a0f1e;
+    --card: #10182b;
+    --ink: #e8ecf8;
+    --ink-soft: #9aa7c7;
+    --ink-faint: #5f6c8f;
+    --line: #263352;
+    --metro: #22d3ee;
+    --metro-soft: rgba(34, 211, 238, 0.12);
+    --brick: #ff5d7a;
+    --neon-a: #ff3d81;
+    --neon-b: #22d3ee;
+    --grad: linear-gradient(135deg, var(--neon-a), var(--neon-b));
+  }
+}
+
+/* 通用按钮与卡片 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16rpx 32rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 28rpx;
+  line-height: 1.2;
+}
+
+.btn::after {
+  border: none;
+}
+
+.btn-primary {
+  background: var(--grad);
+  border: none;
+  color: #ffffff;
+}
+
+.btn-danger {
+  color: var(--brick);
+  border-color: var(--brick);
+}
+
+.card {
+  background: var(--card);
+  border-radius: 24rpx;
+  padding: 24rpx;
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,84 @@
+<view class="page" wx:if="{{place}}">
+  <!-- 查看态 -->
+  <block wx:if="{{!editing}}">
+    <view class="head">
+      <view class="name-row">
+        <text class="emoji">{{meta.emoji}}</text>
+        <text class="name">{{place.name}}</text>
+        <text wx:if="{{place.visited}}" class="visited">已去过 ●</text>
+      </view>
+      <view class="meta-row">
+        <text class="meta">{{place.category}}{{place.added_by ? ' · ' + place.added_by : ''}}{{place.address ? ' · ' + place.address : ''}}</text>
+      </view>
+      <view class="desc" wx:if="{{place.description}}">{{place.description}}</view>
+      <view class="wish-row" wx:if="{{place.wishes.length > 0}}">
+        ♡ 想去：{{place.wishes}}
+      </view>
+    </view>
+
+    <view class="actions" wx:if="{{!isPublicView}}">
+      <view class="btn" bindtap="toggleVisited">{{place.visited ? '↩️ 取消打卡' : '✅ 打卡'}}</view>
+      <view class="btn" bindtap="toggleWish">♡ 想去</view>
+      <view class="btn" bindtap="togglePublic">{{place.is_public ? '🌏 已公开' : '🌏 公开'}}</view>
+      <view class="btn" bindtap="openEdit">✏️ 编辑</view>
+      <view class="btn btn-danger" bindtap="removePlace">🗑️ 删除</view>
+    </view>
+    <view class="public-tip" wx:else>来自公共广场 · 只读</view>
+
+    <!-- 照片 -->
+    <view class="section">
+      <view class="section-head">
+        <text>照片 {{photos.length}}/9</text>
+        <view class="btn btn-mini" wx:if="{{!isPublicView && photos.length < 9}}" bindtap="addPhoto">＋ 添加</view>
+      </view>
+      <view class="photo-grid">
+        <view wx:for="{{photos}}" wx:key="id" class="photo-cell">
+          <image class="photo" src="{{item.thumb}}" mode="aspectFill" data-index="{{index}}" bindtap="previewPhoto" />
+          <view class="photo-del" wx:if="{{!isPublicView}}" data-id="{{item.id}}" catchtap="removePhoto">✕</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 留言 -->
+    <view class="section">
+      <view class="section-head"><text>留言 {{comments.length}}</text></view>
+      <view class="comment" wx:for="{{comments}}" wx:key="id">
+        <view class="comment-main">
+          <text class="comment-author">{{item.author || '同学'}}</text>
+          <text class="comment-body">{{item.body}}</text>
+        </view>
+        <view class="comment-del" wx:if="{{!isPublicView}}" data-id="{{item.id}}" bindtap="removeComment">✕</view>
+      </view>
+      <view class="comment-form" wx:if="{{!isPublicView}}">
+        <input class="comment-input" value="{{commentText}}" maxlength="280" placeholder="说点什么…" bindinput="onCommentInput" />
+        <view class="btn btn-primary btn-mini" bindtap="sendComment">发送</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 编辑态 -->
+  <block wx:else>
+    <view class="field">
+      <text class="label">名称</text>
+      <input class="input" value="{{form.name}}" maxlength="100" data-key="name" bindinput="onFormInput" />
+    </view>
+    <view class="field">
+      <text class="label">分类</text>
+      <picker range="{{categories}}" range-key="id" bindchange="onFormCategory">
+        <view class="input picker-value">{{form.category}} ▾</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="label">描述</text>
+      <textarea class="input textarea" value="{{form.description}}" maxlength="500" data-key="description" bindinput="onFormInput" />
+    </view>
+    <view class="field">
+      <text class="label">地址</text>
+      <input class="input" value="{{form.address}}" maxlength="200" data-key="address" bindinput="onFormInput" />
+    </view>
+    <view class="actions">
+      <view class="btn" bindtap="cancelEdit">取消</view>
+      <view class="btn btn-primary" bindtap="saveEdit">保存</view>
+    </view>
+  </block>
+</view>
