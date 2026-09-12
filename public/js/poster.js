@@ -94,7 +94,12 @@ function drawHeader(ctx, mapName) {
 
   // 地图名胶囊
   ctx.font = '600 28px "PingFang SC", "Microsoft YaHei", sans-serif';
-  const nameWidth = ctx.measureText(mapName).width;
+  let pillName = mapName;
+  while (ctx.measureText(pillName).width > 640 && pillName.length > 4) {
+    pillName = pillName.slice(0, -2);
+  }
+  if (pillName !== mapName) pillName += '…';
+  const nameWidth = ctx.measureText(pillName).width;
   const pillX = 182;
   const pillY = 196;
   ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
@@ -102,12 +107,22 @@ function drawHeader(ctx, mapName) {
   roundRect(ctx, pillX, pillY, nameWidth + 56, 50, 25);
   ctx.stroke();
   ctx.fillStyle = NEON_B;
-  ctx.fillText(`🗂 ${mapName}`, pillX + 28, pillY + 34);
+  ctx.fillText(`🗂 ${pillName}`, pillX + 28, pillY + 34);
 }
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  // 兼容无 roundRect 的旧浏览器（iOS ≤16.3）：手绘圆角路径
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 function drawStats(ctx, places) {

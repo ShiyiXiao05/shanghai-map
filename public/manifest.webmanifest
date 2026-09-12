@@ -28,5 +28,6 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "viewport_fit": "cover"
 }

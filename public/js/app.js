@@ -1632,7 +1632,7 @@ function renderMemories(memories) {
       placeholder.textContent = '📷';
       strip.appendChild(placeholder);
     } else {
-      for (const thumb of memory.photos) {
+      for (const thumb of memory.photos.slice(0, 4)) {
         const img = document.createElement('img');
         img.src = thumb;
         img.alt = memory.name;
@@ -1681,12 +1681,17 @@ async function renderPoster() {
   } catch {
     /* 拿不到照片也照样生成 */
   }
+  try {
   await generatePoster(canvas, {
     mapName: state.map.name,
     code: state.map.code,
     places: state.places,
     photos: photos.slice(0, 6),
   });
+  } catch (err) {
+    console.error(err);
+    toast('海报生成失败，请重试', 'error');
+  }
 }
 
 function savePoster() {
@@ -1721,7 +1726,15 @@ function registerServiceWorker() {
   });
 }
 
+function bindCommentFocusScroll() {
+  document.addEventListener('focusin', (event) => {
+    if (event.target?.id !== 'comment-input') return;
+    setTimeout(() => event.target.scrollIntoView({ block: 'nearest' }), 250);
+  });
+}
+
 async function boot() {
+  bindCommentFocusScroll();
   bindThemeSelect();
   fillCategorySelect();
   renderChips();
