@@ -39,28 +39,37 @@ Page({
   },
 
   async refresh() {
+    if (!this.placeId) return;
     const code = this.mapCode();
-    if (!code || !this.placeId) return;
-    try {
-      const places = await api.listPlaces(code);
-      const place = places.find((p) => p.id === this.placeId);
-      if (!place) {
-        wx.showToast({ title: '地点不存在', icon: 'none' });
-        setTimeout(() => wx.navigateBack(), 800);
+    let place = null;
+    if (code) {
+      try {
+        const places = await api.listPlaces(code);
+        place = places.find((p) => p.id === this.placeId) ?? null;
+      } catch (err) {
+        wx.showToast({ title: err.message, icon: 'none' });
         return;
       }
-      const meta = categoryMeta(place.category);
-      this.setData({
-        place,
-        meta,
-        isPublicView: app.globalData.isPublicView,
-        amapUrl: `https://uri.amap.com/marker?position=${place.lng},${place.lat}&name=${encodeURIComponent(place.name)}&src=moduExplore&coordinate=gaode`,
-      });
-      wx.setNavigationBarTitle({ title: place.name });
+    } else {
+      // 公共广场：无邀请码，用列表页传来的公开地点，只读（照片/留言需要邀请码，不加载）
+      place = app.globalData.detailPlace?.id === this.placeId ? app.globalData.detailPlace : null;
+    }
+    if (!place) {
+      wx.showToast({ title: '地点不存在', icon: 'none' });
+      setTimeout(() => wx.navigateBack(), 800);
+      return;
+    }
+    const meta = categoryMeta(place.category);
+    this.setData({
+      place,
+      meta,
+      isPublicView: app.globalData.isPublicView,
+      amapUrl: `https://uri.amap.com/marker?position=${place.lng},${place.lat}&name=${encodeURIComponent(place.name)}&src=moduExplore&coordinate=gaode`,
+    });
+    wx.setNavigationBarTitle({ title: place.name });
+    if (code) {
       this.loadPhotos();
       this.loadComments();
-    } catch (err) {
-      wx.showToast({ title: err.message, icon: 'none' });
     }
   },
 

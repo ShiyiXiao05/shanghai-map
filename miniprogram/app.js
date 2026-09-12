@@ -6,6 +6,8 @@ App({
     map: null,
     // 公共广场只读视图标记
     isPublicView: false,
+    // 列表页传给详情页的地点对象（公共广场无邀请码时兜底）
+    detailPlace: null,
   },
 
   onLaunch() {

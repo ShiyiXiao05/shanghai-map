@@ -25,8 +25,8 @@
     </view>
     <view class="public-tip" wx:else>来自公共广场 · 只读</view>
 
-    <!-- 照片 -->
-    <view class="section">
+    <!-- 照片（公共广场只读：照片需要邀请码，整段隐藏） -->
+    <view class="section" wx:if="{{!isPublicView}}">
       <view class="section-head">
         <text>照片 {{photos.length}}/9</text>
         <view class="btn btn-mini" wx:if="{{!isPublicView && photos.length < 9}}" bindtap="addPhoto">＋ 添加</view>
@@ -39,8 +39,8 @@
       </view>
     </view>
 
-    <!-- 留言 -->
-    <view class="section">
+    <!-- 留言（公共广场只读：留言需要邀请码，整段隐藏） -->
+    <view class="section" wx:if="{{!isPublicView}}">
       <view class="section-head"><text>留言 {{comments.length}}</text></view>
       <view class="comment" wx:for="{{comments}}" wx:key="id">
         <view class="comment-main">

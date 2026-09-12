@@ -202,6 +202,7 @@ Page({
   },
 
   openDetail(place) {
+    app.globalData.detailPlace = place; // 公共广场无邀请码时，详情页直接用这份只读数据
     wx.navigateTo({ url: `/pages/detail/detail?placeId=${place.id}` });
   },
 
