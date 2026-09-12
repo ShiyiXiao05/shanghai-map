@@ -9,22 +9,30 @@
 
 - **🌍 公共广场**：无需邀请码的默认地图，聚合所有人勾选「公开」的地点（只读，不泄露各地图邀请码）
 - 每张地图独立：创建即生成 6 位邀请码，侧栏切换器管理多张地图，地点互相隔离
-- ⚙️ 地图设置：改名、换邀请码（权限重置，旧码立即失效）、删除地图（级联清理全部数据）
+- ⚙️ 地图设置：改名、换邀请码（权限重置，旧码立即失效）、删除地图（级联清理全部数据 + CDN 照片）、**JSON 导出备份**、**🗑️ 回收站**（删除的地点保留 30 天可恢复）
 - 邀请码即权限：知道码才能看和编（读 `?map=`、写请求带码），无账号系统
 - 上海地图（高德深色底图）展示标记，按分类着色；搜索地点名或地图吸附选点（自动匹配附近地点）
 - 🔗 高德导入：粘贴高德 App 分享的文本/链接一键导入（支持「位置：经度,纬度」坐标、uri.amap.com/marker 链接、【地点名】搜索）
 - 🗺️ 详情一键跳转高德：桌面打开网页版，手机拉起高德 App 看位置、直接导航
-- 每个地点：名称、描述、分类（景点/美食/展馆/购物/娱乐/其他）、添加人昵称、时间
+- 每个地点：名称、描述、分类（景点/美食/展馆/购物/娱乐/其他）、**人均价格/营业时间/标签**（详情徽章展示）、添加人昵称、时间
 - 地点详情：照片（客户端压缩上传，最多 9 张，带上传时间）与留言（280 字内）
+- **🚶 行程单**：勾选地点串成一条路线，上下移排序，显示相邻距离与步行时间（haversine + 4.5km/h），一键生成高德多点步行导航、复制行程文本
 - 「我也想去」♥ 投票：按昵称去重，悬停看谁想去了
 - 📷 回忆时间线：已打卡地点按时间倒序串成足迹流
 - 🖼 分享海报：一键生成深色霓虹统计卡（含邀请码），保存后发群拉新
+- **🔔 推送通知**（Web Push）：侧栏 🔔 订阅后，地图有新地点/照片/留言时浏览器推送提醒（需服务端配置 VAPID 密钥，见准备工作）
 - "已去过"圆圈打卡、分类筛选 + 排序（最新/名称/最想去）、列表计数、列表悬停与地图标记联动
 - 地点深链：详情页「🔗 分享」复制 `?map=码&place=id`，同学打开直达该地点
 - 自定义确认/昵称弹窗（无原生 confirm/prompt）、操作忙碌态、搜索支持 ↑↓ + Enter 键盘导航
 - 移动端底部抽屉可收起；对话框动效、骨架屏加载、图标化 toast
 - PWA：可安装到主屏幕，静态资源离线缓存
 - 六套配色 + 跟随系统：☀️ 浅色 / 🌫️ 雾灰 / 🌃 东京夜 / 🌌 墨蓝 / 🍷 微醺，**地图底图随主题联动**（深色主题用高德官方 dark/darkblue/wine 深色底图），移动端适配
+
+### 📱 微信小程序（体验版）
+
+`miniprogram/` 目录是功能对齐网页版的微信小程序：原生 `<map>` 组件（腾讯底图同为 GCJ-02 坐标，数据零转换）、微信原生选点添加（`wx.chooseLocation`，无需位置服务 key）、高德分享导入、详情（照片/留言/想去/打卡）、回忆时间线、行程单、分享海报（canvas 生成存相册）、深浅双主题跟随系统。
+
+本地预览：微信开发者工具导入 `miniprogram/` 目录（详情设置勾选「不校验合法域名」即可直连线上后端）；`utils/config.js` 的 `BASE_URL` 指向后端地址。当前用 `touristappid` 游客模式，正式体验版需替换为自己的 AppID。
 
 ## 技术栈
 
@@ -52,6 +60,7 @@ npm --prefix server run dev
 1. **数据库**：注册 [Neon](https://console.neon.tech)（免费、无需信用卡）→ 创建项目 → 复制 Connection string 填入 `.env` 的 `DATABASE_URL`
 2. **地图 key**：注册 [高德开放平台](https://console.amap.com)（需阿里云/淘宝账号）→ 创建应用 → 添加 Key，服务平台选 **Web端(JS API)** → 得到 key 与安全密钥，填入 `.env` 的 `AMAP_KEY`、`AMAP_SECURITY_CODE`
 3. **图床（推荐）**：注册 [Cloudinary](https://console.cloudinary.com)（免费、无需信用卡）→ Dashboard 的 API Keys 复制 `CLOUDINARY_URL` 填入 `.env`。配置后照片存 CDN、数据库只存链接（不占 Neon 存储）；不配置则照片存数据库。存量照片迁移：`cd server && node scripts/migrate-photos.mjs`
+4. **推送通知（可选）**：生成 VAPID 密钥对 `npx web-push generate-vapid-keys`，填入 `.env` 的 `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`（另加 `VAPID_SUBJECT=mailto:你的邮箱`）。不配置则 🔔 推送功能静默停用，其余功能不受影响
 
 ## 和同学协作
 
@@ -71,7 +80,15 @@ npm --prefix server run dev
 | GET | /api/places?map=码 | 地点列表（含照片/留言计数） | query 传入 |
 | POST | /api/places | 新增地点 | body `map_code` |
 | PUT | /api/places/:id | 编辑地点 | 头 `x-map-code` |
-| DELETE | /api/places/:id | 删除地点（级联清理照片留言） | 头 `x-map-code` |
+| DELETE | /api/places/:id | 删除地点（软删除，进回收站 30 天） | 头 `x-map-code` |
+| POST | /api/places/:id/restore | 从回收站恢复地点 | body `map_code` |
+| GET | /api/places?map=码&view=trash | 回收站列表（顺带清理超期项） | query 传入 |
+| GET | /api/maps/:code/export | 全量导出 JSON（地点/照片链接/留言/想去） | — |
+| GET | /api/itinerary?map=码 | 行程单（按序返回站点） | query 传入 |
+| PUT | /api/itinerary | 保存行程（place_ids 数组顺序即行程顺序） | body `map_code` |
+| GET | /api/push/key | Web Push 公钥（未配置 VAPID 时 503） | — |
+| POST | /api/push/subscribe | 订阅推送通知 | body `map_code` |
+| DELETE | /api/push/subscribe | 退订推送 | 头 `x-map-code` |
 | GET | /api/places/:id/photos?map=码 | 照片列表（含缩略图） | query 传入 |
 | POST | /api/places/:id/photos | 上传照片（base64，≤9 张/地点） | body `map_code` |
 | GET | /api/photos/:id?map=码 | 照片原图（二进制） | query 传入 |
@@ -125,10 +142,12 @@ git push -u origin main
 server/   Express 后端（API + 静态托管）
   app.js        应用装配
   store.js      数据层（静态 SQL + 参数绑定、邀请码生成、生产连接池）
+  pusher.js     Web Push 发送器（VAPID 未配置时停用）
   env.js        dotenv 引导
-  routes/       maps / places / photos / comments 路由
-  test/         接口测试（node:test + pg-mem）
+  routes/       maps / places / photos / comments / itinerary / push 路由
+  test/         接口测试（node:test + pg-mem，49 个用例）
 public/   前端（index.html / css / js，js 含照片客户端压缩）
+miniprogram/  微信小程序（原生 map 组件，功能对齐网页版）
 docs/     设计文档
 render.yaml  Render 部署蓝图
 ```
