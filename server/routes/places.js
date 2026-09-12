@@ -113,7 +113,39 @@ export function createPlacesRouter({ store, uploader }) {
       if (!(await store.getMapByCode(code))) {
         return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
       }
+      if ((req.query.view ?? '') === 'trash') {
+        // 打开回收站时顺带彻底清理软删超 30 天的地点（惰性过期）
+        const expiredPublicIds = await store.purgeExpired(code);
+        if (uploader?.configured && expiredPublicIds.length > 0) {
+          await Promise.all(
+            expiredPublicIds.map((publicId) =>
+              uploader.destroy(publicId).catch(() => {
+                /* 单张销毁失败不阻塞 */
+              })
+            )
+          );
+        }
+        return res.json({ places: await store.listTrash(code) });
+      }
       res.json({ places: await store.listPlaces(code) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // 从回收站恢复地点（软删除 30 天内）
+  router.post('/:id/restore', async (req, res, next) => {
+    try {
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
+      const code = typeof req.body?.map_code === 'string' ? req.body.map_code.trim().toUpperCase() : '';
+      if (!code) return res.status(400).json({ error: '缺少邀请码（map_code）' });
+      if (!(await store.getMapByCode(code))) {
+        return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      }
+      const place = await store.restorePlace(id, code);
+      if (!place) return res.status(404).json({ error: '回收站里没有这个地点' });
+      res.json(place);
     } catch (err) {
       next(err);
     }
@@ -198,16 +230,7 @@ export function createPlacesRouter({ store, uploader }) {
       if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
       const removed = await store.remove(id, req.mapCode);
       if (!removed) return res.status(404).json({ error: '地点不存在或邀请码不匹配' });
-      // 级联销毁 CDN 资源，避免删地点后云上照片成孤儿
-      if (uploader?.configured && removed.photoPublicIds.length > 0) {
-        await Promise.all(
-          removed.photoPublicIds.map((publicId) =>
-            uploader.destroy(publicId).catch(() => {
-              /* 单张销毁失败不阻塞删除 */
-            })
-          )
-        );
-      }
+      // 软删除：照片/CDN 原样保留，30 天内可在回收站恢复；超期清理在回收站打开时触发
       res.status(204).end();
     } catch (err) {
       next(err);

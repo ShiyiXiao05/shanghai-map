@@ -1581,6 +1581,66 @@ function bindMapSettings() {
   $('#btn-map-rename').addEventListener('click', renameCurrentMap);
   $('#btn-map-rekey').addEventListener('click', rekeyCurrentMap);
   $('#btn-map-delete').addEventListener('click', deleteCurrentMap);
+  $('#btn-map-trash').addEventListener('click', openTrash);
+  $('#btn-trash-close').addEventListener('click', () => $('#trash-dialog').close());
+}
+
+/* ---------- 回收站 ---------- */
+
+async function openTrash() {
+  if (!state.map || isPublicView()) return;
+  $('#map-settings-dialog').close();
+  $('#trash-dialog').showModal();
+  $('#trash-list').textContent = '';
+  $('#trash-empty').hidden = true;
+  try {
+    renderTrash(await api.trashPlaces(state.map.code));
+  } catch (err) {
+    toast(err.message, 'error');
+    $('#trash-dialog').close();
+  }
+}
+
+function renderTrash(places) {
+  const list = $('#trash-list');
+  list.textContent = '';
+  $('#trash-empty').hidden = places.length > 0;
+  for (const place of places) {
+    const li = document.createElement('li');
+    li.className = 'trash-item';
+
+    const main = document.createElement('div');
+    main.className = 'trash-main';
+    const name = document.createElement('span');
+    name.className = 'trash-name';
+    name.textContent = place.name;
+    main.append(name);
+    const meta = document.createElement('span');
+    meta.className = 'trash-meta';
+    const days = place.deleted_at
+      ? Math.max(0, 30 - Math.floor((Date.now() - new Date(place.deleted_at)) / 86400000))
+      : 30;
+    meta.textContent = `${place.category} · ${days} 天后彻底删除`;
+    main.append(meta);
+    li.append(main);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-small btn-primary';
+    btn.textContent = '↩️ 恢复';
+    btn.addEventListener('click', async () => {
+      try {
+        await api.restorePlace(state.map.code, place.id);
+        toast(`「${place.name}」已恢复`);
+        li.remove();
+        await loadPlaces();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+    li.append(btn);
+    list.append(li);
+  }
 }
 
 /* ---------- 启动 ---------- */

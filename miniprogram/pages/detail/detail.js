@@ -315,7 +315,7 @@ Page({
     if (!confirm) return;
     try {
       await api.deletePlace(this.mapCode(), this.placeId);
-      wx.showToast({ title: '已删除' });
+      wx.showToast({ title: '已移入回收站（网页版 30 天内可恢复）', icon: 'none' });
       setTimeout(() => wx.navigateBack(), 600);
     } catch (err) {
       wx.showToast({ title: err.message, icon: 'none' });

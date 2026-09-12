@@ -61,6 +61,7 @@ export function createPlaceStore(pool) {
     await pool.query(
       "ALTER TABLE public.places ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT ''"
     );
+    await pool.query('ALTER TABLE public.places ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ');
     await pool.query(
       'CREATE INDEX IF NOT EXISTS idx_places_public ON public.places (is_public) WHERE is_public'
     );
@@ -231,7 +232,7 @@ export function createPlaceStore(pool) {
       pool.query(
         `SELECT id, name, description, category, lng, lat, address, added_by,
                 visited, is_public, price_hint, hours, tags, created_at, visited_at
-         FROM public.places WHERE map_code = $1 ORDER BY id ASC`,
+         FROM public.places WHERE map_code = $1 AND deleted_at IS NULL ORDER BY id ASC`,
         [code]
       ),
       pool.query(
@@ -284,7 +285,7 @@ export function createPlaceStore(pool) {
 
   async function listPlaces(mapCode) {
     const { rows } = await pool.query(
-      'SELECT * FROM public.places WHERE map_code = $1 ORDER BY created_at DESC, id DESC',
+      'SELECT * FROM public.places WHERE map_code = $1 AND deleted_at IS NULL ORDER BY created_at DESC, id DESC',
       [mapCode]
     );
     if (rows.length === 0) return [];
@@ -363,7 +364,7 @@ export function createPlaceStore(pool) {
          hours = COALESCE($10, hours),
          tags = COALESCE($11, tags),
          updated_at = now()
-       WHERE id = $12 AND map_code = $13
+       WHERE id = $12 AND map_code = $13 AND deleted_at IS NULL
        RETURNING *`,
       [
         provided('name'),
@@ -384,30 +385,56 @@ export function createPlaceStore(pool) {
     return rows[0] ?? null;
   }
 
+  // 软删除：地点进回收站，30 天内可恢复（照片/留言/想去原样保留，CDN 不动）
   async function remove(id, mapCode) {
     const { rows } = await pool.query(
-      'DELETE FROM public.places WHERE id = $1 AND map_code = $2 RETURNING id',
+      `UPDATE public.places SET deleted_at = now(), is_public = FALSE, updated_at = now()
+       WHERE id = $1 AND map_code = $2 AND deleted_at IS NULL RETURNING id`,
       [id, mapCode]
     );
-    if (rows.length === 0) return false;
-    const photoRows = await pool.query(
-      'DELETE FROM place_photos WHERE place_id = $1 AND map_code = $2 RETURNING public_id',
+    return rows.length > 0;
+  }
+
+  // 回收站列表（最近删除的在前）
+  async function listTrash(mapCode) {
+    const { rows } = await pool.query(
+      'SELECT * FROM public.places WHERE map_code = $1 AND deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC',
+      [mapCode]
+    );
+    return rows;
+  }
+
+  // 恢复：清空 deleted_at，连带行程/照片/留言全部回来
+  async function restorePlace(id, mapCode) {
+    const { rows } = await pool.query(
+      `UPDATE public.places SET deleted_at = NULL, updated_at = now()
+       WHERE id = $1 AND map_code = $2 AND deleted_at IS NOT NULL RETURNING *`,
       [id, mapCode]
     );
-    await pool.query('DELETE FROM place_comments WHERE place_id = $1 AND map_code = $2', [
-      id,
-      mapCode,
-    ]);
-    await pool.query('DELETE FROM place_wishes WHERE place_id = $1 AND map_code = $2', [
-      id,
-      mapCode,
-    ]);
-    await pool.query('DELETE FROM itinerary_stops WHERE place_id = $1 AND map_code = $2', [
-      id,
-      mapCode,
-    ]);
-    photoCache.clear(); // 级联删除绕过了 removePhoto，直接整表清空最稳妥
-    return { photoPublicIds: photoRows.rows.map((r) => r.public_id).filter(Boolean) };
+    return rows[0] ?? null;
+  }
+
+  // 彻底清理软删超 30 天的地点（打开回收站时惰性触发），返回待销毁的 CDN public_id
+  async function purgeExpired(mapCode) {
+    const expired = await pool.query(
+      'SELECT id FROM public.places WHERE map_code = $1 AND deleted_at IS NOT NULL AND deleted_at < now() - interval \'30 days\'',
+      [mapCode]
+    );
+    const publicIds = [];
+    for (const row of expired.rows) {
+      const id = Number(row.id);
+      const photoRows = await pool.query(
+        'DELETE FROM place_photos WHERE place_id = $1 AND map_code = $2 RETURNING public_id',
+        [id, mapCode]
+      );
+      publicIds.push(...photoRows.rows.map((r) => r.public_id).filter(Boolean));
+      await pool.query('DELETE FROM place_comments WHERE place_id = $1 AND map_code = $2', [id, mapCode]);
+      await pool.query('DELETE FROM place_wishes WHERE place_id = $1 AND map_code = $2', [id, mapCode]);
+      await pool.query('DELETE FROM itinerary_stops WHERE place_id = $1 AND map_code = $2', [id, mapCode]);
+      await pool.query('DELETE FROM public.places WHERE id = $1 AND map_code = $2', [id, mapCode]);
+    }
+    if (expired.rows.length > 0) photoCache.clear();
+    return publicIds;
   }
 
   // 行程单：按 position 顺序返回站点（JOIN 过滤掉已删除的地点）
@@ -416,7 +443,7 @@ export function createPlaceStore(pool) {
       `SELECT s.place_id AS id, s.position, p.name, p.category, p.lng, p.lat,
               p.address, p.visited
        FROM itinerary_stops s
-       JOIN public.places p ON p.id = s.place_id AND p.map_code = s.map_code
+       JOIN public.places p ON p.id = s.place_id AND p.map_code = s.map_code AND p.deleted_at IS NULL
        WHERE s.map_code = $1
        ORDER BY s.position, s.place_id`,
       [mapCode]
@@ -439,7 +466,7 @@ export function createPlaceStore(pool) {
       // 不用 ANY($2::int[])：pg-mem 对数组参数的 cast 匹配不上；IN + 纯占位符两端都稳
       const placeholders = ordered.map((_, i) => `$${i + 2}`).join(', ');
       const { rows } = await pool.query(
-        `SELECT id FROM public.places WHERE map_code = $1 AND id IN (${placeholders})`,
+        `SELECT id FROM public.places WHERE map_code = $1 AND deleted_at IS NULL AND id IN (${placeholders})`,
         [mapCode, ...ordered]
       );
       // pg-mem 会把整数列按字符串返回，统一 Number 规避双端差异
@@ -460,7 +487,7 @@ export function createPlaceStore(pool) {
 
   async function getPlace(id, mapCode) {
     const { rows } = await pool.query(
-      'SELECT * FROM public.places WHERE id = $1 AND map_code = $2',
+      'SELECT * FROM public.places WHERE id = $1 AND map_code = $2 AND deleted_at IS NULL',
       [id, mapCode]
     );
     return rows[0] ?? null;
@@ -530,8 +557,12 @@ export function createPlaceStore(pool) {
     const key = `${id}:${mapCode}`;
     const cached = cacheGet(key);
     if (cached) return cached;
+    // 软删除的地点照片不可访问（随地点一起进回收站）
     const { rows } = await pool.query(
-      'SELECT mime, full_b64, url FROM place_photos WHERE id = $1 AND map_code = $2',
+      `SELECT ph.mime, ph.full_b64, ph.url
+       FROM place_photos ph
+       JOIN public.places pl ON pl.id = ph.place_id AND pl.map_code = ph.map_code
+       WHERE ph.id = $1 AND ph.map_code = $2 AND pl.deleted_at IS NULL`,
       [id, mapCode]
     );
     if (!rows[0]) return null;
@@ -569,8 +600,12 @@ export function createPlaceStore(pool) {
   }
 
   async function removeComment(id, mapCode) {
+    // 软删除的地点留言不可操作
     const { rows } = await pool.query(
-      'DELETE FROM place_comments WHERE id = $1 AND map_code = $2 RETURNING id',
+      `DELETE FROM place_comments
+       WHERE id = $1 AND map_code = $2
+         AND place_id IN (SELECT id FROM public.places WHERE map_code = $2 AND deleted_at IS NULL)
+       RETURNING id`,
       [id, mapCode]
     );
     return rows.length > 0;
@@ -582,7 +617,7 @@ export function createPlaceStore(pool) {
       `SELECT id, name, description, category, lng, lat, address, added_by,
               visited, created_at, updated_at, visited_at, is_public
        FROM public.places
-       WHERE is_public = TRUE
+       WHERE is_public = TRUE AND deleted_at IS NULL
        ORDER BY created_at DESC, id DESC`
     );
     if (rows.length === 0) return [];
@@ -609,7 +644,8 @@ export function createPlaceStore(pool) {
 
   async function togglePublic(id, mapCode) {
     const { rows } = await pool.query(
-      'UPDATE public.places SET is_public = NOT is_public, updated_at = now() WHERE id = $1 AND map_code = $2 RETURNING is_public',
+      `UPDATE public.places SET is_public = NOT is_public, updated_at = now()
+       WHERE id = $1 AND map_code = $2 AND deleted_at IS NULL RETURNING is_public`,
       [id, mapCode]
     );
     return rows[0] ?? null;
@@ -640,7 +676,7 @@ export function createPlaceStore(pool) {
     const { rows } = await pool.query(
       `SELECT id, name, category, added_by, address, visited_at
        FROM public.places
-       WHERE map_code = $1 AND visited = TRUE`,
+       WHERE map_code = $1 AND visited = TRUE AND deleted_at IS NULL`,
       [mapCode]
     );
     if (rows.length === 0) return [];
@@ -694,6 +730,9 @@ export function createPlaceStore(pool) {
     listItinerary,
     setItinerary,
     exportMap,
+    listTrash,
+    restorePlace,
+    purgeExpired,
   };
 }
 

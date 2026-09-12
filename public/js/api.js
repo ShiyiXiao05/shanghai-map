@@ -37,6 +37,15 @@ export const api = {
   updatePlace: (mapCode, id, patch) =>
     request('PUT', `/api/places/${id}`, { body: patch, mapCode }),
   deletePlace: (mapCode, id) => request('DELETE', `/api/places/${id}`, { mapCode }),
+  trashPlaces: async (mapCode) =>
+    (
+      await request(
+        'GET',
+        `/api/places?map=${encodeURIComponent(mapCode)}&view=trash`
+      )
+    ).places,
+  restorePlace: (mapCode, id) =>
+    request('POST', `/api/places/${id}/restore`, { body: { map_code: mapCode } }),
   listPhotos: async (mapCode, placeId) =>
     (
       await request(

@@ -350,6 +350,13 @@
         </div>
         <a class="btn btn-small" id="btn-map-export" href="#" download>导出</a>
       </div>
+      <div class="settings-row">
+        <div class="settings-text">
+          <b>回收站</b>
+          <p class="settings-hint">删除的地点在这里保留 30 天，可随时恢复</p>
+        </div>
+        <button type="button" class="btn btn-small" id="btn-map-trash">🗑️ 打开</button>
+      </div>
       <div class="settings-divider"></div>
       <div class="settings-row">
         <div class="settings-text">
@@ -368,6 +375,20 @@
       <div class="form-actions">
         <button type="button" class="btn" id="btn-map-settings-close">关闭</button>
       </div>
+    </div>
+  </dialog>
+
+  <dialog id="trash-dialog" class="dialog dialog-narrow">
+    <div class="trash-body">
+      <header class="detail-head">
+        <div class="detail-title-group">
+          <h2>🗑️ 回收站</h2>
+          <p class="detail-meta">删除的地点保留 30 天，超期自动彻底清理</p>
+        </div>
+        <button type="button" class="detail-close" id="btn-trash-close" aria-label="关闭">✕</button>
+      </header>
+      <ul class="trash-list" id="trash-list"></ul>
+      <p class="detail-empty" id="trash-empty">回收站是空的</p>
     </div>
   </dialog>
 
