@@ -1,2 +1,33 @@
-.page { padding: 40rpx; }
-.tip { color: var(--ink-faint); font-size: 26rpx; }
+.page {
+  min-height: 100vh;
+  background: var(--paper);
+  padding: 28rpx 28rpx calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.canvas-wrap {
+  width: 100%;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.poster {
+  width: 540rpx;
+  height: 720rpx;
+  display: block;
+  margin: 0 auto;
+}
+
+.save {
+  margin-top: 32rpx;
+  padding: 22rpx 60rpx;
+}
+
+.hint {
+  margin-top: 18rpx;
+  font-size: 22rpx;
+  color: var(--ink-faint);
+}

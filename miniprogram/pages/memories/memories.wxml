@@ -1,1 +1,29 @@
-<view class="page"><view class="tip">{{tip}}</view></view>
+<view class="page">
+  <view wx:if="{{loading}}" class="tip">加载中…</view>
+  <view wx:elif="{{groups.length === 0}}" class="tip">还没有打卡记录。去过地点后在详情页点「✅ 打卡」，这里就会攒下一份回忆时间线。</view>
+
+  <view wx:for="{{groups}}" wx:for-item="group" wx:key="month" class="group">
+    <view class="month">{{group.month}}</view>
+    <view
+      wx:for="{{group.items}}"
+      wx:key="id"
+      class="memory"
+      data-id="{{item.id}}"
+      bindtap="openDetail"
+    >
+      <view class="m-name">{{item.name}}</view>
+      <view class="m-meta">{{item.date}}{{item.added_by ? ' · ' + item.added_by : ''}}{{item.address ? ' · ' + item.address : ''}}</view>
+      <view class="m-photos" wx:if="{{item.photos.length > 0}}">
+        <image
+          wx:for="{{item.photos}}"
+          wx:for-item="photo"
+          wx:key="*this"
+          class="m-photo"
+          src="{{photo}}"
+          mode="aspectFill"
+          lazy-load
+        />
+      </view>
+    </view>
+  </view>
+</view>

@@ -2,7 +2,7 @@
   "description": "魔都·Explore 微信小程序（体验版）",
   "miniprogramRoot": "./",
   "compileType": "miniprogram",
-  "appid": "touristappid",
+  "appid": "wx11fc6701721156d9",
   "projectname": "modu-explore",
   "setting": {
     "es6": true,
@@ -12,8 +12,30 @@
     "urlCheck": false,
     "coverView": true,
     "lazyloadPlaceholderEnable": false,
-    "ignoreUploadUnusedFiles": true
+    "ignoreUploadUnusedFiles": true,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
   },
   "libVersion": "3.5.0",
-  "condition": {}
+  "condition": {},
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {}
 }

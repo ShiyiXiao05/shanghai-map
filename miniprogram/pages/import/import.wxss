@@ -1,2 +1,76 @@
-.page { padding: 40rpx; }
-.tip { color: var(--ink-faint); font-size: 26rpx; }
+.page {
+  min-height: 100vh;
+  background: var(--paper);
+  padding: 28rpx 28rpx calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.hint {
+  font-size: 24rpx;
+  color: var(--ink-soft);
+  margin-bottom: 20rpx;
+  line-height: 1.7;
+}
+
+.textarea {
+  min-height: 180rpx;
+}
+
+.input {
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  font-size: 28rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.parse {
+  margin-top: 20rpx;
+}
+
+.result {
+  margin-top: 24rpx;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+}
+
+.result-error {
+  background: var(--metro-soft);
+  color: var(--ink-soft);
+}
+
+.result-ok {
+  background: var(--card);
+  border: 1rpx solid var(--metro);
+}
+
+.r-name {
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.r-meta {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: var(--ink-soft);
+}
+
+.field {
+  margin-top: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.label {
+  font-size: 24rpx;
+  color: var(--ink-soft);
+}
+
+.btn-primary {
+  margin-top: 28rpx;
+}

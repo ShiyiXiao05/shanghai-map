@@ -1,1 +1,7 @@
-<view class="page"><view class="tip">{{tip}}</view></view>
+<view class="page">
+  <view class="canvas-wrap">
+    <canvas type="2d" id="poster-canvas" class="poster"></canvas>
+  </view>
+  <view class="btn btn-primary save" bindtap="saveToAlbum">{{saving ? '保存中…' : '⬇️ 保存海报到相册'}}</view>
+  <view class="hint">保存后发到群里，同学扫码/输邀请码就能加入</view>
+</view>

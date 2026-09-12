@@ -1,1 +1,31 @@
-<view class="page"><view class="tip">{{tip}}</view></view>
+<view class="page">
+  <view class="hint">把高德 App 里分享出来的文本（含链接）粘贴到下面，自动解析地点与坐标。</view>
+
+  <textarea class="input textarea" value="{{raw}}" maxlength="1000" placeholder="例如：我分享一个位置【武康大楼】位置：121.4375,31.2054 https://uri.amap.com/marker?..." bindinput="onRaw" />
+  <view class="btn parse" bindtap="parse">解析</view>
+
+  <view wx:if="{{result && result.error}}" class="result result-error">{{result.error}}</view>
+
+  <block wx:if="{{result && result.keyword}}">
+    <view class="result">识别到地点名「{{result.keyword}}」，但没拿到坐标。请点下面用搜索选点。</view>
+    <view class="btn btn-primary" bindtap="goSearch">🔍 去搜索这个地点</view>
+  </block>
+
+  <block wx:if="{{result && result.lng}}">
+    <view class="result result-ok">
+      <view class="r-name">{{result.name || '（未命名地点）'}}</view>
+      <view class="r-meta">{{result.address || '无地址信息'}} · {{result.lat}}, {{result.lng}}</view>
+    </view>
+    <view class="field">
+      <text class="label">分类</text>
+      <picker range="{{categories}}" range-key="id" bindchange="onCategory">
+        <view class="input">{{category}} ▾</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="label">你的昵称</text>
+      <input class="input" value="{{nickname}}" maxlength="30" bindinput="onNickname" />
+    </view>
+    <view class="btn btn-primary" bindtap="save">{{saving ? '导入中…' : '导入到地图'}}</view>
+  </block>
+</view>

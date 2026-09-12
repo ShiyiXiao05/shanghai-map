@@ -18,6 +18,12 @@
   },
   "darkmode": true,
   "themeLocation": "theme.json",
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于地图选点与展示附近地点"
+    }
+  },
+  "requiredPrivateInfos": ["chooseLocation"],
   "style": "v2",
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"

@@ -1,3 +1,87 @@
-.page { padding: 28rpx; }
-.input { background: var(--card); border: 1rpx solid var(--line); border-radius: 16rpx; padding: 20rpx 24rpx; font-size: 30rpx; }
-.tip { margin-top: 24rpx; font-size: 24rpx; color: var(--ink-faint); }
+.page {
+  min-height: 100vh;
+  background: var(--paper);
+  padding: 28rpx 28rpx calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.picker {
+  background: var(--card);
+  border: 2rpx dashed var(--line);
+  border-radius: 20rpx;
+  padding: 44rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 28rpx;
+}
+
+.picker-on {
+  border-style: solid;
+  border-color: var(--metro);
+  align-items: flex-start;
+}
+
+.picker-icon {
+  font-size: 56rpx;
+}
+
+.picker-title {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.picker-tip {
+  font-size: 22rpx;
+  color: var(--ink-faint);
+}
+
+.picked-name {
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.picked-meta {
+  font-size: 22rpx;
+  color: var(--ink-soft);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-bottom: 24rpx;
+}
+
+.label {
+  font-size: 24rpx;
+  color: var(--ink-soft);
+}
+
+.input {
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  font-size: 30rpx;
+}
+
+.textarea {
+  min-height: 140rpx;
+}
+
+.save {
+  margin-top: 12rpx;
+  padding: 24rpx;
+  font-size: 32rpx;
+}
+
+.import-link {
+  margin-top: 28rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: var(--metro);
+}

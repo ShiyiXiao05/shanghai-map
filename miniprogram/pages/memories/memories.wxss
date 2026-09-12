@@ -1,2 +1,55 @@
-.page { padding: 40rpx; }
-.tip { color: var(--ink-faint); font-size: 26rpx; }
+.page {
+  min-height: 100vh;
+  background: var(--paper);
+  padding: 28rpx 28rpx calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.tip {
+  padding: 80rpx 30rpx;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 25rpx;
+  line-height: 1.8;
+}
+
+.group {
+  margin-bottom: 32rpx;
+}
+
+.month {
+  font-size: 30rpx;
+  font-weight: 700;
+  margin-bottom: 16rpx;
+}
+
+.memory {
+  background: var(--card);
+  border-radius: 20rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+}
+
+.m-name {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.m-meta {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--ink-faint);
+}
+
+.m-photos {
+  margin-top: 14rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.m-photo {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 12rpx;
+}

@@ -105,4 +105,12 @@ Page({
       fail: () => wx.reLaunch({ url: '/pages/index/index' }),
     });
   },
+
+  goMemories() {
+    wx.navigateTo({ url: '/pages/memories/memories' });
+  },
+
+  goPoster() {
+    wx.navigateTo({ url: '/pages/poster/poster' });
+  },
 });

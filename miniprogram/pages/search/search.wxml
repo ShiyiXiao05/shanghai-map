@@ -1,4 +1,35 @@
 <view class="page">
-  <input class="input" placeholder="搜索地点，比如「武康路」" value="{{keyword}}" bindinput="onInput" focus />
-  <view class="tip">{{tip}}</view>
+  <view class="picker {{picked ? 'picker-on' : ''}}" bindtap="chooseLocation">
+    <block wx:if="{{picked}}">
+      <view class="picked-name">{{picked.name || '（未命名位置）'}}</view>
+      <view class="picked-meta">{{picked.address}} · {{picked.latitude}}, {{picked.longitude}}</view>
+      <view class="picked-tip">点击重新选择</view>
+    </block>
+    <block wx:else>
+      <view class="picker-icon">🔍</view>
+      <view class="picker-title">搜索地点，或在地图上选点</view>
+      <view class="picker-tip">微信原生选点：搜「武康路」或直接点地图</view>
+    </block>
+  </view>
+
+  <view class="field">
+    <text class="label">分类</text>
+    <picker range="{{categories}}" range-key="id" bindchange="onCategory">
+      <view class="input">{{category}} ▾</view>
+    </picker>
+  </view>
+
+  <view class="field">
+    <text class="label">描述</text>
+    <textarea class="input textarea" value="{{description}}" maxlength="500" placeholder="为什么想去、和谁去、要注意什么…" bindinput="onDescription" />
+  </view>
+
+  <view class="field">
+    <text class="label">你的昵称</text>
+    <input class="input" value="{{nickname}}" maxlength="30" placeholder="记录是谁想去的" bindinput="onNickname" />
+  </view>
+
+  <view class="btn btn-primary save" bindtap="save">{{saving ? '保存中…' : '保存到地图'}}</view>
+
+  <view class="import-link" bindtap="goImport">📋 粘贴高德分享导入 →</view>
 </view>

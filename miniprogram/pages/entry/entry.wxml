@@ -21,6 +21,10 @@
       <view class="btn btn-primary" data-mode="create" bindtap="switchMode">＋ 创建新地图</view>
       <view class="btn" data-mode="join" bindtap="switchMode">🔑 用邀请码加入</view>
     </view>
+    <view class="actions" wx:if="{{joinedMaps.length > 0}}">
+      <view class="btn" bindtap="goMemories">📷 回忆时间线</view>
+      <view class="btn" bindtap="goPoster">🖼 分享海报</view>
+    </view>
   </view>
 
   <view wx:elif="{{mode === 'create'}}" class="body">
