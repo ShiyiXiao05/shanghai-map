@@ -1510,6 +1510,9 @@ function openMapSettings() {
     return;
   }
   $('#map-name-input').value = state.map.name;
+  // 导出直接走后端 JSON 端点（知道邀请码即有权限，与整体模型一致）
+  $('#btn-map-export').href = `/api/maps/${encodeURIComponent(state.map.code)}/export`;
+  $('#btn-map-export').setAttribute('download', `魔都Explore-${state.map.name}.json`);
   $('#map-settings-dialog').showModal();
 }
 

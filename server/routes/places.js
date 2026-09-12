@@ -103,7 +103,7 @@ function parseId(raw) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
-export function createPlacesRouter({ store }) {
+export function createPlacesRouter({ store, uploader }) {
   const router = Router();
 
   router.get('/', async (req, res, next) => {
@@ -198,6 +198,16 @@ export function createPlacesRouter({ store }) {
       if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
       const removed = await store.remove(id, req.mapCode);
       if (!removed) return res.status(404).json({ error: '地点不存在或邀请码不匹配' });
+      // 级联销毁 CDN 资源，避免删地点后云上照片成孤儿
+      if (uploader?.configured && removed.photoPublicIds.length > 0) {
+        await Promise.all(
+          removed.photoPublicIds.map((publicId) =>
+            uploader.destroy(publicId).catch(() => {
+              /* 单张销毁失败不阻塞删除 */
+            })
+          )
+        );
+      }
       res.status(204).end();
     } catch (err) {
       next(err);

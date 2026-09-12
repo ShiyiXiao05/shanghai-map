@@ -24,8 +24,8 @@ export function buildApp({ store, mapConfig, uploader }) {
     res.json({ key: mapConfig.key, securityJsCode: mapConfig.securityJsCode ?? '' });
   });
 
-  app.use('/api/maps', createMapsRouter({ store }));
-  app.use('/api/places', createPlacesRouter({ store }));
+  app.use('/api/maps', createMapsRouter({ store, uploader }));
+  app.use('/api/places', createPlacesRouter({ store, uploader }));
   app.use('/api', createPhotosRouter({ store, uploader }));
   app.use('/api', createCommentsRouter({ store }));
   app.use('/api/itinerary', createItineraryRouter({ store }));

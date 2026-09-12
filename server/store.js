@@ -211,12 +211,75 @@ export function createPlaceStore(pool) {
   async function deleteMap(code) {
     const { rows } = await pool.query('DELETE FROM maps WHERE code = $1 RETURNING code', [code]);
     if (rows.length === 0) return false;
+    const photoRows = await pool.query(
+      'DELETE FROM place_photos WHERE map_code = $1 RETURNING public_id',
+      [code]
+    );
     await pool.query('DELETE FROM public.places WHERE map_code = $1', [code]);
-    await pool.query('DELETE FROM place_photos WHERE map_code = $1', [code]);
     await pool.query('DELETE FROM place_comments WHERE map_code = $1', [code]);
     await pool.query('DELETE FROM place_wishes WHERE map_code = $1', [code]);
+    await pool.query('DELETE FROM itinerary_stops WHERE map_code = $1', [code]);
     photoCache.clear();
-    return true;
+    return { photoPublicIds: photoRows.rows.map((r) => r.public_id).filter(Boolean) };
+  }
+
+  // 全量导出：map 元信息 + 每个地点（含新字段）的照片链接/留言/想去
+  async function exportMap(code) {
+    const map = await getMapByCode(code);
+    if (!map) return null;
+    const [placeRows, photoRows, commentRows, wishRows] = await Promise.all([
+      pool.query(
+        `SELECT id, name, description, category, lng, lat, address, added_by,
+                visited, is_public, price_hint, hours, tags, created_at, visited_at
+         FROM public.places WHERE map_code = $1 ORDER BY id ASC`,
+        [code]
+      ),
+      pool.query(
+        `SELECT id, place_id, url, thumb_url, added_by, created_at
+         FROM place_photos WHERE map_code = $1 ORDER BY id ASC`,
+        [code]
+      ),
+      pool.query(
+        'SELECT id, place_id, author, body, created_at FROM place_comments WHERE map_code = $1 ORDER BY id ASC',
+        [code]
+      ),
+      pool.query(
+        'SELECT place_id, who FROM place_wishes WHERE map_code = $1 ORDER BY id ASC',
+        [code]
+      ),
+    ]);
+    const byPlace = (rows, key = 'place_id') => {
+      const map = new Map();
+      for (const row of rows) {
+        const list = map.get(row[key]) ?? [];
+        list.push(row);
+        map.set(row[key], list);
+      }
+      return map;
+    };
+    const photosBy = byPlace(photoRows.rows);
+    const commentsBy = byPlace(commentRows.rows);
+    const wishesBy = byPlace(wishRows.rows);
+    return {
+      map: { ...map, exported_at: new Date().toISOString() },
+      places: placeRows.rows.map((row) => ({
+        ...row,
+        photos: (photosBy.get(row.id) ?? []).map((p) => ({
+          id: p.id,
+          url: p.url,
+          thumb_url: p.thumb_url,
+          added_by: p.added_by,
+          created_at: p.created_at,
+        })),
+        comments: (commentsBy.get(row.id) ?? []).map((c) => ({
+          id: c.id,
+          author: c.author,
+          body: c.body,
+          created_at: c.created_at,
+        })),
+        wishes: (wishesBy.get(row.id) ?? []).map((w) => w.who),
+      })),
+    };
   }
 
   async function listPlaces(mapCode) {
@@ -327,10 +390,10 @@ export function createPlaceStore(pool) {
       [id, mapCode]
     );
     if (rows.length === 0) return false;
-    await pool.query('DELETE FROM place_photos WHERE place_id = $1 AND map_code = $2', [
-      id,
-      mapCode,
-    ]);
+    const photoRows = await pool.query(
+      'DELETE FROM place_photos WHERE place_id = $1 AND map_code = $2 RETURNING public_id',
+      [id, mapCode]
+    );
     await pool.query('DELETE FROM place_comments WHERE place_id = $1 AND map_code = $2', [
       id,
       mapCode,
@@ -344,7 +407,7 @@ export function createPlaceStore(pool) {
       mapCode,
     ]);
     photoCache.clear(); // 级联删除绕过了 removePhoto，直接整表清空最稳妥
-    return true;
+    return { photoPublicIds: photoRows.rows.map((r) => r.public_id).filter(Boolean) };
   }
 
   // 行程单：按 position 顺序返回站点（JOIN 过滤掉已删除的地点）
@@ -630,6 +693,7 @@ export function createPlaceStore(pool) {
     togglePublic,
     listItinerary,
     setItinerary,
+    exportMap,
   };
 }
 

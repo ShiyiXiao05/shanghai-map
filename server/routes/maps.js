@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-export function createMapsRouter({ store }) {
+export function createMapsRouter({ store, uploader }) {
   const router = Router();
 
   // 回忆时间线：已打卡地点 + 缩略图（要放在 /:code 之前定义更清晰）
@@ -69,11 +69,33 @@ export function createMapsRouter({ store }) {
     }
   });
 
+  // 全量导出：JSON 备份（知道邀请码即可导出，与权限模型一致）
+  router.get('/:code/export', async (req, res, next) => {
+    try {
+      const code = (req.params.code ?? '').trim().toUpperCase();
+      const data = await store.exportMap(code);
+      if (!data) return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      res.json(data);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.delete('/:code', async (req, res, next) => {
     try {
       const code = (req.params.code ?? '').trim().toUpperCase();
       const removed = await store.deleteMap(code);
       if (!removed) return res.status(404).json({ error: '邀请码不存在，检查一下再试' });
+      // 级联销毁 CDN 资源，避免删图后云上照片成孤儿
+      if (uploader?.configured && removed.photoPublicIds.length > 0) {
+        await Promise.all(
+          removed.photoPublicIds.map((publicId) =>
+            uploader.destroy(publicId).catch(() => {
+              /* 单张销毁失败不阻塞删图 */
+            })
+          )
+        );
+      }
       res.status(204).end();
     } catch (err) {
       next(err);
