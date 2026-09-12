@@ -2,7 +2,7 @@
   "description": "魔都·Explore 微信小程序（体验版）",
   "miniprogramRoot": "./",
   "compileType": "miniprogram",
-  "appid": "wx11fc6701721156d9",
+  "appid": "wx45e968f2b0809dde",
   "projectname": "modu-explore",
   "setting": {
     "es6": true,
