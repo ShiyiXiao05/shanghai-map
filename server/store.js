@@ -53,6 +53,15 @@ export function createPlaceStore(pool) {
       'ALTER TABLE public.places ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE'
     );
     await pool.query(
+      "ALTER TABLE public.places ADD COLUMN IF NOT EXISTS price_hint TEXT NOT NULL DEFAULT ''"
+    );
+    await pool.query(
+      "ALTER TABLE public.places ADD COLUMN IF NOT EXISTS hours TEXT NOT NULL DEFAULT ''"
+    );
+    await pool.query(
+      "ALTER TABLE public.places ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT ''"
+    );
+    await pool.query(
       'CREATE INDEX IF NOT EXISTS idx_places_public ON public.places (is_public) WHERE is_public'
     );
     await pool.query(`
@@ -249,8 +258,9 @@ export function createPlaceStore(pool) {
   async function create(data) {
     const { rows } = await pool.query(
       `INSERT INTO public.places
-         (name, description, category, lng, lat, address, added_by, visited, map_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (name, description, category, lng, lat, address, added_by, visited,
+          map_code, price_hint, hours, tags)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         data.name,
@@ -262,6 +272,9 @@ export function createPlaceStore(pool) {
         data.added_by ?? '',
         data.visited ?? false,
         data.map_code,
+        data.price_hint ?? '',
+        data.hours ?? '',
+        data.tags ?? '',
       ]
     );
     return rows[0];
@@ -283,8 +296,11 @@ export function createPlaceStore(pool) {
            WHEN COALESCE($8, visited) THEN COALESCE(visited_at, now())
            ELSE NULL
          END,
+         price_hint = COALESCE($9, price_hint),
+         hours = COALESCE($10, hours),
+         tags = COALESCE($11, tags),
          updated_at = now()
-       WHERE id = $9 AND map_code = $10
+       WHERE id = $12 AND map_code = $13
        RETURNING *`,
       [
         provided('name'),
@@ -295,6 +311,9 @@ export function createPlaceStore(pool) {
         provided('address'),
         provided('added_by'),
         provided('visited'),
+        provided('price_hint'),
+        provided('hours'),
+        provided('tags'),
         id,
         mapCode,
       ]

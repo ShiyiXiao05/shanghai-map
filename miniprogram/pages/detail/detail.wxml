@@ -11,6 +11,9 @@
         <text class="meta">{{place.category}}{{place.added_by ? ' · ' + place.added_by : ''}}{{place.address ? ' · ' + place.address : ''}}</text>
       </view>
       <view class="desc" wx:if="{{place.description}}">{{place.description}}</view>
+      <view class="badges" wx:if="{{badges.length > 0}}">
+        <text wx:for="{{badges}}" wx:key="*this" class="badge">{{item}}</text>
+      </view>
       <view class="wish-row" wx:if="{{place.wishes.length > 0}}">
         ♡ 想去：{{place.wishes}}
       </view>
@@ -75,6 +78,18 @@
     <view class="field">
       <text class="label">地址</text>
       <input class="input" value="{{form.address}}" maxlength="200" data-key="address" bindinput="onFormInput" />
+    </view>
+    <view class="field">
+      <text class="label">人均</text>
+      <input class="input" value="{{form.price_hint}}" maxlength="50" placeholder="选填，比如：人均 80" data-key="price_hint" bindinput="onFormInput" />
+    </view>
+    <view class="field">
+      <text class="label">营业时间</text>
+      <input class="input" value="{{form.hours}}" maxlength="100" placeholder="选填，比如：11:00-22:00" data-key="hours" bindinput="onFormInput" />
+    </view>
+    <view class="field">
+      <text class="label">标签</text>
+      <input class="input" value="{{form.tags}}" maxlength="100" placeholder="选填，逗号分隔" data-key="tags" bindinput="onFormInput" />
     </view>
     <view class="actions">
       <view class="btn" bindtap="cancelEdit">取消</view>

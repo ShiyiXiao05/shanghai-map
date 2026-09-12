@@ -1931,3 +1931,17 @@ button { font: inherit; }
   .itinerary-body { max-height: calc(88vh - 48px); max-height: calc(88dvh - 48px); }
   .itinerary-ops .btn { min-height: 40px; }
 }
+
+/* ---------- 地点信息徽章（人均/营业时间/标签） ---------- */
+
+.detail-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+
+.detail-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}

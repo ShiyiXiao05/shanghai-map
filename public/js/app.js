@@ -870,6 +870,9 @@ function openPlaceDialog({ coords, prefill, editing } = {}) {
     form.elements.description.value = editing.description;
     form.elements.address.value = editing.address;
     form.elements.visited.checked = editing.visited;
+    form.elements.price_hint.value = editing.price_hint ?? '';
+    form.elements.hours.value = editing.hours ?? '';
+    form.elements.tags.value = editing.tags ?? '';
   }
   form.elements.added_by.value = editing?.added_by ?? localStorage.getItem(NICKNAME_KEY) ?? '';
 
@@ -895,6 +898,9 @@ async function submitPlace(event) {
     description: form.elements.description.value.trim(),
     address: form.elements.address.value.trim(),
     added_by: form.elements.added_by.value.trim(),
+    price_hint: form.elements.price_hint.value.trim(),
+    hours: form.elements.hours.value.trim(),
+    tags: form.elements.tags.value.trim(),
   };
   if (payload.added_by) {
     localStorage.setItem(NICKNAME_KEY, payload.added_by);
@@ -912,6 +918,10 @@ async function submitPlace(event) {
       // 接口返回的是裸记录，保留本地计数与 wishes
       const index = state.places.findIndex((p) => p.id === editingId);
       if (index >= 0) state.places[index] = { ...state.places[index], ...updated };
+      if (detailPlace?.id === editingId) {
+        detailPlace = state.places[index]; // 详情弹层若开着，同步到编辑后的数据
+        syncDetailHeader();
+      }
       toast('已保存修改');
     } else {
       if (!dialogCoords) {
@@ -1046,6 +1056,25 @@ function syncDetailHeader() {
   const desc = $('#detail-desc');
   desc.hidden = !place.description;
   desc.textContent = place.description ?? '';
+  const badges = $('#detail-badges');
+  const badgeItems = [
+    place.price_hint ? `💰 ${place.price_hint}` : '',
+    place.hours ? `🕐 ${place.hours}` : '',
+    ...(place.tags ?? '')
+      .split(/[,，]/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => `🏷️ ${t}`),
+  ].filter(Boolean);
+  badges.hidden = badgeItems.length === 0;
+  badges.replaceChildren(
+    ...badgeItems.map((text) => {
+      const span = document.createElement('span');
+      span.className = 'detail-badge';
+      span.textContent = text;
+      return span;
+    })
+  );
   $('#btn-detail-toggle').textContent = place.visited ? '↩️ 取消打卡' : '✅ 打卡';
   syncDetailWishes(place);
   // 公开开关（公共广场只读视图下由 openDetail 统一隐藏）

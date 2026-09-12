@@ -85,3 +85,13 @@
   font-size: 24rpx;
   color: var(--metro);
 }
+
+.field-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.field-half {
+  flex: 1;
+  min-width: 0;
+}

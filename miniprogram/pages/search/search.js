@@ -11,6 +11,9 @@ Page({
     picked: null, // { name, address, latitude, longitude }
     category: CATEGORIES[0].id,
     description: '',
+    priceHint: '',
+    hours: '',
+    tags: '',
     nickname: '',
     saving: false,
   },
@@ -51,12 +54,24 @@ Page({
     this.setData({ description: event.detail.value });
   },
 
+  onPriceHint(event) {
+    this.setData({ priceHint: event.detail.value });
+  },
+
+  onHours(event) {
+    this.setData({ hours: event.detail.value });
+  },
+
+  onTags(event) {
+    this.setData({ tags: event.detail.value });
+  },
+
   onNickname(event) {
     this.setData({ nickname: event.detail.value });
   },
 
   async save() {
-    const { picked, category, description, nickname } = this.data;
+    const { picked, category, description, priceHint, hours, tags, nickname } = this.data;
     if (!picked) {
       wx.showToast({ title: '先选择一个位置', icon: 'none' });
       return;
@@ -68,6 +83,9 @@ Page({
         name: picked.name || '未命名地点',
         category,
         description: description.trim(),
+        price_hint: priceHint.trim(),
+        hours: hours.trim(),
+        tags: tags.trim(),
         address: picked.address,
         lng: picked.longitude,
         lat: picked.latitude,

@@ -7,6 +7,7 @@ Page({
   data: {
     place: null,
     meta: {},
+    badges: [],
     categories: CATEGORIES,
     photos: [],
     comments: [],
@@ -60,9 +61,19 @@ Page({
       return;
     }
     const meta = categoryMeta(place.category);
+    const badges = [];
+    if (place.price_hint) badges.push(`💰 ${place.price_hint}`);
+    if (place.hours) badges.push(`🕐 ${place.hours}`);
+    for (const tag of String(place.tags ?? '')
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean)) {
+      badges.push(`🏷️ ${tag}`);
+    }
     this.setData({
       place,
       meta,
+      badges,
       isPublicView: app.globalData.isPublicView,
       amapUrl: `https://uri.amap.com/marker?position=${place.lng},${place.lat}&name=${encodeURIComponent(place.name)}&src=moduExplore&coordinate=gaode`,
     });
@@ -254,6 +265,9 @@ Page({
         category: place.category,
         description: place.description ?? '',
         address: place.address ?? '',
+        price_hint: place.price_hint ?? '',
+        hours: place.hours ?? '',
+        tags: place.tags ?? '',
       },
     });
   },
@@ -283,6 +297,9 @@ Page({
         category: f.category,
         description: f.description.trim(),
         address: f.address.trim(),
+        price_hint: (f.price_hint ?? '').trim(),
+        hours: (f.hours ?? '').trim(),
+        tags: (f.tags ?? '').trim(),
       });
       this.setData({ editing: false });
       this.refresh();

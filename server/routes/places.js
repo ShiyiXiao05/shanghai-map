@@ -1,7 +1,15 @@
 import { Router } from 'express';
 import { CATEGORIES } from '../store.js';
 
-const LIMITS = { name: 100, description: 500, address: 200, added_by: 30 };
+const LIMITS = {
+  name: 100,
+  description: 500,
+  address: 200,
+  added_by: 30,
+  price_hint: 50,
+  hours: 100,
+  tags: 100,
+};
 
 function readString(value, field, { fallback = '' } = {}) {
   if (value === undefined || value === null) {
@@ -44,6 +52,13 @@ function validatePlace(body, { partial }) {
     const description = readString(body.description, 'description');
     if (description.error) return fail(description.error);
     out.description = description.value;
+  }
+  for (const field of ['price_hint', 'hours', 'tags']) {
+    if (body[field] !== undefined) {
+      const checked = readString(body[field], field);
+      if (checked.error) return fail(checked.error);
+      out[field] = checked.value;
+    }
   }
   if (!partial || body.category !== undefined) {
     if (!CATEGORIES.includes(body.category)) {

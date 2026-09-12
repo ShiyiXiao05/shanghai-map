@@ -24,6 +24,22 @@
     <textarea class="input textarea" value="{{description}}" maxlength="500" placeholder="为什么想去、和谁去、要注意什么…" bindinput="onDescription" />
   </view>
 
+  <view class="field-row">
+    <view class="field field-half">
+      <text class="label">人均</text>
+      <input class="input" value="{{priceHint}}" maxlength="50" placeholder="比如 80" bindinput="onPriceHint" />
+    </view>
+    <view class="field field-half">
+      <text class="label">营业时间</text>
+      <input class="input" value="{{hours}}" maxlength="100" placeholder="11:00-22:00" bindinput="onHours" />
+    </view>
+  </view>
+
+  <view class="field">
+    <text class="label">标签</text>
+    <input class="input" value="{{tags}}" maxlength="100" placeholder="选填，逗号分隔，比如：椒麻鸡,面馆" bindinput="onTags" />
+  </view>
+
   <view class="field">
     <text class="label">你的昵称</text>
     <input class="input" value="{{nickname}}" maxlength="30" placeholder="记录是谁想去的" bindinput="onNickname" />

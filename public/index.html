@@ -117,6 +117,18 @@
           <span>地址</span>
           <input name="address" maxlength="200" placeholder="选填，搜索定位后会自动带上" />
         </label>
+        <label class="field field-price">
+          <span>人均</span>
+          <input name="price_hint" maxlength="50" placeholder="选填，比如：人均 80" />
+        </label>
+        <label class="field field-hours">
+          <span>营业时间</span>
+          <input name="hours" maxlength="100" placeholder="选填，比如：11:00-22:00" />
+        </label>
+        <label class="field field-tags">
+          <span>标签</span>
+          <input name="tags" maxlength="100" placeholder="选填，逗号分隔，比如：椒麻鸡,川菜" />
+        </label>
         <label class="field field-nickname">
           <span>你的昵称</span>
           <input name="added_by" maxlength="30" placeholder="记录是谁想去的" />
@@ -171,6 +183,7 @@
         <button type="button" class="detail-close" id="btn-detail-close" aria-label="关闭">✕</button>
       </header>
       <p class="detail-desc" id="detail-desc" hidden></p>
+      <div class="detail-badges" id="detail-badges" hidden></div>
       <div class="detail-actions">
         <button type="button" class="btn btn-small" id="btn-detail-toggle">✅ 打卡</button>
         <button type="button" class="btn btn-small" id="btn-detail-edit">✏️ 编辑</button>

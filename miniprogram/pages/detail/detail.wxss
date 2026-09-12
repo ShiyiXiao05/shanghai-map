@@ -194,3 +194,20 @@
 .picker-value {
   color: var(--ink);
 }
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 12rpx;
+}
+
+.badge {
+  padding: 4rpx 18rpx;
+  border-radius: 999rpx;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 24rpx;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
