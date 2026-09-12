@@ -107,6 +107,21 @@ export function createPlaceStore(pool) {
     await pool.query(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_wishes_place_who ON place_wishes (place_id, who)'
     );
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS itinerary_stops (
+        id SERIAL PRIMARY KEY,
+        map_code TEXT NOT NULL,
+        place_id INTEGER NOT NULL,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_itinerary_map_place ON itinerary_stops (map_code, place_id)'
+    );
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_itinerary_map_pos ON itinerary_stops (map_code, position)'
+    );
     await pool.query(
       'CREATE INDEX IF NOT EXISTS idx_places_map_created ON public.places (map_code, created_at DESC)'
     );
@@ -305,8 +320,60 @@ export function createPlaceStore(pool) {
       id,
       mapCode,
     ]);
+    await pool.query('DELETE FROM itinerary_stops WHERE place_id = $1 AND map_code = $2', [
+      id,
+      mapCode,
+    ]);
     photoCache.clear(); // 级联删除绕过了 removePhoto，直接整表清空最稳妥
     return true;
+  }
+
+  // 行程单：按 position 顺序返回站点（JOIN 过滤掉已删除的地点）
+  async function listItinerary(mapCode) {
+    const { rows } = await pool.query(
+      `SELECT s.place_id AS id, s.position, p.name, p.category, p.lng, p.lat,
+              p.address, p.visited
+       FROM itinerary_stops s
+       JOIN public.places p ON p.id = s.place_id AND p.map_code = s.map_code
+       WHERE s.map_code = $1
+       ORDER BY s.position, s.place_id`,
+      [mapCode]
+    );
+    return rows;
+  }
+
+  // 全量替换式保存：place_ids 的新顺序即最终顺序；不属本地图或重复的 id 静默丢弃
+  async function setItinerary(mapCode, placeIds) {
+    const seen = new Set();
+    const ordered = [];
+    for (const raw of placeIds) {
+      if (!seen.has(raw)) {
+        seen.add(raw);
+        ordered.push(raw);
+      }
+    }
+    let valid = new Set();
+    if (ordered.length > 0) {
+      // 不用 ANY($2::int[])：pg-mem 对数组参数的 cast 匹配不上；IN + 纯占位符两端都稳
+      const placeholders = ordered.map((_, i) => `$${i + 2}`).join(', ');
+      const { rows } = await pool.query(
+        `SELECT id FROM public.places WHERE map_code = $1 AND id IN (${placeholders})`,
+        [mapCode, ...ordered]
+      );
+      // pg-mem 会把整数列按字符串返回，统一 Number 规避双端差异
+      valid = new Set(rows.map((r) => Number(r.id)));
+    }
+    await pool.query('DELETE FROM itinerary_stops WHERE map_code = $1', [mapCode]);
+    let position = 0;
+    for (const id of ordered) {
+      if (!valid.has(id)) continue;
+      position += 1;
+      await pool.query(
+        'INSERT INTO itinerary_stops (map_code, place_id, position) VALUES ($1, $2, $3)',
+        [mapCode, id, position]
+      );
+    }
+    return listItinerary(mapCode);
   }
 
   async function getPlace(id, mapCode) {
@@ -542,6 +609,8 @@ export function createPlaceStore(pool) {
     listMemories,
     listPublicPlaces,
     togglePublic,
+    listItinerary,
+    setItinerary,
   };
 }
 

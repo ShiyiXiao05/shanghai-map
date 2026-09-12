@@ -61,6 +61,7 @@
       <div class="side-actions">
         <button type="button" class="btn btn-small" id="btn-memories">📷 回忆</button>
         <button type="button" class="btn btn-small" id="btn-poster">🖼 分享海报</button>
+        <button type="button" class="btn btn-small" id="btn-itinerary">🚶 行程</button>
         <select id="theme-select" class="sort-select" aria-label="配色主题"></select>
       </div>
       <div class="filters">
@@ -241,6 +242,32 @@
       <div class="form-actions">
         <button type="button" class="btn" id="btn-poster-refresh">🔄 重新生成</button>
         <button type="button" class="btn btn-primary" id="btn-poster-save">⬇️ 保存图片</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="itinerary-dialog" class="dialog dialog-itinerary">
+    <div class="itinerary-body">
+      <header class="detail-head">
+        <div class="detail-title-group">
+          <h2>🚶 行程单</h2>
+          <p class="detail-meta" id="itinerary-summary">把想去的串成一条路线</p>
+        </div>
+        <button type="button" class="detail-close" id="btn-itinerary-close" aria-label="关闭">✕</button>
+      </header>
+      <div class="itinerary-list" id="itinerary-list"></div>
+      <div class="itinerary-empty" id="itinerary-empty" hidden>
+        <p class="empty-icon" aria-hidden="true">🚶</p>
+        <p>行程还是空的</p>
+        <p>从下面把想去的地点加进来，排成一天的路线</p>
+      </div>
+      <div class="itinerary-add">
+        <p class="itinerary-add-title">＋ 添加地点</p>
+        <div class="itinerary-add-list" id="itinerary-add-list"></div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btn-itinerary-copy">📋 复制行程</button>
+        <a class="btn btn-primary" id="btn-itinerary-nav" target="_blank" rel="noopener" href="#" hidden>🧭 高德导航</a>
       </div>
     </div>
   </dialog>

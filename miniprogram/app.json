@@ -6,7 +6,8 @@
     "pages/search/search",
     "pages/memories/memories",
     "pages/poster/poster",
-    "pages/import/import"
+    "pages/import/import",
+    "pages/itinerary/itinerary"
   ],
   "window": {
     "navigationStyle": "custom",

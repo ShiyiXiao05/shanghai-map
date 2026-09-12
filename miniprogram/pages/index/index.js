@@ -66,6 +66,14 @@ Page({
     wx.navigateTo({ url: '/pages/entry/entry' });
   },
 
+  goItinerary() {
+    if (!app.globalData.map || app.globalData.isPublicView) {
+      wx.showToast({ title: '公共广场是只读的，先加入一张地图', icon: 'none' });
+      return;
+    }
+    wx.navigateTo({ url: '/pages/itinerary/itinerary' });
+  },
+
   async joinByCode(code) {
     wx.showLoading({ title: '加入地图…' });
     try {

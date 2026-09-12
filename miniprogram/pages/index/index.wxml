@@ -11,6 +11,7 @@
       </view>
       <view class="nav-actions">
         <view class="nav-btn" bindtap="goMemories">📷</view>
+        <view class="nav-btn" bindtap="goItinerary">🚶</view>
         <view class="nav-btn nav-btn-primary" bindtap="goSearch">＋ 标记</view>
       </view>
     </view>

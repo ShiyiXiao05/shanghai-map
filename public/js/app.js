@@ -1707,6 +1707,192 @@ function savePoster() {
   }, 'image/png');
 }
 
+// ---------- 行程单 ----------
+
+const WALK_KMH = 4.5; // 步行速度，用于估算站间耗时
+
+let itineraryIds = []; // 当前行程的地点 id 顺序（服务端为准）
+
+function haversineKm(a, b) {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(s));
+}
+
+function fmtKm(km) {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
+function fmtWalk(km) {
+  const minutes = Math.max(1, Math.round((km / WALK_KMH) * 60));
+  return minutes < 60 ? `${minutes} 分钟` : `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
+}
+
+function itineraryPlaces() {
+  const byId = new Map(state.places.map((p) => [p.id, p]));
+  return itineraryIds.map((id) => byId.get(id)).filter(Boolean);
+}
+
+async function openItinerary() {
+  if (!requireRealMap()) return;
+  $('#itinerary-dialog').showModal();
+  try {
+    itineraryIds = (await api.itinerary(state.map.code)).map((s) => s.id);
+  } catch {
+    itineraryIds = []; // 拉取失败按空行程展示，下一次保存会整体重建
+  }
+  renderItinerary();
+}
+
+function renderItinerary() {
+  const stops = itineraryPlaces();
+  const list = $('#itinerary-list');
+  list.textContent = '';
+
+  let totalKm = 0;
+  stops.forEach((place, i) => {
+    const li = document.createElement('li');
+    li.className = 'itinerary-stop';
+
+    const no = document.createElement('span');
+    no.className = 'itinerary-no';
+    no.textContent = i + 1;
+    li.append(no);
+
+    const main = document.createElement('div');
+    main.className = 'itinerary-stop-main';
+    const name = document.createElement('span');
+    name.className = 'itinerary-stop-name';
+    name.textContent = place.name;
+    if (place.visited) name.classList.add('is-visited');
+    main.append(name);
+
+    const next = stops[i + 1];
+    if (next) {
+      const km = haversineKm(place, next);
+      totalKm += km;
+      const leg = document.createElement('span');
+      leg.className = 'itinerary-leg';
+      leg.textContent = `↳ ${fmtKm(km)} · 步行约 ${fmtWalk(km)}`;
+      main.append(leg);
+    }
+    li.append(main);
+
+    const ops = document.createElement('div');
+    ops.className = 'itinerary-ops';
+    const mk = (text, cls, disabled, onClick) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = cls;
+      btn.textContent = text;
+      btn.disabled = disabled;
+      btn.addEventListener('click', onClick);
+      return btn;
+    };
+    ops.append(
+      mk('↑', 'btn btn-small', i === 0, () => moveItinerary(i, -1)),
+      mk('↓', 'btn btn-small', !next, () => moveItinerary(i, 1)),
+      mk('✕', 'btn btn-small btn-danger', false, () => {
+        itineraryIds.splice(i, 1);
+        saveItinerary();
+      })
+    );
+    li.append(ops);
+    list.append(li);
+  });
+
+  $('#itinerary-empty').hidden = stops.length > 0;
+  $('#itinerary-summary').textContent =
+    stops.length > 1
+      ? `${stops.length} 站 · 全程步行 ${fmtKm(totalKm)} · 约 ${fmtWalk(totalKm)}`
+      : `${stops.length} 站`;
+
+  const inTrip = new Set(itineraryIds);
+  const rest = state.places.filter((p) => !inTrip.has(p.id)).slice(0, 60);
+  const addList = $('#itinerary-add-list');
+  addList.textContent = '';
+  for (const place of rest) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'btn btn-small itinerary-chip';
+    chip.textContent = `＋ ${place.name}`;
+    chip.addEventListener('click', () => {
+      itineraryIds.push(place.id);
+      saveItinerary();
+    });
+    addList.append(chip);
+  }
+  $('.itinerary-add').hidden = rest.length === 0 && stops.length === 0;
+
+  const nav = $('#btn-itinerary-nav');
+  if (stops.length >= 2) {
+    nav.hidden = false;
+    nav.href = buildItineraryNavUrl(stops);
+  } else {
+    nav.hidden = true;
+  }
+}
+
+function moveItinerary(index, delta) {
+  const target = index + delta;
+  if (target < 0 || target >= itineraryIds.length) return;
+  [itineraryIds[index], itineraryIds[target]] = [itineraryIds[target], itineraryIds[index]];
+  saveItinerary();
+}
+
+async function saveItinerary() {
+  try {
+    const { stops } = await api.setItinerary(state.map.code, itineraryIds);
+    itineraryIds = stops.map((s) => s.id);
+    renderItinerary();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+// 高德多点步行导航：首站起点、末站终点、中间走 via
+function buildItineraryNavUrl(stops) {
+  const pt = (p) => `${p.lng},${p.lat},${encodeURIComponent(p.name)}`;
+  const parts = [
+    `from=${pt(stops[0])}`,
+    `to=${pt(stops[stops.length - 1])}`,
+  ];
+  if (stops.length > 2) parts.push(`via=${stops.slice(1, -1).map(pt).join(';')}`);
+  parts.push('mode=walk', 'coordinate=gaode', 'src=moduExplore', 'callnative=1');
+  return `https://uri.amap.com/navigation?${parts.join('&')}`;
+}
+
+function buildItineraryText() {
+  const stops = itineraryPlaces();
+  if (stops.length === 0) return '';
+  const lines = [`《${state.map?.name ?? '魔都Explore'}》行程单`, ''];
+  stops.forEach((p, i) => lines.push(`${i + 1}. ${p.name}${p.visited ? '（已去过）' : ''}`));
+  if (stops.length > 1) {
+    let totalKm = 0;
+    for (let i = 1; i < stops.length; i += 1) totalKm += haversineKm(stops[i - 1], stops[i]);
+    lines.push('', `全程步行 ${fmtKm(totalKm)}，约 ${fmtWalk(totalKm)}`);
+  }
+  return lines.join('\n');
+}
+
+async function copyItinerary() {
+  const text = buildItineraryText();
+  if (!text) {
+    toast('行程还是空的');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('行程已复制，发给同学吧');
+  } catch {
+    toast('复制失败，可手动截图分享');
+  }
+}
+
 function bindExtras() {
   $('#btn-detail-wish').addEventListener('click', () => {
     if (detailPlace) toggleWish(detailPlace);
@@ -1717,6 +1903,9 @@ function bindExtras() {
   $('#btn-poster-close').addEventListener('click', () => $('#poster-dialog').close());
   $('#btn-poster-refresh').addEventListener('click', renderPoster);
   $('#btn-poster-save').addEventListener('click', savePoster);
+  $('#btn-itinerary').addEventListener('click', openItinerary);
+  $('#btn-itinerary-close').addEventListener('click', () => $('#itinerary-dialog').close());
+  $('#btn-itinerary-copy').addEventListener('click', copyItinerary);
 }
 
 function registerServiceWorker() {

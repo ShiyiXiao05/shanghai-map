@@ -52,6 +52,14 @@ export const api = {
   togglePublic: (code, id) =>
     request('POST', `/api/places/${id}/public`, { body: { map_code: code } }),
 
+  // 行程单
+  itinerary: (code) =>
+    get(`/api/itinerary?map=${encodeURIComponent(code)}`).then((d) => d.stops),
+  setItinerary: (code, placeIds) =>
+    request('PUT', '/api/itinerary', { body: { map_code: code, place_ids: placeIds } }).then(
+      (d) => d.stops
+    ),
+
   // 照片
   listPhotos: (code, placeId) =>
     get(`/api/places/${placeId}/photos?map=${encodeURIComponent(code)}`).then((d) => d.photos),

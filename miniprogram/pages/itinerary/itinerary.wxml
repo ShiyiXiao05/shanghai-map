@@ -1,0 +1,40 @@
+<view class="page">
+  <view class="head">
+    <view class="title">🚶 行程单</view>
+    <view class="sub">{{mapName}} · {{summary}}</view>
+  </view>
+
+  <view wx:if="{{stops.length === 0 && !loading}}" class="empty">
+    <text class="empty-icon">🚶</text>
+    <text>行程还是空的</text>
+    <text class="empty-sub">从下面把想去的地点加进来，排成一天的路线</text>
+  </view>
+
+  <view class="stop-list">
+    <view wx:for="{{stops}}" wx:key="id" class="stop">
+      <view class="stop-head">
+        <view class="stop-no">{{index + 1}}</view>
+        <view class="stop-emoji" style="background: {{item.emojiColor}}22; border-color: {{item.emojiColor}}55;">{{item.emoji}}</view>
+        <view class="stop-name {{item.visited ? 'visited' : ''}}">{{item.name}}</view>
+        <view class="stop-ops">
+          <view class="op {{item.canUp ? '' : 'op-dis'}}" data-index="{{index}}" bindtap="onMoveUp">↑</view>
+          <view class="op {{item.canDown ? '' : 'op-dis'}}" data-index="{{index}}" bindtap="onMoveDown">↓</view>
+          <view class="op op-del" data-index="{{index}}" bindtap="onRemove">✕</view>
+        </view>
+      </view>
+      <view wx:if="{{item.legText}}" class="stop-leg">{{item.legText}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{chips.length > 0}}" class="add">
+    <view class="add-title">＋ 添加地点</view>
+    <view class="add-list">
+      <view wx:for="{{chips}}" wx:key="id" class="chip" data-id="{{item.id}}" bindtap="onAddChip">＋ {{item.name}}</view>
+    </view>
+  </view>
+
+  <view class="actions">
+    <view class="btn" bindtap="onCopyText">📋 复制行程</view>
+    <view class="btn btn-primary" bindtap="onCopyNav">🧭 复制导航链接</view>
+  </view>
+</view>

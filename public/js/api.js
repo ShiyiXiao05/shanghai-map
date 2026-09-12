@@ -70,4 +70,8 @@ export const api = {
     request('PUT', `/api/maps/${encodeURIComponent(mapCode)}`, { body: { name } }),
   rekeyMap: (mapCode) => request('POST', `/api/maps/${encodeURIComponent(mapCode)}/rekey`),
   deleteMap: (mapCode) => request('DELETE', `/api/maps/${encodeURIComponent(mapCode)}`),
+  itinerary: async (mapCode) =>
+    (await request('GET', `/api/itinerary?map=${encodeURIComponent(mapCode)}`)).stops,
+  setItinerary: (mapCode, placeIds) =>
+    request('PUT', '/api/itinerary', { body: { map_code: mapCode, place_ids: placeIds } }),
 };

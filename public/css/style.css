@@ -1863,3 +1863,71 @@ button { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---------- 行程单 ---------- */
+
+.dialog-itinerary { width: 460px; }
+
+.itinerary-body {
+  max-height: 80vh;
+  max-height: 80dvh;
+  overflow-y: auto;
+  padding: 20px 22px 22px;
+  scrollbar-width: thin;
+}
+
+.itinerary-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+
+.itinerary-stop {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.itinerary-no {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  border-radius: 50%;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--metro);
+}
+
+.itinerary-stop-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+.itinerary-stop-name {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.itinerary-stop-name.is-visited { color: var(--ink-soft); }
+
+.itinerary-leg { font-size: 12px; color: var(--ink-soft); }
+
+.itinerary-ops { flex: none; display: flex; gap: 6px; }
+.itinerary-ops .btn { min-width: 34px; padding: 5px 8px; }
+
+.itinerary-empty { text-align: center; color: var(--ink-soft); padding: 18px 0 6px; }
+.itinerary-empty .empty-icon { font-size: 26px; margin: 0 0 6px; }
+
+.itinerary-add { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.itinerary-add-title { margin: 0 0 8px; font-size: 13px; color: var(--ink-soft); }
+.itinerary-add-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.itinerary-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 640px) {
+  .dialog-itinerary { width: 92vw; }
+  .itinerary-body { max-height: calc(88vh - 48px); max-height: calc(88dvh - 48px); }
+  .itinerary-ops .btn { min-height: 40px; }
+}
