@@ -9,7 +9,7 @@ function parseId(raw) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
-export function createCommentsRouter({ store }) {
+export function createCommentsRouter({ store, pusher }) {
   const router = Router();
 
   router.get('/places/:id/comments', async (req, res, next) => {
@@ -48,6 +48,12 @@ export function createCommentsRouter({ store }) {
         typeof body.author === 'string' ? body.author.trim().slice(0, MAX_AUTHOR_CHARS) : '';
       const comment = await store.createComment({ placeId: id, mapCode: code, author, body: text });
       res.status(201).json(comment);
+      // 新留言通知订阅者
+      pusher?.notifyMap(code, {
+        title: '💬 魔都·Explore 有新留言',
+        body: `${author || '同学'}：${text.slice(0, 40)}`,
+        url: `/?map=${code}&place=${id}`,
+      });
     } catch (err) {
       next(err);
     }

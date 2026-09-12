@@ -103,7 +103,7 @@ function parseId(raw) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
-export function createPlacesRouter({ store, uploader }) {
+export function createPlacesRouter({ store, uploader, pusher }) {
   const router = Router();
 
   router.get('/', async (req, res, next) => {
@@ -162,6 +162,12 @@ export function createPlacesRouter({ store, uploader }) {
       if (checked.error) return res.status(400).json({ error: checked.error });
       const place = await store.create({ ...checked.value, map_code: code });
       res.status(201).json(place);
+      // 新地点通知订阅者（异步广播，不影响响应；自己订阅的也会收到一条轻提醒）
+      pusher?.notifyMap(code, {
+        title: '📍 魔都·Explore 有新地点',
+        body: `${place.added_by || '同学'} 添加了「${place.name}」`,
+        url: `/?map=${code}&place=${place.id}`,
+      });
     } catch (err) {
       next(err);
     }

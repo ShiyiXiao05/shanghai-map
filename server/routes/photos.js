@@ -19,7 +19,7 @@ function parseId(raw) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
-export function createPhotosRouter({ store, uploader }) {
+export function createPhotosRouter({ store, uploader, pusher }) {
   const router = Router();
 
   // 列表含缩略图 data URL，供详情页直接渲染
@@ -76,7 +76,14 @@ export function createPhotosRouter({ store, uploader }) {
           url: uploaded.url,
           thumbUrl: uploaded.thumbUrl,
         });
-        return res.status(201).json({ id: photo.id });
+        res.status(201).json({ id: photo.id });
+        // 新照片通知订阅者
+        pusher?.notifyMap(code, {
+          title: '📷 魔都·Explore 有新照片',
+          body: `${addedBy || '同学'} 上传了一张照片`,
+          url: `/?map=${code}&place=${id}`,
+        });
+        return;
       }
 
       const thumb = parseImageDataUrl(body.thumb, '缩略图');
@@ -93,6 +100,12 @@ export function createPhotosRouter({ store, uploader }) {
         addedBy,
       });
       res.status(201).json({ id: photo.id });
+      // 新照片通知订阅者
+      pusher?.notifyMap(code, {
+        title: '📷 魔都·Explore 有新照片',
+        body: `${addedBy || '同学'} 上传了一张照片`,
+        url: `/?map=${code}&place=${id}`,
+      });
     } catch (err) {
       next(err);
     }

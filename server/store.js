@@ -62,6 +62,20 @@ export function createPlaceStore(pool) {
       "ALTER TABLE public.places ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT ''"
     );
     await pool.query('ALTER TABLE public.places ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        map_code TEXT NOT NULL,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        who TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_push_map ON push_subscriptions (map_code)'
+    );
     await pool.query(
       'CREATE INDEX IF NOT EXISTS idx_places_public ON public.places (is_public) WHERE is_public'
     );
@@ -220,8 +234,32 @@ export function createPlaceStore(pool) {
     await pool.query('DELETE FROM place_comments WHERE map_code = $1', [code]);
     await pool.query('DELETE FROM place_wishes WHERE map_code = $1', [code]);
     await pool.query('DELETE FROM itinerary_stops WHERE map_code = $1', [code]);
+    await pool.query('DELETE FROM push_subscriptions WHERE map_code = $1', [code]);
     photoCache.clear();
     return { photoPublicIds: photoRows.rows.map((r) => r.public_id).filter(Boolean) };
+  }
+
+  // ---------- Web Push 订阅 ----------
+
+  async function saveSubscription({ mapCode, endpoint, p256dh, auth, who }) {
+    await pool.query(
+      `INSERT INTO push_subscriptions (map_code, endpoint, p256dh, auth, who)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (endpoint) DO UPDATE SET map_code = $1, p256dh = $3, auth = $4, who = $5`,
+      [mapCode, endpoint, p256dh, auth, who ?? '']
+    );
+  }
+
+  async function removeSubscription(endpoint) {
+    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+  }
+
+  async function listSubscriptions(mapCode) {
+    const { rows } = await pool.query(
+      'SELECT endpoint, p256dh, auth, who FROM push_subscriptions WHERE map_code = $1',
+      [mapCode]
+    );
+    return rows;
   }
 
   // 全量导出：map 元信息 + 每个地点（含新字段）的照片链接/留言/想去
@@ -733,6 +771,9 @@ export function createPlaceStore(pool) {
     listTrash,
     restorePlace,
     purgeExpired,
+    saveSubscription,
+    removeSubscription,
+    listSubscriptions,
   };
 }
 

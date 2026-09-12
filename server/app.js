@@ -5,8 +5,9 @@ import { createMapsRouter } from './routes/maps.js';
 import { createPhotosRouter } from './routes/photos.js';
 import { createCommentsRouter } from './routes/comments.js';
 import { createItineraryRouter } from './routes/itinerary.js';
+import { createPushRouter } from './routes/push.js';
 
-export function buildApp({ store, mapConfig, uploader }) {
+export function buildApp({ store, mapConfig, uploader, pusher }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(compression());
@@ -25,9 +26,11 @@ export function buildApp({ store, mapConfig, uploader }) {
   });
 
   app.use('/api/maps', createMapsRouter({ store, uploader }));
-  app.use('/api/places', createPlacesRouter({ store, uploader }));
-  app.use('/api', createPhotosRouter({ store, uploader }));
-  app.use('/api', createCommentsRouter({ store }));
+  app.use('/api/places', createPlacesRouter({ store, uploader, pusher }));
+  app.use('/api', createPhotosRouter({ store, uploader, pusher }));
+  app.use('/api', createCommentsRouter({ store, pusher }));
+  app.use('/api/itinerary', createItineraryRouter({ store }));
+  app.use('/api/push', createPushRouter({ store, pusher }));
   app.use('/api/itinerary', createItineraryRouter({ store }));
 
   // 公共广场：无需邀请码的只读聚合（不含 map_code，不泄露各地图邀请码）

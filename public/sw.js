@@ -1,7 +1,7 @@
 /* 魔都·Explore Service Worker
    策略：核心静态资源预缓存 + stale-while-revalidate；API 一律走网络；跨域直通 */
 
-const CACHE_NAME = 'wishmap-static-v12';
+const CACHE_NAME = 'wishmap-static-v13';
 const CORE_ASSETS = [
   '/',
   '/css/style.css',
@@ -38,6 +38,41 @@ self.addEventListener('activate', (event) => {
       .keys()
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
+  );
+});
+
+// Web Push：新地点/照片/留言时弹出系统通知
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: '魔都·Explore', body: event.data ? event.data.text() : '有新动态' };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || '魔都·Explore', {
+      body: data.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: data.url || 'default',
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.navigate(url);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
   );
 });
 

@@ -5,6 +5,7 @@ import './env.js';
 import { buildApp } from './app.js';
 import { placeStore as productionStore, createPlaceStore } from './store.js';
 import { createCloudinaryUploader } from './uploader.js';
+import { createPusher } from './pusher.js';
 
 async function resolveStore() {
   if (productionStore) return productionStore;
@@ -30,10 +31,21 @@ if (!uploader.configured) {
   console.warn('未配置 CLOUDINARY_URL：照片将存入数据库（占用 Neon 存储，建议配置免费图床）');
 }
 
+const pusher = createPusher({
+  publicKey: process.env.VAPID_PUBLIC_KEY,
+  privateKey: process.env.VAPID_PRIVATE_KEY,
+  subject: process.env.VAPID_SUBJECT,
+  store,
+});
+if (!pusher.configured) {
+  console.warn('未配置 VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY：Web Push 通知停用（配置后自动启用）');
+}
+
 const app = buildApp({
   store,
   mapConfig: { key: process.env.AMAP_KEY, securityJsCode: process.env.AMAP_SECURITY_CODE },
   uploader,
+  pusher,
 });
 app.use(
   express.static(publicDir, {

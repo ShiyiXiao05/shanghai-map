@@ -1998,6 +1998,57 @@ function bindExtras() {
   $('#btn-itinerary').addEventListener('click', openItinerary);
   $('#btn-itinerary-close').addEventListener('click', () => $('#itinerary-dialog').close());
   $('#btn-itinerary-copy').addEventListener('click', copyItinerary);
+  $('#btn-push').addEventListener('click', togglePush);
+}
+
+/* ---------- Web Push 通知 ---------- */
+
+const PUSH_KEY = 'wish-push-endpoint';
+
+async function togglePush() {
+  if (!requireRealMap()) return;
+  const btn = $('#btn-push');
+  if (localStorage.getItem(PUSH_KEY)) {
+    // 已订阅 → 退订
+    try {
+      await api.unsubscribePush(state.map.code, localStorage.getItem(PUSH_KEY));
+      localStorage.removeItem(PUSH_KEY);
+      btn.classList.remove('is-on');
+      toast('已关闭这张地图的推送');
+    } catch (err) {
+      toast(`退订失败：${err.message}`, 'error');
+    }
+    return;
+  }
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    toast('当前浏览器不支持推送通知', 'error');
+    return;
+  }
+  try {
+    const { publicKey } = await api.pushKey();
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      toast('没有通知权限，浏览器地址栏 ⭐ 旁可重新允许', 'info');
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: publicKey,
+    });
+    const who = localStorage.getItem(NICKNAME_KEY) ?? '';
+    await api.subscribePush(state.map.code, sub.toJSON(), who);
+    localStorage.setItem(PUSH_KEY, sub.endpoint);
+    btn.classList.add('is-on');
+    toast('订阅成功：这张地图有新地点/照片/留言会提醒你 🔔');
+  } catch (err) {
+    toast(`订阅失败：${err.message}`, 'error');
+  }
+}
+
+function syncPushButton() {
+  const btn = $('#btn-push');
+  btn?.classList.toggle('is-on', Boolean(localStorage.getItem(PUSH_KEY)));
 }
 
 function registerServiceWorker() {
@@ -2019,6 +2070,7 @@ async function boot() {
   bindThemeSelect();
   fillCategorySelect();
   renderChips();
+  syncPushButton();
   bindStaticEvents();
   bindSearch();
   bindImport();

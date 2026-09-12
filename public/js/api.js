@@ -83,4 +83,11 @@ export const api = {
     (await request('GET', `/api/itinerary?map=${encodeURIComponent(mapCode)}`)).stops,
   setItinerary: (mapCode, placeIds) =>
     request('PUT', '/api/itinerary', { body: { map_code: mapCode, place_ids: placeIds } }),
+  pushKey: () => request('GET', '/api/push/key'),
+  subscribePush: (mapCode, subscription, who) =>
+    request('POST', '/api/push/subscribe', {
+      body: { map_code: mapCode, subscription, who },
+    }),
+  unsubscribePush: (mapCode, endpoint) =>
+    request('DELETE', '/api/push/subscribe', { mapCode, body: { endpoint } }),
 };
