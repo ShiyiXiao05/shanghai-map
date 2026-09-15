@@ -8,32 +8,45 @@
 .head {
   background: var(--card);
   border-radius: 24rpx;
-  padding: 28rpx;
+  padding: 32rpx 28rpx 28rpx;
+  box-shadow: 0 4rpx 20rpx rgba(20, 40, 60, 0.05);
 }
 
 .name-row {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-}
-
-.emoji {
-  font-size: 36rpx;
+  gap: 14rpx;
 }
 
 .name {
-  font-size: 38rpx;
+  font-size: 36rpx;
   font-weight: 700;
   flex: 1;
+  line-height: 1.35;
 }
 
 .visited {
+  flex: none;
   font-size: 22rpx;
   color: var(--brick);
+  background: rgba(190, 74, 67, 0.1);
+  border-radius: 999rpx;
+  padding: 6rpx 18rpx;
 }
 
 .meta-row {
-  margin-top: 10rpx;
+  margin-top: 18rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex-wrap: wrap;
+}
+
+.cat-tag {
+  font-size: 22rpx;
+  border-radius: 999rpx;
+  padding: 6rpx 18rpx;
+  font-weight: 600;
 }
 
 .meta {
@@ -41,17 +54,28 @@
   color: var(--ink-faint);
 }
 
-.desc {
-  margin-top: 16rpx;
-  font-size: 27rpx;
-  line-height: 1.7;
+.address {
+  margin-top: 14rpx;
+  font-size: 24rpx;
   color: var(--ink-soft);
 }
 
+.desc {
+  margin-top: 20rpx;
+  font-size: 27rpx;
+  line-height: 1.75;
+  color: var(--ink-soft);
+  padding-top: 20rpx;
+  border-top: 1rpx solid var(--line);
+}
+
 .wish-row {
-  margin-top: 14rpx;
+  margin-top: 18rpx;
   font-size: 23rpx;
   color: var(--brick);
+  background: rgba(190, 74, 67, 0.06);
+  border-radius: 14rpx;
+  padding: 12rpx 18rpx;
 }
 
 .actions {
@@ -66,6 +90,9 @@
   font-size: 23rpx;
   color: var(--ink-faint);
   text-align: center;
+  background: var(--card);
+  border-radius: 16rpx;
+  padding: 18rpx;
 }
 
 .section {

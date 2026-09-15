@@ -8,6 +8,8 @@ const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 Page({
   data: {
     statusBarHeight: 20,
+    navRightInset: 100, // 右侧避让胶囊的内缩 px
+    navBottomPad: 8, // 导航栏底部留白 px
     mapName: '',
     isPublicView: false,
     categories: CATEGORIES,
@@ -28,6 +30,16 @@ Page({
   onLoad(query) {
     const sys = wx.getSystemInfoSync();
     this.setData({ statusBarHeight: sys.statusBarHeight || 20 });
+    // 避让右上角微信胶囊：按钮区右边界缩到胶囊左侧，导航栏高度包住胶囊
+    const menu = wx.getMenuButtonBoundingClientRect();
+    if (menu && menu.left > 0) {
+      this.setData({
+        navRightInset: sys.windowWidth - menu.left + 8,
+        navBottomPad: Math.max(6, menu.top - (sys.statusBarHeight || 20)),
+      });
+    } else {
+      this.setData({ navRightInset: 100, navBottomPad: 8 });
+    }
     this.mapCtx = wx.createMapContext('mainMap', this);
     this.prepareMarkerIcons();
 

@@ -10,7 +10,6 @@
     "pages/itinerary/itinerary"
   ],
   "window": {
-    "navigationStyle": "custom",
     "backgroundColor": "@bgColor",
     "backgroundTextStyle": "@bgTxtStyle",
     "navigationBarBackgroundColor": "@navBgColor",

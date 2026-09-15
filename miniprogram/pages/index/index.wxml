@@ -2,9 +2,9 @@
   <!-- 图标生成用隐藏 canvas -->
   <canvas type="2d" id="icon-factory" class="icon-factory"></canvas>
 
-  <!-- 自定义导航栏 -->
-  <view class="nav" style="padding-top: {{statusBarHeight}}px;">
-    <view class="nav-row">
+  <!-- 自定义导航栏（右侧避让微信胶囊） -->
+  <view class="nav" style="padding-top: {{statusBarHeight}}px; padding-bottom: {{navBottomPad}}px;">
+    <view class="nav-row" style="padding-right: {{navRightInset}}px;">
       <view class="nav-title" bindtap="goMapEntry">
         <text class="nav-name">{{mapName}}</text>
         <text class="nav-switch">切换 ▾</text>
