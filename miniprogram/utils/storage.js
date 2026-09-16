@@ -4,6 +4,7 @@ export const KEYS = {
   currentMap: 'wish-current-map', // code
   nickname: 'shanghai-wish-nickname',
   sort: 'wish-sort',
+  authToken: 'wish-wmp-token', // 小程序登录 token（网页版不用）
 };
 
 export function getJoinedMaps() {
@@ -37,4 +38,12 @@ export function getNickname() {
 
 export function setNickname(name) {
   wx.setStorageSync(KEYS.nickname, name);
+}
+
+export function getAuthToken() {
+  return wx.getStorageSync(KEYS.authToken) || '';
+}
+
+export function setAuthToken(token) {
+  wx.setStorageSync(KEYS.authToken, token);
 }

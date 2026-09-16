@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { identityOr401 } from './identity.js';
 
 const MAX_BODY_CHARS = 280;
 const MAX_AUTHOR_CHARS = 30;
@@ -44,8 +45,10 @@ export function createCommentsRouter({ store, pusher }) {
       if (text.length > MAX_BODY_CHARS) {
         return res.status(400).json({ error: `留言最多 ${MAX_BODY_CHARS} 字` });
       }
-      const author =
+      const clientAuthor =
         typeof body.author === 'string' ? body.author.trim().slice(0, MAX_AUTHOR_CHARS) : '';
+      const author = identityOr401(req, res, clientAuthor);
+      if (author === null) return;
       const comment = await store.createComment({ placeId: id, mapCode: code, author, body: text });
       res.status(201).json(comment);
       // 新留言通知订阅者

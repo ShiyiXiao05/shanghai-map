@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { CATEGORIES } from '../store.js';
+import { identityOr401 } from './identity.js';
 
 const LIMITS = {
   name: 100,
@@ -160,7 +161,9 @@ export function createPlacesRouter({ store, uploader, pusher }) {
       }
       const checked = validatePlace(req.body, { partial: false });
       if (checked.error) return res.status(400).json({ error: checked.error });
-      const place = await store.create({ ...checked.value, map_code: code });
+      const addedBy = identityOr401(req, res, checked.value.added_by);
+      if (addedBy === null) return;
+      const place = await store.create({ ...checked.value, added_by: addedBy, map_code: code });
       res.status(201).json(place);
       // 新地点通知订阅者（异步广播，不影响响应；自己订阅的也会收到一条轻提醒）
       pusher?.notifyMap(code, {
@@ -181,7 +184,9 @@ export function createPlacesRouter({ store, uploader, pusher }) {
       const body = typeof req.body === 'object' && req.body !== null ? req.body : {};
       const code = typeof body.map_code === 'string' ? body.map_code.trim().toUpperCase() : '';
       if (!code) return res.status(400).json({ error: '缺少邀请码（map_code）' });
-      const who = typeof body.who === 'string' ? body.who.trim().slice(0, 30) : '';
+      const clientWho = typeof body.who === 'string' ? body.who.trim().slice(0, 30) : '';
+      const who = identityOr401(req, res, clientWho);
+      if (who === null) return;
       if (!who) return res.status(400).json({ error: '需要昵称（who）才能投票' });
       if (!(await store.getPlace(id, code))) {
         return res.status(404).json({ error: '地点不存在或邀请码不匹配' });
@@ -222,6 +227,8 @@ export function createPlacesRouter({ store, uploader, pusher }) {
       if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
       const checked = validatePlace(req.body, { partial: true });
       if (checked.error) return res.status(400).json({ error: checked.error });
+      // 已登录时编辑不改原作者：忽略客户端传的 added_by（编辑本身不记录昵称）
+      if (req.user && checked.value.added_by !== undefined) delete checked.value.added_by;
       const place = await store.update(id, req.mapCode, checked.value);
       if (!place) return res.status(404).json({ error: '地点不存在或邀请码不匹配' });
       res.json(place);

@@ -22,10 +22,9 @@
         <view class="input">{{category}} ▾</view>
       </picker>
     </view>
-    <view class="field">
-      <text class="label">你的昵称</text>
-      <input class="input" value="{{nickname}}" maxlength="30" bindinput="onNickname" />
-    </view>
+    <view class="identity">📮 将以「{{nickname || '登录昵称'}}」的身份导入</view>
     <view class="btn btn-primary" bindtap="save">{{saving ? '导入中…' : '导入到地图'}}</view>
   </block>
+
+  <nickname-modal show="{{nickModalShow}}" bind:confirm="onNickConfirm" bind:cancel="onNickCancel" />
 </view>

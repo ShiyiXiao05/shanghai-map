@@ -4,28 +4,33 @@
 
 ## 当前状态
 
-- ✅ 已完成：地图主页（原生 map 组件 + 分类圆点标记 + 底部列表/筛选/排序/下拉刷新）、创建/加入地图（邀请码大字展示与复制、多地图切换）、地点详情（照片九宫格/预览/上传/删除、留言、想去、打卡、公开、编辑、删除）、深浅双主题（跟随系统）、微信分享（携带地图邀请码直达）
-- 🚧 下一迭代：搜索与吸附选点（腾讯位置服务）、回忆时间线、分享海报、高德链接导入、行程单
-- 配置：`utils/config.js` 填 `TMAP_KEY`（lbs.qq.com，WebServiceAPI + 小程序授权）
+- ✅ 已完成：地图主页（原生 map 组件 + 分类圆点标记 + 底部列表/筛选/排序 + 下拉刷新 + 地图全屏）、创建/加入地图（邀请码大字展示与复制、多地图切换）、搜索选点添加（`wx.chooseLocation`）、高德分享导入、地点详情（照片九宫格/预览/上传/删除、留言、想去、打卡、公开、编辑、删除）、回忆时间线、行程单、分享海报（canvas 生成存相册）、深浅双主题（跟随系统）、微信分享（携带地图邀请码直达）
+- 🔐 登录署名：所有写操作（加地点/导入/留言/想去/传照片/建图）要求登录——静默 `wx.login` 换 token，首次操作弹一次性昵称确认（`input type="nickname"` 键盘上方可一键选用微信昵称，因微信已收回 `getUserProfile`）；之后署名由服务端按登录昵称盖章。需服务端配置 `MINIPROGRAM_APPID/MINIPROGRAM_SECRET/AUTH_SECRET`（见根 README「准备工作」），未配置时登录接口 503
+- 配置：`utils/config.js` 填 `CLOUD_ENV_ID`（微信云托管环境 ID，正式版通道）与 `TMAP_KEY`（lbs.qq.com，WebServiceAPI + 小程序授权，下一迭代搜索用）
 
 ## 如何预览
 
 1. 安装[微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)（稳定版）
-2. 导入本项目：选择 `miniprogram/` 目录；AppID 用「测试号」（注册正式 AppID 后替换 `project.config.json` 里的 `touristappid`）
-3. 详情 → 本地设置 → 勾选**「不校验合法域名」**（体验版阶段直连 Render 后端必须勾）
-4. 编译预览；真机调试扫预览二维码即可（同样需在手机端打开调试模式）
-5. 给同学用：工具栏「预览」生成二维码 → 手机扫码为开发版；正式体验版需在 mp.weixin.qq.com 上传代码并设为体验版，添加同学为体验成员（≤90 人）
+2. 导入本项目：选择 `miniprogram/` 目录，AppID 已配置为正式号 `wx45e968f2b0809dde`
+3. 后端通道二选一（`utils/config.js`）：
+   - **云托管（推荐）**：填 `CLOUD_ENV_ID`（开通见 [../docs/微信云托管部署指引.md](../docs/微信云托管部署指引.md)），请求走 `wx.cloud.callContainer`，与域名校验无关，无需任何勾选
+   - **直连 Render（回落）**：`CLOUD_ENV_ID` 留空走 `BASE_URL`，需在详情 → 本地设置勾选**「不校验合法域名」**（真机调试同样需开调试模式）
+4. 编译预览；真机调试扫预览二维码
+5. 给同学用：工具栏「预览」二维码为开发版；正式体验版在开发者工具「上传」→ mp 后台设为体验版并添加体验成员（≤90 人）；正式版经云托管通道可直接提交审核（免域名备案，见部署指引第 5 步）
 
 ## 结构
 
 ```
 app.js/json/wxss     全局会话（地图切换）、双主题令牌、页面注册
 theme.json           darkmode 导航栏配色
-utils/config.js      后端地址 / 腾讯位置 key / 分类元数据
-utils/api.js         与网页版对齐的全部 API（wx.request）
-utils/storage.js     与网页版同名的本地存储键
-pages/index          地图主页
+utils/config.js      后端通道（CLOUD_ENV_ID 云托管 / BASE_URL 直连回落）/ 腾讯位置 key / 分类元数据
+utils/api.js         与网页版对齐的全部 API（云托管 callContainer 或 wx.request，登录自动带 Bearer token）
+utils/auth.js        登录守卫（静默登录 + 昵称确认重试）
+utils/identity-behavior.js  页面共用：昵称弹层 confirm/cancel 处理
+utils/storage.js     与网页版同名的本地存储键 + 登录 token
+components/nickname-modal   昵称一次性确认弹层（input type="nickname"）
+pages/index          地图主页（含全屏）
 pages/entry          创建/加入/切换地图、邀请码分享
 pages/detail         地点详情（照片/留言/想去/打卡/编辑/删除）
-pages/search|memories|poster|import   占位，下一迭代补齐
+pages/search|import|itinerary|memories|poster  搜索选点/高德导入/行程/回忆/海报
 ```

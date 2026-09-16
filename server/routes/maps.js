@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { identityOr401 } from './identity.js';
 
 export function createMapsRouter({ store, uploader }) {
   const router = Router();
@@ -21,7 +22,10 @@ export function createMapsRouter({ store, uploader }) {
       const name = typeof body.name === 'string' ? body.name.trim() : '';
       if (!name) return res.status(400).json({ error: '地图名称不能为空' });
       if (name.length > 40) return res.status(400).json({ error: '地图名称不能超过 40 字' });
-      const createdBy = typeof body.createdBy === 'string' ? body.createdBy.trim().slice(0, 30) : '';
+      const clientCreatedBy =
+        typeof body.createdBy === 'string' ? body.createdBy.trim().slice(0, 30) : '';
+      const createdBy = identityOr401(req, res, clientCreatedBy);
+      if (createdBy === null) return;
       const map = await store.createMap({ name, createdBy });
       res.status(201).json(map);
     } catch (err) {

@@ -23,13 +23,16 @@ Page({
     latitude: SHANGHAI_CENTER.latitude,
     loading: true,
     markerIcons: {}, // categoryId -> 临时图标路径
+    isMapFs: false, // 地图全屏态
+    refreshing: false, // 列表下拉刷新中
+    isDark: false, // 跟随系统深色，控制下拉刷新指示器配色
   },
 
   mapCtx: null,
 
   onLoad(query) {
     const sys = wx.getSystemInfoSync();
-    this.setData({ statusBarHeight: sys.statusBarHeight || 20 });
+    this.setData({ statusBarHeight: sys.statusBarHeight || 20, isDark: sys.theme === 'dark' });
     // 避让右上角微信胶囊：按钮区右边界缩到胶囊左侧，导航栏高度包住胶囊
     const menu = wx.getMenuButtonBoundingClientRect();
     if (menu && menu.left > 0) {
@@ -70,8 +73,15 @@ Page({
     return { title: '魔都·Explore · 和同学一起标记上海', path: '/pages/index/index' };
   },
 
-  onPullDownRefresh() {
-    this.loadPlaces().finally(() => wx.stopPullDownRefresh());
+  // 页面本身 disableScroll（防止拖地图时页面跟着动），下拉刷新由列表 scroll-view 承担
+  onRefresherRefresh() {
+    if (this.data.refreshing) return;
+    this.setData({ refreshing: true });
+    this.loadPlaces().finally(() => this.setData({ refreshing: false }));
+  },
+
+  toggleMapFs() {
+    this.setData({ isMapFs: !this.data.isMapFs });
   },
 
   enterEntry() {

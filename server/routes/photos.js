@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { identityOr401 } from './identity.js';
 
 const MAX_PHOTOS_PER_PLACE = 9;
 const MAX_FULL_BYTES = 1.5 * 1024 * 1024;
@@ -56,8 +57,10 @@ export function createPhotosRouter({ store, uploader, pusher }) {
       if (full.bytes > MAX_FULL_BYTES) {
         return res.status(400).json({ error: '照片太大，压缩后需小于 1.5MB' });
       }
-      const addedBy =
+      const clientAddedBy =
         typeof body.added_by === 'string' ? body.added_by.trim().slice(0, 30) : '';
+      const addedBy = identityOr401(req, res, clientAddedBy);
+      if (addedBy === null) return;
 
       // 配置了 CDN（Cloudinary）时上传原图、由 URL 派生缩略图；否则走数据库 base64
       if (uploader?.configured) {

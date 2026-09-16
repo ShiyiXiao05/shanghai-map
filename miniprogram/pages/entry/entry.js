@@ -1,14 +1,18 @@
 const app = getApp();
 const { api } = require('../../utils/api.js');
+const auth = require('../../utils/auth.js');
+const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
 
 Page({
+  behaviors: [identityBehavior],
+
   data: {
     joinedMaps: [],
     currentCode: '',
     mode: 'list', // list | create | join | created
     name: '',
-    nickname: '',
+    nickname: '', // 登录身份展示用；创建者署名由服务端按登录昵称盖章
     code: '',
     createdCode: '',
   },
@@ -29,10 +33,6 @@ Page({
     this.setData({ name: event.detail.value });
   },
 
-  onNicknameInput(event) {
-    this.setData({ nickname: event.detail.value });
-  },
-
   onCodeInput(event) {
     this.setData({ code: event.detail.value.toUpperCase() });
   },
@@ -43,13 +43,12 @@ Page({
       wx.showToast({ title: '给地图起个名字吧', icon: 'none' });
       return;
     }
-    if (this.data.nickname.trim()) storage.setNickname(this.data.nickname.trim());
+    // 登录守卫：未登录静默登录；昵称未确认时弹层，确认后自动重试创建
+    const nickname = await auth.requireIdentity(this, () => this.createMap());
+    if (!nickname) return;
     wx.showLoading({ title: '创建中…' });
     try {
-      const map = await api.createMap({
-        name,
-        createdBy: this.data.nickname.trim(),
-      });
+      const map = await api.createMap({ name });
       app.enterMap(map);
       wx.hideLoading();
       this.setData({ createdCode: map.code, mode: 'created', name: '' });

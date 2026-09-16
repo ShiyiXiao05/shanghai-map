@@ -69,14 +69,50 @@
 }
 
 /* 地图 */
-.map {
-  width: 100%;
+.map-wrap {
+  position: relative;
   flex: 1;
+  min-height: 0;
 }
 
-/* 底部面板 */
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+/* 全屏按钮（悬浮于地图右下角） */
+.map-fs-btn {
+  position: absolute;
+  right: 24rpx;
+  bottom: 24rpx;
+  z-index: 5;
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.18);
+}
+
+/* 全屏态：铺满整屏，盖住导航与底部面板 */
+.map-fs {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}
+
+.map-fs .map-fs-btn {
+  bottom: calc(40rpx + env(safe-area-inset-bottom));
+}
+
+/* 底部面板：border-box 让 safe-area 内边距算进 46vh，不把页面撑出屏幕 */
 .panel {
   height: 46vh;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   background: var(--card);

@@ -18,6 +18,9 @@
   },
   "darkmode": true,
   "themeLocation": "theme.json",
+  "usingComponents": {
+    "nickname-modal": "/components/nickname-modal/nickname-modal"
+  },
   "permission": {
     "scope.userLocation": {
       "desc": "用于地图选点与展示附近地点"

@@ -1,11 +1,15 @@
 const app = getApp();
 const { api } = require('../../utils/api.js');
 const { CATEGORIES } = require('../../utils/config.js');
+const auth = require('../../utils/auth.js');
+const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
 
 // 添加地点：wx.chooseLocation 是微信原生的「搜索+地图选点」合一选择器
 // （自带腾讯 POI 搜索与逆地理吸附，无需额外位置服务 key）
 Page({
+  behaviors: [identityBehavior],
+
   data: {
     categories: CATEGORIES,
     picked: null, // { name, address, latitude, longitude }
@@ -14,11 +18,11 @@ Page({
     priceHint: '',
     hours: '',
     tags: '',
-    nickname: '',
+    nickname: '', // 登录身份展示用；署名由服务端按登录昵称盖章
     saving: false,
   },
 
-  onLoad() {
+  onShow() {
     this.setData({ nickname: storage.getNickname() });
   },
 
@@ -66,17 +70,15 @@ Page({
     this.setData({ tags: event.detail.value });
   },
 
-  onNickname(event) {
-    this.setData({ nickname: event.detail.value });
-  },
-
   async save() {
-    const { picked, category, description, priceHint, hours, tags, nickname } = this.data;
+    const { picked, category, description, priceHint, hours, tags } = this.data;
     if (!picked) {
       wx.showToast({ title: '先选择一个位置', icon: 'none' });
       return;
     }
-    if (nickname.trim()) storage.setNickname(nickname.trim());
+    // 登录守卫：未登录静默登录；昵称未确认时弹层，确认后自动重试保存
+    const nickname = await auth.requireIdentity(this, () => this.save());
+    if (!nickname) return;
     this.setData({ saving: true });
     try {
       await api.createPlace(app.globalData.map.code, {
@@ -89,7 +91,6 @@ Page({
         address: picked.address,
         lng: picked.longitude,
         lat: picked.latitude,
-        added_by: nickname.trim(),
       });
       wx.showToast({ title: '已添加到地图' });
       setTimeout(() => wx.navigateBack(), 700);

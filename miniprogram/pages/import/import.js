@@ -1,6 +1,8 @@
 const app = getApp();
 const { api } = require('../../utils/api.js');
 const { CATEGORIES } = require('../../utils/config.js');
+const auth = require('../../utils/auth.js');
+const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
 
 // 解析逻辑与网页版 app.js 的 parseAmapShare 保持一致
@@ -48,17 +50,22 @@ function parseAmapShare(raw) {
 }
 
 Page({
+  behaviors: [identityBehavior],
+
   data: {
     raw: '',
     result: null, // 解析结果 {lng,lat,name,address} | {keyword} | {error}
     categories: CATEGORIES,
     category: CATEGORIES[0].id,
-    nickname: '',
+    nickname: '', // 登录身份展示用；署名由服务端按登录昵称盖章
     saving: false,
   },
 
-  onLoad() {
+  onShow() {
     this.setData({ nickname: storage.getNickname() });
+  },
+
+  onLoad() {
     // 高德 App 分享后直接进来：自动读剪贴板
     wx.getClipboardData({
       success: (res) => {
@@ -83,14 +90,12 @@ Page({
     this.setData({ category: this.data.categories[event.detail.value].id });
   },
 
-  onNickname(event) {
-    this.setData({ nickname: event.detail.value });
-  },
-
   async save() {
     const r = this.data.result;
     if (!r || r.error || r.keyword) return;
-    if (this.data.nickname.trim()) storage.setNickname(this.data.nickname.trim());
+    // 登录守卫：未登录静默登录；昵称未确认时弹层，确认后自动重试导入
+    const nickname = await auth.requireIdentity(this, () => this.save());
+    if (!nickname) return;
     this.setData({ saving: true });
     try {
       await api.createPlace(app.globalData.map.code, {
@@ -99,7 +104,6 @@ Page({
         address: r.address ?? '',
         lng: r.lng,
         lat: r.lat,
-        added_by: this.data.nickname.trim(),
       });
       wx.showToast({ title: '已导入' });
       setTimeout(() => wx.navigateBack({ delta: 2 }), 700);

@@ -1,4 +1,5 @@
 const { getJoinedMaps, getCurrentMapCode, setCurrentMapCode, saveJoinedMap } = require('./utils/storage.js');
+const { CLOUD_ENV_ID } = require('./utils/config.js');
 
 App({
   globalData: {
@@ -11,6 +12,10 @@ App({
   },
 
   onLaunch() {
+    // 微信云托管通道初始化（CLOUD_ENV_ID 为空时走 BASE_URL 直连，无需 init）
+    if (CLOUD_ENV_ID && wx.cloud) {
+      wx.cloud.init({ env: CLOUD_ENV_ID, traceUser: false });
+    }
     this.restoreSession();
   },
 

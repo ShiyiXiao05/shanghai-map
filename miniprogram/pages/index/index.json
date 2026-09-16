@@ -1,5 +1,4 @@
 {
   "navigationStyle": "custom",
-  "enablePullDownRefresh": true,
-  "backgroundTextStyle": "dark"
+  "disableScroll": true
 }

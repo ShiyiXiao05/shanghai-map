@@ -1,0 +1,13 @@
+# 密钥与本地状态绝不进镜像
+.git
+.env
+.env.*
+server/.env
+server/.env.local
+server/.neon
+
+node_modules
+**/node_modules
+.zcode
+.mimosa
+.DS_Store

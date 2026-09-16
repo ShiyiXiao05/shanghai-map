@@ -40,12 +40,12 @@
     <input class="input" value="{{tags}}" maxlength="100" placeholder="选填，逗号分隔，比如：椒麻鸡,面馆" bindinput="onTags" />
   </view>
 
-  <view class="field">
-    <text class="label">你的昵称</text>
-    <input class="input" value="{{nickname}}" maxlength="30" placeholder="记录是谁想去的" bindinput="onNickname" />
-  </view>
+  <view class="identity" wx:if="{{nickname}}">📮 将以「{{nickname}}」的身份添加</view>
+  <view class="identity" wx:else>📮 保存时需登录并确认昵称</view>
 
   <view class="btn btn-primary save" bindtap="save">{{saving ? '保存中…' : '保存到地图'}}</view>
 
   <view class="import-link" bindtap="goImport">📋 粘贴高德分享导入 →</view>
+
+  <nickname-modal show="{{nickModalShow}}" bind:confirm="onNickConfirm" bind:cancel="onNickCancel" />
 </view>

@@ -95,3 +95,9 @@
   flex: 1;
   min-width: 0;
 }
+
+.identity {
+  margin-top: 20rpx;
+  font-size: 24rpx;
+  color: var(--ink-faint);
+}

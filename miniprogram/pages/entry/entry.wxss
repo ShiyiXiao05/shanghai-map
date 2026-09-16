@@ -112,3 +112,9 @@
   width: 100%;
   box-sizing: border-box;
 }
+
+.identity {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: var(--ink-faint);
+}

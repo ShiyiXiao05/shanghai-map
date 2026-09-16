@@ -6,8 +6,9 @@ import { createPhotosRouter } from './routes/photos.js';
 import { createCommentsRouter } from './routes/comments.js';
 import { createItineraryRouter } from './routes/itinerary.js';
 import { createPushRouter } from './routes/push.js';
+import { createAuthRouter } from './routes/auth.js';
 
-export function buildApp({ store, mapConfig, uploader, pusher }) {
+export function buildApp({ store, mapConfig, uploader, pusher, auth }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(compression());
@@ -25,13 +26,18 @@ export function buildApp({ store, mapConfig, uploader, pusher }) {
     res.json({ key: mapConfig.key, securityJsCode: mapConfig.securityJsCode ?? '' });
   });
 
+  // 小程序登录：先挂身份中间件（解析 Bearer token → req.user），再挂 /api/auth
+  if (auth) {
+    app.use('/api', auth.middleware());
+    app.use('/api/auth', createAuthRouter({ auth, store }));
+  }
+
   app.use('/api/maps', createMapsRouter({ store, uploader }));
   app.use('/api/places', createPlacesRouter({ store, uploader, pusher }));
   app.use('/api', createPhotosRouter({ store, uploader, pusher }));
   app.use('/api', createCommentsRouter({ store, pusher }));
   app.use('/api/itinerary', createItineraryRouter({ store }));
   app.use('/api/push', createPushRouter({ store, pusher }));
-  app.use('/api/itinerary', createItineraryRouter({ store }));
 
   // 公共广场：无需邀请码的只读聚合（不含 map_code，不泄露各地图邀请码）
   app.get('/api/public/places', async (req, res, next) => {

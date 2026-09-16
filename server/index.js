@@ -6,6 +6,7 @@ import { buildApp } from './app.js';
 import { placeStore as productionStore, createPlaceStore } from './store.js';
 import { createCloudinaryUploader } from './uploader.js';
 import { createPusher } from './pusher.js';
+import { createAuth } from './auth.js';
 
 async function resolveStore() {
   if (productionStore) return productionStore;
@@ -41,11 +42,25 @@ if (!pusher.configured) {
   console.warn('未配置 VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY：Web Push 通知停用（配置后自动启用）');
 }
 
+const auth = createAuth({
+  appid: process.env.MINIPROGRAM_APPID,
+  secret: process.env.MINIPROGRAM_SECRET,
+  signSecret: process.env.AUTH_SECRET,
+  store,
+});
+if (!auth.configured) {
+  console.warn('未配置 MINIPROGRAM_APPID/MINIPROGRAM_SECRET：小程序登录停用（配置后自动启用）');
+}
+if (auth.ephemeralSecret) {
+  console.warn('未配置 AUTH_SECRET：登录 token 重启后失效，生产环境建议配置');
+}
+
 const app = buildApp({
   store,
   mapConfig: { key: process.env.AMAP_KEY, securityJsCode: process.env.AMAP_SECURITY_CODE },
   uploader,
   pusher,
+  auth,
 });
 app.use(
   express.static(publicDir, {

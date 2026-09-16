@@ -1,9 +1,12 @@
 const app = getApp();
 const { api } = require('../../utils/api.js');
 const { categoryMeta, CATEGORIES } = require('../../utils/config.js');
-const storage = require('../../utils/storage.js');
+const auth = require('../../utils/auth.js');
+const identityBehavior = require('../../utils/identity-behavior.js');
 
 Page({
+  behaviors: [identityBehavior],
+
   data: {
     place: null,
     meta: {},
@@ -88,7 +91,11 @@ Page({
     try {
       const photos = await api.listPhotos(this.mapCode(), this.placeId);
       this.setData({
-        photos: photos.map((p) => ({ ...p, fullUrl: api.photoUrl(this.mapCode(), p.id) })),
+        photos: photos.map((p) => ({
+          ...p,
+          // CDN 原图直链优先（预览不经过后端域名）；存量 DB 照片回落后端 302 端点
+          fullUrl: p.full || api.photoUrl(this.mapCode(), p.id),
+        })),
       });
     } catch {
       /* 无照片权限时静默 */
@@ -115,22 +122,11 @@ Page({
   },
 
   async toggleWish() {
-    let who = storage.getNickname();
-    if (!who) {
-      const { confirm, value } = await new Promise((resolve) =>
-        wx.showModal({
-          title: '先留个昵称',
-          editable: true,
-          placeholderText: '同学怎么称呼你',
-          success: (res) => resolve(res),
-        })
-      );
-      if (!confirm || !value.trim()) return;
-      who = value.trim();
-      storage.setNickname(who);
-    }
+    // 登录守卫：署名（who）由服务端按登录昵称盖章
+    const nickname = await auth.requireIdentity(this, () => this.toggleWish());
+    if (!nickname) return;
     try {
-      await api.toggleWish(this.mapCode(), this.placeId, who);
+      await api.toggleWish(this.mapCode(), this.placeId);
       this.refresh();
     } catch (err) {
       wx.showToast({ title: err.message, icon: 'none' });
@@ -155,6 +151,8 @@ Page({
 
   async addPhoto() {
     if (this.data.isPublicView) return;
+    const nickname = await auth.requireIdentity(this, () => this.addPhoto());
+    if (!nickname) return;
     const choose = await wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
@@ -172,7 +170,6 @@ Page({
       await api.uploadPhoto(this.mapCode(), this.placeId, {
         full: dataUrl,
         thumb: dataUrl,
-        addedBy: storage.getNickname(),
       });
       wx.hideLoading();
       wx.showToast({ title: '照片已添加' });
@@ -219,22 +216,11 @@ Page({
   async sendComment() {
     const body = this.data.commentText.trim();
     if (!body) return;
-    let who = storage.getNickname();
-    if (!who) {
-      const { confirm, value } = await new Promise((resolve) =>
-        wx.showModal({
-          title: '先留个昵称',
-          editable: true,
-          placeholderText: '同学怎么称呼你',
-          success: resolve,
-        })
-      );
-      if (!confirm || !value.trim()) return;
-      who = value.trim();
-      storage.setNickname(who);
-    }
+    // 登录守卫：署名（author）由服务端按登录昵称盖章
+    const nickname = await auth.requireIdentity(this, () => this.sendComment());
+    if (!nickname) return;
     try {
-      await api.createComment(this.mapCode(), this.placeId, { body, author: who });
+      await api.createComment(this.mapCode(), this.placeId, body);
       this.setData({ commentText: '' });
       this.loadComments();
     } catch (err) {

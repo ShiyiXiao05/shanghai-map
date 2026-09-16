@@ -132,6 +132,15 @@ export function createPlaceStore(pool) {
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_wishes_place_who ON place_wishes (place_id, who)'
     );
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        openid TEXT PRIMARY KEY,
+        nickname TEXT NOT NULL DEFAULT '',
+        avatar_url TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS itinerary_stops (
         id SERIAL PRIMARY KEY,
         map_code TEXT NOT NULL,
@@ -260,6 +269,34 @@ export function createPlaceStore(pool) {
       [mapCode]
     );
     return rows;
+  }
+
+  // ---------- 小程序登录用户 ----------
+
+  async function getUser(openid) {
+    const { rows } = await pool.query('SELECT openid, nickname FROM users WHERE openid = $1', [
+      openid,
+    ]);
+    return rows[0] ?? null;
+  }
+
+  // 登录即建档（幂等）：已有用户返回现昵称，新用户昵称为空待补填
+  async function ensureUser(openid) {
+    const inserted = await pool.query(
+      `INSERT INTO users (openid) VALUES ($1)
+       ON CONFLICT (openid) DO NOTHING RETURNING openid, nickname`,
+      [openid]
+    );
+    if (inserted.rows[0]) return inserted.rows[0];
+    return getUser(openid);
+  }
+
+  async function setNickname(openid, nickname) {
+    const { rows } = await pool.query(
+      'UPDATE users SET nickname = $2, updated_at = now() WHERE openid = $1 RETURNING openid, nickname',
+      [openid, nickname]
+    );
+    return rows[0] ?? null;
   }
 
   // 全量导出：map 元信息 + 每个地点（含新字段）的照片链接/留言/想去
@@ -533,13 +570,15 @@ export function createPlaceStore(pool) {
 
   async function listPhotos(placeId, mapCode) {
     const { rows } = await pool.query(
-      `SELECT id, mime, thumb_b64, thumb_url, added_by, created_at
+      `SELECT id, mime, thumb_b64, thumb_url, url, added_by, created_at
        FROM place_photos WHERE place_id = $1 AND map_code = $2 ORDER BY id ASC`,
       [placeId, mapCode]
     );
-    return rows.map(({ thumb_b64, thumb_url, mime, ...rest }) => ({
+    return rows.map(({ thumb_b64, thumb_url, url, mime, ...rest }) => ({
       ...rest,
       thumb: thumb_url || `data:${mime};base64,${thumb_b64}`,
+      // CDN 原图直链：小程序大图预览直接走 Cloudinary，不依赖后端域名；存量 DB 照片为 null
+      full: url || null,
     }));
   }
 
@@ -774,6 +813,9 @@ export function createPlaceStore(pool) {
     saveSubscription,
     removeSubscription,
     listSubscriptions,
+    getUser,
+    ensureUser,
+    setNickname,
   };
 }
 

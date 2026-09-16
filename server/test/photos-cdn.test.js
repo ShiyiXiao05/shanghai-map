@@ -92,6 +92,8 @@ describe('photos with CDN uploader', () => {
     assert.equal(list.photos.length, 1);
     assert.ok(list.photos[0].thumb.startsWith('https://res.cloudinary.com/'));
     assert.ok(!list.photos[0].thumb.startsWith('data:'));
+    // 原图直链直接下发，小程序预览大图不再经过后端域名
+    assert.ok(list.photos[0].full.startsWith('https://res.cloudinary.com/'));
 
     const full = await request('GET', `/api/photos/${id}?map=${map.code}`);
     assert.equal(full.status, 302);
@@ -112,5 +114,38 @@ describe('photos with CDN uploader', () => {
     const del = await request('DELETE', `/api/photos/${id}`, { mapCode: map.code });
     assert.equal(del.status, 204);
     assert.equal(uploader.destroyed.length, 1);
+  });
+});
+
+describe('photos without CDN uploader', () => {
+  let server;
+  let request;
+
+  beforeEach(async () => {
+    ({ server, request } = await startServer());
+  });
+
+  afterEach(async () => {
+    server.closeAllConnections();
+    await server.close();
+  });
+
+  it('存量 DB 照片：列表 full 为 null，客户端回落后端重定向端点', async () => {
+    const mapRes = await request('POST', '/api/maps', { body: { name: '周末' } });
+    const map = await mapRes.json();
+    await request('POST', '/api/places', { body: { ...validPlace, map_code: map.code } });
+    const place = await (await request('GET', `/api/places?map=${map.code}`)).json();
+
+    const upload = await request('POST', `/api/places/${place.places[0].id}/photos`, {
+      body: { map_code: map.code, full: tinyPng, thumb: tinyPng },
+    });
+    assert.equal(upload.status, 201);
+
+    const list = await (
+      await request('GET', `/api/places/${place.places[0].id}/photos?map=${map.code}`)
+    ).json();
+    assert.equal(list.photos.length, 1);
+    assert.ok(list.photos[0].thumb.startsWith('data:'));
+    assert.equal(list.photos[0].full, null);
   });
 });

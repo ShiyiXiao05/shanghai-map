@@ -97,4 +97,6 @@
       <view class="btn btn-primary" bindtap="saveEdit">保存</view>
     </view>
   </block>
+
+  <nickname-modal show="{{nickModalShow}}" bind:confirm="onNickConfirm" bind:cancel="onNickCancel" />
 </view>

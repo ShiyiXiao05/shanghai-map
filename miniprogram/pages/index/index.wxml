@@ -17,18 +17,21 @@
     </view>
   </view>
 
-  <!-- 地图 -->
-  <map
-    id="mainMap"
-    class="map"
-    longitude="{{longitude}}"
-    latitude="{{latitude}}"
-    scale="12"
-    markers="{{markers}}"
-    enable-poi="{{true}}"
-    show-location="{{false}}"
-    bindmarkertap="onMarkerTap"
-  ></map>
+  <!-- 地图（可全屏铺满整屏） -->
+  <view class="map-wrap {{isMapFs ? 'map-fs' : ''}}">
+    <map
+      id="mainMap"
+      class="map"
+      longitude="{{longitude}}"
+      latitude="{{latitude}}"
+      scale="12"
+      markers="{{markers}}"
+      enable-poi="{{true}}"
+      show-location="{{false}}"
+      bindmarkertap="onMarkerTap"
+    ></map>
+    <view class="map-fs-btn" bindtap="toggleMapFs">{{isMapFs ? '✕ 退出全屏' : '⛶ 全屏'}}</view>
+  </view>
 
   <!-- 底部列表面板 -->
   <view class="panel">
@@ -56,7 +59,15 @@
       </view>
     </view>
 
-    <scroll-view scroll-y class="place-scroll">
+    <!-- 下拉刷新：页面本身不可滚动（disableScroll），刷新手势收进列表内部 -->
+    <scroll-view
+      scroll-y
+      class="place-scroll"
+      refresher-enabled
+      refresher-triggered="{{refreshing}}"
+      refresher-default-style="{{isDark ? 'white' : 'black'}}"
+      bindrefresherrefresh="onRefresherRefresh"
+    >
       <view wx:if="{{filtered.length === 0 && !loading}}" class="empty">
         <text class="empty-icon">🌃</text>
         <text>{{places.length === 0 ? '这张地图还没有地点' : '这个筛选下没有地点'}}</text>

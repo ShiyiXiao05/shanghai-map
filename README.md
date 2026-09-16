@@ -30,16 +30,16 @@
 
 ### 📱 微信小程序（体验版）
 
-`miniprogram/` 目录是功能对齐网页版的微信小程序：原生 `<map>` 组件（腾讯底图同为 GCJ-02 坐标，数据零转换）、微信原生选点添加（`wx.chooseLocation`，无需位置服务 key）、高德分享导入、详情（照片/留言/想去/打卡）、回忆时间线、行程单、分享海报（canvas 生成存相册）、深浅双主题跟随系统。
+`miniprogram/` 目录是功能对齐网页版的微信小程序：原生 `<map>` 组件（腾讯底图同为 GCJ-02 坐标，数据零转换）、微信原生选点添加（`wx.chooseLocation`，无需位置服务 key）、高德分享导入、详情（照片/留言/想去/打卡）、回忆时间线、行程单、分享海报（canvas 生成存相册）、深浅双主题跟随系统、地图全屏。**登录署名**：所有写操作要求登录（静默 `wx.login` + 首次昵称确认，服务端按登录昵称盖章署名），需在后端配置 `MINIPROGRAM_APPID/MINIPROGRAM_SECRET/AUTH_SECRET`。
 
-本地预览：微信开发者工具导入 `miniprogram/` 目录（详情设置勾选「不校验合法域名」即可直连线上后端）；`utils/config.js` 的 `BASE_URL` 指向后端地址。当前用 `touristappid` 游客模式，正式体验版需替换为自己的 AppID。
+本地预览：微信开发者工具导入 `miniprogram/` 目录（AppID 已配置为正式号）。后端通道二选一：`utils/config.js` 填 `CLOUD_ENV_ID`（微信云托管，正式版通道，免域名备案，见 [docs/微信云托管部署指引.md](docs/微信云托管部署指引.md)）；留空则回落 `BASE_URL` 直连 Render（体验版需勾选「不校验合法域名」）。
 
 ## 技术栈
 
 - 前端：原生 HTML/CSS/JS + 高德地图 JS API 2.0（无构建，克隆即用），PWA（manifest + Service Worker）
 - 后端：Node.js + Express，`pg` 连接池，所有 SQL 静态字面量 + 参数绑定；gzip 压缩、照片内存缓存与 DB 索引
 - 数据库：Neon 免费托管 Postgres（数据持久保存）
-- 部署：Render 免费 Web Service（后端同时托管前端静态页）
+- 部署：双通道同一份代码——网页走 Render 免费 Web Service（后端同时托管前端静态页），小程序正式版走微信云托管（根目录 `Dockerfile`，`wx.cloud.callContainer` 调用，免域名备案），两端共用同一个 Neon
 
 ## 本地开发
 
@@ -61,6 +61,7 @@ npm --prefix server run dev
 2. **地图 key**：注册 [高德开放平台](https://console.amap.com)（需阿里云/淘宝账号）→ 创建应用 → 添加 Key，服务平台选 **Web端(JS API)** → 得到 key 与安全密钥，填入 `.env` 的 `AMAP_KEY`、`AMAP_SECURITY_CODE`
 3. **图床（推荐）**：注册 [Cloudinary](https://console.cloudinary.com)（免费、无需信用卡）→ Dashboard 的 API Keys 复制 `CLOUDINARY_URL` 填入 `.env`。配置后照片存 CDN、数据库只存链接（不占 Neon 存储）；不配置则照片存数据库。存量照片迁移：`cd server && node scripts/migrate-photos.mjs`
 4. **推送通知（可选）**：生成 VAPID 密钥对 `npx web-push generate-vapid-keys`，填入 `.env` 的 `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`（另加 `VAPID_SUBJECT=mailto:你的邮箱`）。不配置则 🔔 推送功能静默停用，其余功能不受影响
+5. **小程序登录（可选）**：在 [mp.weixin.qq.com](https://mp.weixin.qq.com) → 开发管理 → 开发设置 复制 AppID / AppSecret，填入 `MINIPROGRAM_APPID`、`MINIPROGRAM_SECRET`；再用 `openssl rand -base64 32` 生成 `AUTH_SECRET`。配置后小程序所有写操作要求登录（静默 `wx.login` + 首次确认昵称），地点/留言/想去/照片的署名由服务端按登录昵称盖章，不可冒名。不配置则小程序登录停用，写接口退回客户端昵称
 
 ## 和同学协作
 
@@ -72,6 +73,8 @@ npm --prefix server run dev
 
 | 方法 | 路径 | 说明 | 邀请码 |
 |---|---|---|---|
+| POST | /api/auth/login | 小程序登录：wx.login 的 code 换 token + 昵称状态 | — |
+| POST | /api/auth/profile | 设置/更新昵称（需 `Authorization: Bearer token`） | — |
 | POST | /api/maps | 创建地图，返回邀请码 | — |
 | PUT | /api/maps/:code | 地图改名 | — |
 | POST | /api/maps/:code/rekey | 换邀请码（旧码失效，地点随迁） | — |
@@ -105,6 +108,8 @@ npm --prefix server run dev
 
 邀请码无效返回 404；前端已自动处理。
 
+**登录与署名**：小程序端请求自动带 `Authorization: Bearer token`，服务端将 `added_by` / `author` / `who` / `createdBy` 一律盖章为登录昵称（客户端传值被忽略，防冒名）；网页端不带 token，行为不变（继续用请求里的昵称字段）。登录 token 过期时写操作返回 401，读操作不受影响。
+
 ## 部署手册
 
 把网站发布到公网（免费），让同学直接用网址访问：
@@ -136,18 +141,26 @@ git push -u origin main
 
 把 `https://xxx.onrender.com` 发给同学，让他们创建/加入地图即可。
 
+### 第 4 步（可选）：微信云托管——小程序正式版通道
+
+小程序正式发布要求 `request` 域名 HTTPS + ICP 备案，Render 域名无法满足。把同一份后端打成 Docker 镜像部署到**微信云托管**，小程序改走 `wx.cloud.callContainer` 官方通道即可免备案直接提审；网页端 Render 不动，两端共用数据库。前 3 个月免费，之后每月几毛钱。
+
+完整步骤（开通环境 → 绑定 GitHub 自动构建 → 配环境变量 → 回填环境 ID → 提审发布）见 **[docs/微信云托管部署指引.md](docs/微信云托管部署指引.md)**，代码侧已全部就绪。
+
 ## 项目结构
 
 ```
 server/   Express 后端（API + 静态托管）
   app.js        应用装配
   store.js      数据层（静态 SQL + 参数绑定、邀请码生成、生产连接池）
+  auth.js       小程序登录（code2Session + HMAC token；未配置时停用）
   pusher.js     Web Push 发送器（VAPID 未配置时停用）
   env.js        dotenv 引导
-  routes/       maps / places / photos / comments / itinerary / push 路由
-  test/         接口测试（node:test + pg-mem，49 个用例）
+  routes/       auth / maps / places / photos / comments / itinerary / push 路由
+  test/         接口测试（node:test + pg-mem，56 个用例）
 public/   前端（index.html / css / js，js 含照片客户端压缩）
-miniprogram/  微信小程序（原生 map 组件，功能对齐网页版）
-docs/     设计文档
-render.yaml  Render 部署蓝图
+miniprogram/  微信小程序（原生 map 组件，功能对齐网页版 + 登录署名；云托管 callContainer 通道，CLOUD_ENV_ID 留空回落 Render 直连）
+docs/     设计文档 + 微信云托管部署指引
+render.yaml  Render 部署蓝图（网页端）
+Dockerfile / container.config.json / .dockerignore  微信云托管镜像构建（小程序端）
 ```

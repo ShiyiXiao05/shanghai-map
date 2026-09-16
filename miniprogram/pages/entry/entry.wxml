@@ -33,10 +33,7 @@
       <text class="label">地图名称</text>
       <input class="input" value="{{name}}" maxlength="40" placeholder="比如：周末 citywalk" bindinput="onNameInput" />
     </view>
-    <view class="field">
-      <text class="label">你的昵称</text>
-      <input class="input" value="{{nickname}}" maxlength="30" placeholder="同学怎么称呼你（选填）" bindinput="onNicknameInput" />
-    </view>
+    <view class="identity">📮 创建者将记录为「{{nickname || '登录昵称'}}」</view>
     <view class="actions">
       <view class="btn" data-mode="list" bindtap="switchMode">返回</view>
       <view class="btn btn-primary" bindtap="createMap">创建，生成邀请码</view>
@@ -64,4 +61,6 @@
       <view class="btn btn-primary" bindtap="back">开始标记</view>
     </view>
   </view>
+
+  <nickname-modal show="{{nickModalShow}}" bind:confirm="onNickConfirm" bind:cancel="onNickCancel" />
 </view>
