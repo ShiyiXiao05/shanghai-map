@@ -5,7 +5,7 @@ export const BASE_URL = 'https://shanghai-wish-map.onrender.com';
 // 1.5 微信云托管（正式版通道）：开通云托管后填入环境 ID（形如 xxx-1a2b3c），
 // 所有请求自动改走 wx.cloud.callContainer，免域名备案、正式版可直接提审；
 // 留空则回落 wx.request 直连上面的 BASE_URL（体验版/本地调试用）
-export const CLOUD_ENV_ID = '';
+export const CLOUD_ENV_ID = 'shanghai-map-d4gh58zcjddcf3dc1';
 // 云托管服务名：与控制台创建的服务名一致（见 docs/微信云托管部署指引.md）
 export const CLOUD_SERVICE_NAME = 'shanghai-map';
 
