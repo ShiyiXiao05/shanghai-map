@@ -43,6 +43,7 @@ export function createMapView(container, { mapStyle = 'amap://styles/normal' } =
   let infoWindow = null;
   let pickHandler = null;
   let hotId = null;
+  let userMarker = null;
 
   function setHotClass(id, on) {
     const el = markers.get(id)?.marker.getElement();
@@ -243,5 +244,38 @@ export function createMapView(container, { mapStyle = 'amap://styles/normal' } =
     if (style) map.setMapStyle(style);
   }
 
-  return { map, setPlaces, openInfo, closeInfo, focus, highlight, setMapStyle, setPickMode, searchPois, reverseGeocode, showPickMarker, clearPickMarker };
+  async function locate() {
+    await new Promise((resolve, reject) => {
+      if (AMap.Geolocation) return resolve();
+      AMap.plugin('AMap.Geolocation', (ok) => (ok === false ? reject(new Error('定位插件加载失败')) : resolve()));
+    });
+    const geolocation = new AMap.Geolocation({
+      enableHighAccuracy: true,
+      timeout: 10000,
+      convert: true,
+      showMarker: false,
+      showCircle: false,
+    });
+    const position = await new Promise((resolve, reject) => {
+      geolocation.getCurrentPosition((status, result) => {
+        if (status === 'complete' && result?.position) resolve(result.position);
+        else reject(new Error(result?.message || '无法获取当前位置'));
+      });
+    });
+    const lng = Number(position.lng);
+    const lat = Number(position.lat);
+    if (userMarker) map.remove(userMarker);
+    userMarker = new AMap.Marker({
+      position: [lng, lat],
+      content: '<div class="user-location"><span></span></div>',
+      anchor: 'center',
+      zIndex: 200,
+      title: '我的位置',
+    });
+    map.add(userMarker);
+    map.setZoomAndCenter(14, [lng, lat], true);
+    return { lng, lat };
+  }
+
+  return { map, setPlaces, openInfo, closeInfo, focus, highlight, setMapStyle, setPickMode, searchPois, reverseGeocode, showPickMarker, clearPickMarker, locate };
 }

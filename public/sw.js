@@ -1,7 +1,7 @@
 /* 魔都·Explore Service Worker
    策略：核心静态资源预缓存 + stale-while-revalidate；API 一律走网络；跨域直通 */
 
-const CACHE_NAME = 'wishmap-static-v13';
+const CACHE_NAME = 'wishmap-static-v14';
 const CORE_ASSETS = [
   '/',
   '/css/style.css',

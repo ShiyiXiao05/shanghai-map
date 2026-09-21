@@ -81,11 +81,16 @@
 }
 
 /* 全屏按钮（悬浮于地图右下角） */
-.map-fs-btn {
+.map-tools {
   position: absolute;
   right: 24rpx;
   bottom: 24rpx;
   z-index: 5;
+  display: flex;
+  gap: 12rpx;
+}
+
+.map-tool-btn {
   padding: 12rpx 24rpx;
   border-radius: 999rpx;
   border: 1rpx solid var(--line);
@@ -94,6 +99,8 @@
   font-size: 24rpx;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.18);
 }
+
+.map-tool-random { border-color: var(--brick); }
 
 /* 全屏态：铺满整屏，盖住导航与底部面板 */
 .map-fs {
@@ -105,9 +112,70 @@
   z-index: 100;
 }
 
-.map-fs .map-fs-btn {
+.map-fs .map-tools {
   bottom: calc(40rpx + env(safe-area-inset-bottom));
 }
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.discover-sheet {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 30rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  border-radius: 24rpx 24rpx 0 0;
+  background: var(--card);
+}
+
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18rpx; }
+.sheet-title { color: var(--ink); font-size: 32rpx; font-weight: 700; }
+.sheet-sub { margin-top: 6rpx; color: var(--ink-faint); font-size: 22rpx; }
+.sheet-close { padding: 12rpx; color: var(--ink-soft); font-size: 28rpx; }
+
+.nearby-row {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  min-height: 92rpx;
+  padding: 8rpx 6rpx;
+  border-top: 1rpx solid var(--line);
+}
+.nearby-emoji { width: 54rpx; text-align: center; font-size: 34rpx; }
+.nearby-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5rpx; }
+.nearby-name { color: var(--ink); font-size: 28rpx; font-weight: 600; }
+.nearby-meta { color: var(--ink-faint); font-size: 21rpx; }
+.nearby-distance { flex: none; color: var(--metro); font-size: 23rpx; font-weight: 600; }
+
+.random-sheet { text-align: center; padding-top: 38rpx; }
+.random-sheet-close { position: absolute; top: 14rpx; right: 18rpx; }
+.random-kicker { margin-bottom: 20rpx; color: var(--ink-soft); font-size: 25rpx; }
+.random-card {
+  min-height: 300rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18rpx;
+  padding: 28rpx;
+  border: 1rpx solid var(--brick);
+  border-radius: 16rpx;
+  background: var(--paper);
+}
+.random-card-drawing { opacity: 0.82; transform: scale(0.99); }
+.random-emoji { font-size: 76rpx; }
+.random-name { max-width: 100%; color: var(--ink); font-size: 40rpx; font-weight: 700; word-break: break-all; }
+.random-meta { max-width: 100%; color: var(--ink-soft); font-size: 23rpx; }
+.random-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; margin-top: 22rpx; }
+.btn-disabled { opacity: 0.5; }
 
 /* 底部面板：border-box 让 safe-area 内边距算进 46vh，不把页面撑出屏幕 */
 .panel {

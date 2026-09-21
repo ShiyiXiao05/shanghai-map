@@ -59,11 +59,15 @@
         <button type="button" class="btn btn-small" id="btn-map-settings" title="地图设置：改名 / 换邀请码 / 删除">⚙️</button>
       </div>
       <div class="side-actions">
-        <button type="button" class="btn btn-small" id="btn-memories">📷 回忆</button>
-        <button type="button" class="btn btn-small" id="btn-poster">🖼 分享海报</button>
-        <button type="button" class="btn btn-small" id="btn-itinerary">🚶 行程</button>
-        <button type="button" class="btn btn-small" id="btn-push" title="有新地点/照片/留言时推送提醒">🔔</button>
+        <button type="button" class="btn btn-small side-icon-btn" id="btn-memories" aria-label="回忆" title="回忆">📷</button>
+        <button type="button" class="btn btn-small side-icon-btn" id="btn-poster" aria-label="分享海报" title="分享海报">🖼️</button>
+        <button type="button" class="btn btn-small side-icon-btn" id="btn-itinerary" aria-label="行程" title="行程">🚶</button>
+        <button type="button" class="btn btn-small side-icon-btn" id="btn-push" aria-label="推送提醒" title="有新地点/照片/留言时推送提醒">🔔</button>
         <select id="theme-select" class="sort-select" aria-label="配色主题"></select>
+      </div>
+      <div class="discover-actions">
+        <button type="button" class="btn btn-small" id="btn-nearby">◎ 离我最近</button>
+        <button type="button" class="btn btn-small btn-draw" id="btn-random">🎲 随机抽一个</button>
       </div>
       <div class="filters">
         <div class="category-chips" id="category-chips" role="group" aria-label="按分类筛选"></div>
@@ -282,6 +286,35 @@
       <div class="form-actions">
         <button type="button" class="btn" id="btn-itinerary-copy">📋 复制行程</button>
         <a class="btn btn-primary" id="btn-itinerary-nav" target="_blank" rel="noopener" href="#" hidden>🧭 高德导航</a>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="nearby-dialog" class="dialog dialog-narrow">
+    <div class="discover-body">
+      <header class="detail-head">
+        <div class="detail-title-group">
+          <h2>◎ 离我最近</h2>
+          <p class="detail-meta">按当前位置的直线距离排序</p>
+        </div>
+        <button type="button" class="detail-close" id="btn-nearby-close" aria-label="关闭">✕</button>
+      </header>
+      <div class="nearby-list" id="nearby-list"></div>
+    </div>
+  </dialog>
+
+  <dialog id="random-dialog" class="dialog dialog-random">
+    <div class="discover-body random-body">
+      <button type="button" class="detail-close random-close" id="btn-random-close" aria-label="关闭">✕</button>
+      <p class="random-kicker">今天去哪里？</p>
+      <div class="random-card" id="random-card" aria-live="polite">
+        <span class="random-emoji" id="random-emoji">🎲</span>
+        <strong id="random-name">准备抽取</strong>
+        <span id="random-meta">从当前地图的全部地点中随机选择</span>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btn-random-again">再抽一次</button>
+        <button type="button" class="btn btn-primary" id="btn-random-open" disabled>查看地点</button>
       </div>
     </div>
   </dialog>

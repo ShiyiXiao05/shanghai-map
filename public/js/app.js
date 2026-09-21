@@ -78,6 +78,8 @@ const state = {
   pickMode: false,
   sort: localStorage.getItem(SORT_KEY) || 'newest',
   loading: false,
+  userLocation: null,
+  randomPlace: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -1824,6 +1826,97 @@ function fmtWalk(km) {
   return minutes < 60 ? `${minutes} 分钟` : `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
 }
 
+function randomIndex(length) {
+  if (length <= 1) return 0;
+  if (globalThis.crypto?.getRandomValues) {
+    const limit = Math.floor(0x100000000 / length) * length;
+    const value = new Uint32Array(1);
+    do globalThis.crypto.getRandomValues(value); while (value[0] >= limit);
+    return value[0] % length;
+  }
+  return Math.floor(Math.random() * length);
+}
+
+async function openNearby() {
+  if (!state.mapView) {
+    toast('地图未启用，暂时无法定位', 'error');
+    return;
+  }
+  if (state.places.length === 0) {
+    toast('当前地图还没有地点', 'info');
+    return;
+  }
+  const button = $('#btn-nearby');
+  button.disabled = true;
+  button.textContent = '◎ 定位中…';
+  try {
+    state.userLocation = await state.mapView.locate();
+    const nearest = state.places
+      .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
+      .map((place) => ({ ...place, distanceKm: haversineKm(state.userLocation, place) }))
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 5);
+    const list = $('#nearby-list');
+    list.replaceChildren();
+    for (const place of nearest) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'nearby-item';
+      const meta = categoryMeta(place.category);
+      row.innerHTML = `<span class="nearby-emoji">${meta.emoji}</span><span class="nearby-main"><strong></strong><small></small></span><b>${fmtKm(place.distanceKm)}</b>`;
+      row.querySelector('strong').textContent = place.name;
+      row.querySelector('small').textContent = [place.category, place.address].filter(Boolean).join(' · ');
+      row.addEventListener('click', () => {
+        $('#nearby-dialog').close();
+        focusPlace(place);
+      });
+      list.appendChild(row);
+    }
+    $('#nearby-dialog').showModal();
+  } catch (err) {
+    toast(`定位失败：${err.message}`, 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = '◎ 离我最近';
+  }
+}
+
+let randomTimer = null;
+
+function drawRandomPlace() {
+  if (state.places.length === 0) {
+    toast('当前地图还没有地点', 'info');
+    return;
+  }
+  const dialog = $('#random-dialog');
+  if (!dialog.open) dialog.showModal();
+  clearInterval(randomTimer);
+  state.randomPlace = null;
+  $('#btn-random-open').disabled = true;
+  $('#btn-random-again').disabled = true;
+  $('#random-card').classList.add('is-drawing');
+  let ticks = 0;
+  randomTimer = setInterval(() => {
+    const preview = state.places[randomIndex(state.places.length)];
+    const meta = categoryMeta(preview.category);
+    $('#random-emoji').textContent = meta.emoji;
+    $('#random-name').textContent = preview.name;
+    $('#random-meta').textContent = preview.category;
+    ticks += 1;
+    if (ticks < 12) return;
+    clearInterval(randomTimer);
+    randomTimer = null;
+    state.randomPlace = state.places[randomIndex(state.places.length)];
+    const resultMeta = categoryMeta(state.randomPlace.category);
+    $('#random-emoji').textContent = resultMeta.emoji;
+    $('#random-name').textContent = state.randomPlace.name;
+    $('#random-meta').textContent = [state.randomPlace.category, state.randomPlace.address].filter(Boolean).join(' · ');
+    $('#random-card').classList.remove('is-drawing');
+    $('#btn-random-open').disabled = false;
+    $('#btn-random-again').disabled = false;
+  }, 70);
+}
+
 function itineraryPlaces() {
   const byId = new Map(state.places.map((p) => [p.id, p]));
   return itineraryIds.map((id) => byId.get(id)).filter(Boolean);
@@ -1999,6 +2092,22 @@ function bindExtras() {
   $('#btn-itinerary-close').addEventListener('click', () => $('#itinerary-dialog').close());
   $('#btn-itinerary-copy').addEventListener('click', copyItinerary);
   $('#btn-push').addEventListener('click', togglePush);
+  $('#btn-nearby').addEventListener('click', openNearby);
+  $('#btn-nearby-close').addEventListener('click', () => $('#nearby-dialog').close());
+  $('#btn-random').addEventListener('click', drawRandomPlace);
+  $('#btn-random-again').addEventListener('click', drawRandomPlace);
+  $('#btn-random-close').addEventListener('click', () => $('#random-dialog').close());
+  $('#random-dialog').addEventListener('close', () => {
+    clearInterval(randomTimer);
+    randomTimer = null;
+    $('#random-card').classList.remove('is-drawing');
+  });
+  $('#btn-random-open').addEventListener('click', () => {
+    if (!state.randomPlace) return;
+    $('#random-dialog').close();
+    focusPlace(state.randomPlace);
+    openDetail(state.randomPlace);
+  });
 }
 
 /* ---------- Web Push 通知 ---------- */

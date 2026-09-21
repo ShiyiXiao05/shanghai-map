@@ -5,6 +5,20 @@ const storage = require('../../utils/storage.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
+function haversineKm(a, b) {
+  const rad = Math.PI / 180;
+  const dLat = (Number(b.lat) - Number(a.latitude)) * rad;
+  const dLng = (Number(b.lng) - Number(a.longitude)) * rad;
+  const value =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(Number(a.latitude) * rad) * Math.cos(Number(b.lat) * rad) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(value));
+}
+
+function formatDistance(km) {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
 Page({
   data: {
     statusBarHeight: 20,
@@ -26,9 +40,18 @@ Page({
     isMapFs: false, // 地图全屏态
     refreshing: false, // 列表下拉刷新中
     isDark: false, // 跟随系统深色，控制下拉刷新指示器配色
+    showLocation: false,
+    nearbyOpen: false,
+    nearbyPlaces: [],
+    randomOpen: false,
+    randomDrawing: false,
+    randomPlace: null,
   },
 
   mapCtx: null,
+  randomTimer: null,
+
+  noop() {},
 
   onLoad(query) {
     const sys = wx.getSystemInfoSync();
@@ -82,6 +105,91 @@ Page({
 
   toggleMapFs() {
     this.setData({ isMapFs: !this.data.isMapFs });
+  },
+
+  onUnload() {
+    clearInterval(this.randomTimer);
+  },
+
+  locateNearby() {
+    if (this.data.places.length === 0) {
+      wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
+      return;
+    }
+    wx.showLoading({ title: '定位中…' });
+    wx.getLocation({
+      type: 'gcj02',
+      isHighAccuracy: true,
+      success: (location) => {
+        const nearest = this.data.places
+          .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
+          .map((place) => {
+            const distanceKm = haversineKm(location, place);
+            const meta = categoryMeta(place.category);
+            return { ...place, emoji: meta.emoji, distance: formatDistance(distanceKm), distanceKm };
+          })
+          .sort((a, b) => a.distanceKm - b.distanceKm)
+          .slice(0, 5);
+        this.setData({
+          longitude: location.longitude,
+          latitude: location.latitude,
+          showLocation: true,
+          nearbyPlaces: nearest,
+          nearbyOpen: true,
+        });
+      },
+      fail: (err) => {
+        const denied = String(err.errMsg || '').includes('auth deny');
+        wx.showToast({ title: denied ? '请在设置中允许位置权限' : '暂时无法获取位置', icon: 'none' });
+      },
+      complete: () => wx.hideLoading(),
+    });
+  },
+
+  closeNearby() {
+    this.setData({ nearbyOpen: false });
+  },
+
+  openNearbyPlace(event) {
+    const place = this.data.places.find((item) => item.id === Number(event.currentTarget.dataset.id));
+    if (!place) return;
+    this.setData({ nearbyOpen: false, longitude: place.lng, latitude: place.lat });
+    this.openDetail(place);
+  },
+
+  drawRandom() {
+    const places = this.data.places;
+    if (places.length === 0) {
+      wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
+      return;
+    }
+    clearInterval(this.randomTimer);
+    this.setData({ randomOpen: true, randomDrawing: true, randomPlace: null });
+    let ticks = 0;
+    this.randomTimer = setInterval(() => {
+      const place = places[Math.floor(Math.random() * places.length)];
+      const meta = categoryMeta(place.category);
+      this.setData({ randomPlace: { ...place, emoji: meta.emoji } });
+      ticks += 1;
+      if (ticks < 12) return;
+      clearInterval(this.randomTimer);
+      this.randomTimer = null;
+      this.setData({ randomDrawing: false });
+    }, 70);
+  },
+
+  closeRandom() {
+    clearInterval(this.randomTimer);
+    this.randomTimer = null;
+    this.setData({ randomOpen: false, randomDrawing: false });
+  },
+
+  openRandomPlace() {
+    const place = this.data.randomPlace;
+    if (!place || this.data.randomDrawing) return;
+    this.closeRandom();
+    this.setData({ longitude: place.lng, latitude: place.lat });
+    this.openDetail(place);
   },
 
   enterEntry() {

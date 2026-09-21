@@ -27,10 +27,14 @@
       scale="12"
       markers="{{markers}}"
       enable-poi="{{true}}"
-      show-location="{{false}}"
+      show-location="{{showLocation}}"
       bindmarkertap="onMarkerTap"
     ></map>
-    <view class="map-fs-btn" bindtap="toggleMapFs">{{isMapFs ? '✕ 退出全屏' : '⛶ 全屏'}}</view>
+    <view class="map-tools">
+      <view class="map-tool-btn" bindtap="locateNearby">◎ 附近</view>
+      <view class="map-tool-btn map-tool-random" bindtap="drawRandom">🎲 抽一个</view>
+      <view class="map-tool-btn" bindtap="toggleMapFs">{{isMapFs ? '✕ 退出' : '⛶ 全屏'}}</view>
+    </view>
   </view>
 
   <!-- 底部列表面板 -->
@@ -94,5 +98,41 @@
         <view class="place-wish" wx:if="{{item.wishCount > 0}}">♡ {{item.wishCount}}</view>
       </view>
     </scroll-view>
+  </view>
+
+  <view wx:if="{{nearbyOpen}}" class="modal-mask" bindtap="closeNearby">
+    <view class="discover-sheet" catchtap="noop">
+      <view class="sheet-head">
+        <view>
+          <view class="sheet-title">◎ 离我最近</view>
+          <view class="sheet-sub">按当前位置的直线距离排序</view>
+        </view>
+        <view class="sheet-close" bindtap="closeNearby">✕</view>
+      </view>
+      <view wx:for="{{nearbyPlaces}}" wx:key="id" class="nearby-row" data-id="{{item.id}}" bindtap="openNearbyPlace">
+        <text class="nearby-emoji">{{item.emoji}}</text>
+        <view class="nearby-main">
+          <text class="nearby-name">{{item.name}}</text>
+          <text class="nearby-meta ellipsis">{{item.category}}{{item.address ? ' · ' + item.address : ''}}</text>
+        </view>
+        <text class="nearby-distance">{{item.distance}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{randomOpen}}" class="modal-mask" bindtap="closeRandom">
+    <view class="discover-sheet random-sheet" catchtap="noop">
+      <view class="sheet-close random-sheet-close" bindtap="closeRandom">✕</view>
+      <view class="random-kicker">今天去哪里？</view>
+      <view class="random-card {{randomDrawing ? 'random-card-drawing' : ''}}">
+        <text class="random-emoji">{{randomPlace ? randomPlace.emoji : '🎲'}}</text>
+        <text class="random-name">{{randomPlace ? randomPlace.name : '准备抽取'}}</text>
+        <text class="random-meta">{{randomPlace ? randomPlace.category + (randomPlace.address ? ' · ' + randomPlace.address : '') : '从当前地图的全部地点中随机选择'}}</text>
+      </view>
+      <view class="random-actions">
+        <view class="btn" bindtap="drawRandom">再抽一次</view>
+        <view class="btn btn-primary {{randomDrawing ? 'btn-disabled' : ''}}" bindtap="openRandomPlace">查看地点</view>
+      </view>
+    </view>
   </view>
 </view>

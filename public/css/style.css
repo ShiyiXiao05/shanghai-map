@@ -692,6 +692,93 @@ button { font: inherit; }
 }
 
 .side-actions .btn { flex: 1; }
+.side-actions .side-icon-btn { flex: 0 0 38px; padding-inline: 0; font-size: 15px; }
+
+.discover-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 6px 14px 8px;
+  flex: none;
+}
+
+.btn-draw {
+  border-color: color-mix(in srgb, var(--brick) 55%, var(--line));
+  color: var(--ink);
+}
+
+.user-location {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, #1677ff 18%, transparent);
+  animation: location-pulse 1.8s ease-out infinite;
+}
+
+.user-location span {
+  width: 13px;
+  height: 13px;
+  box-sizing: border-box;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #1677ff;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.55);
+}
+
+@keyframes location-pulse {
+  0%, 45% { box-shadow: 0 0 0 0 rgba(22, 119, 255, 0.35); }
+  100% { box-shadow: 0 0 0 14px rgba(22, 119, 255, 0); }
+}
+
+.discover-body { padding: 22px 24px; }
+.nearby-list { display: grid; gap: 6px; margin-top: 14px; }
+
+.nearby-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nearby-item:hover { background: var(--metro-soft); }
+.nearby-emoji { font-size: 22px; text-align: center; }
+.nearby-main { min-width: 0; display: grid; gap: 3px; }
+.nearby-main strong, .nearby-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nearby-main small { color: var(--ink-faint); font-size: 11.5px; }
+.nearby-item > b { color: var(--metro); font-size: 12px; white-space: nowrap; }
+
+.dialog-random { width: 380px; }
+.random-body { position: relative; text-align: center; }
+.random-close { position: absolute; right: 14px; top: 12px; }
+.random-kicker { margin: 4px 0 14px; color: var(--ink-soft); font-size: 13px; }
+.random-card {
+  min-height: 176px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--brick) 48%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--card) 88%, var(--brick));
+  box-shadow: var(--shadow-card);
+}
+.random-card.is-drawing { animation: card-draw 0.14s ease-in-out infinite alternate; }
+.random-emoji { font-size: 44px; }
+.random-card strong { max-width: 100%; font-size: 23px; overflow-wrap: anywhere; }
+.random-card > span:last-child { color: var(--ink-soft); font-size: 12px; }
+@keyframes card-draw { to { transform: translateY(-3px) scale(1.01); } }
 
 /* 「我也想去」心形投票 */
 
