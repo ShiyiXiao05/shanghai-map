@@ -41,6 +41,13 @@ export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecu
   app.use('/api', createApiRateLimiters());
   // 3mb：照片上传的 base64 数据远大于普通 JSON 请求
   app.use(express.json({ limit: '3mb' }));
+  // 微信「消息推送」若把数据格式选成 XML：保留原始文本，由回调路由做兜底解析
+  app.use(
+    express.text({
+      type: (req) => /xml/i.test(req.headers['content-type'] || ''),
+      limit: '64kb',
+    })
+  );
 
   app.get('/api/health', (req, res) => {
     res.json({ ok: true });

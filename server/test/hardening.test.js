@@ -768,3 +768,65 @@ describe('照片缓存按字节计容', () => {
     }
   });
 });
+
+describe('微信消息推送 URL 校验握手（否则后台保存不了）', () => {
+  const token = 'e2e-msg-token';
+  function sign(ts, nonce) {
+    return createHash('sha1').update([token, ts, nonce].sort().join('')).digest('hex');
+  }
+  function makeSecurity() {
+    return createContentSecurity({
+      appid: 'wx',
+      secret: 's',
+      msgToken: token,
+      fetchImpl: async () => ({ json: async () => ({ access_token: 'tk', errcode: 0, trace_id: 'x' }) }),
+      logger: { warn() {} },
+    });
+  }
+
+  it('GET 带正确签名时原样回显 echostr；签名不符 403', async () => {
+    const { server, request } = await startServer({ contentSecurity: makeSecurity() });
+    try {
+      const ts = '1700000001';
+      const nonce = 'abc';
+      const ok = await request(
+        'GET',
+        `/api/wechat/media-check-callback?signature=${sign(ts, nonce)}&timestamp=${ts}&nonce=${nonce}&echostr=hello-wechat-123`
+      );
+      assert.equal(ok.status, 200);
+      assert.equal(await ok.text(), 'hello-wechat-123');
+
+      const bad = await request(
+        'GET',
+        `/api/wechat/media-check-callback?signature=deadbeef&timestamp=${ts}&nonce=${nonce}&echostr=x`
+      );
+      assert.equal(bad.status, 403);
+    } finally {
+      server.closeAllConnections();
+      await server.close();
+    }
+  });
+
+  it('数据格式选 XML 时也能解析审核结果', async () => {
+    const { server, request } = await startServer({ contentSecurity: makeSecurity() });
+    try {
+      const ts = '1700000002';
+      const nonce = 'xyz';
+      const sig = sign(ts, nonce);
+      const xml =
+        '<xml><ToUserName><![CDATA[gh_x]]></ToUserName>' +
+        '<Event><![CDATA[wxa_media_check]]></Event>' +
+        '<trace_id><![CDATA[xml-trace-1]]></trace_id>' +
+        '<result><suggest><![CDATA[risky]]></suggest><label>20001</label></result></xml>';
+      const res = await fetch(
+        `${server.address() ? `http://127.0.0.1:${server.address().port}` : ''}/api/wechat/media-check-callback?signature=${sig}&timestamp=${ts}&nonce=${nonce}`,
+        { method: 'POST', headers: { 'content-type': 'text/xml' }, body: xml }
+      );
+      assert.equal(res.status, 200);
+      assert.equal(await res.text(), 'success');
+    } finally {
+      server.closeAllConnections();
+      await server.close();
+    }
+  });
+});
