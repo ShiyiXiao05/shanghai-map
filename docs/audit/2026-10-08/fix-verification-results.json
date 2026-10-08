@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-08T07:33:36.224Z",
+  "checkedAt": "2026-10-08T08:22:56.897Z",
   "static": {
     "jsFiles": 54,
     "syntaxFailures": [],
@@ -12,7 +12,7 @@
       "available": true,
       "status": 0,
       "stderr": "",
-      "outputBytes": 99521
+      "outputBytes": 99560
     },
     "wxss": {
       "fileCount": 11,
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "CGP8U5",
+        "code": "BXFVCP",
         "placeId": 1
       }
     },
@@ -277,15 +277,15 @@
     "e2eSteps": 20,
     "e2eFailed": 0,
     "serverTests": {
-      "tests": 102,
-      "pass": 102,
+      "tests": 111,
+      "pass": 111,
       "fail": 0,
       "exitCode": 0
     }
   },
   "tests": {
-    "tests": 102,
-    "pass": 102,
+    "tests": 111,
+    "pass": 111,
     "fail": 0,
     "exitCode": 0
   }

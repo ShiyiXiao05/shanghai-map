@@ -16,7 +16,8 @@ jobs:
     steps:
       - name: Ping /api/health
         run: |
-          url="https://shanghai-wish-map.onrender.com/api/health"
+          # /api/ready 会顺带检查数据库；数据库挂了也该告警
+          url="https://shanghai-wish-map.onrender.com/api/ready"
           for attempt in 1 2 3; do
             # Render 免费实例休眠后首访会慢，超时给足；每次重试间隔 20s
             code=$(curl -sS -o /tmp/body.txt -w "%{http_code}" --max-time 60 "$url" || true)

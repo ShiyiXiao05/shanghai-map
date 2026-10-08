@@ -13,6 +13,7 @@ const requireServer = createRequire(path.join(root, 'server/package.json'));
 const { newDb } = requireServer('pg-mem');
 const { buildApp } = await import(path.join(root, 'server/app.js'));
 const { createPlaceStore } = await import(path.join(root, 'server/store.js'));
+const { createAuth } = await import(path.join(root, 'server/auth.js'));
 const { createContentSecurity } = await import(path.join(root, 'server/content-security.js'));
 const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 const input = { name: 'Local review place', category: '\u666f\u70b9', lng: 121.47, lat: 31.23 };
@@ -24,13 +25,14 @@ const originalError = console.error;
 console.warn = (...args) => warnings.push(args.map(String).join(' '));
 console.error = (...args) => errors.push(args.map((v) => v?.message || String(v)).join(' '));
 
-async function fixture({ uploader, contentSecurity } = {}) {
+async function fixture({ uploader, contentSecurity, authEnabled } = {}) {
   const db = newDb();
   const pg = db.adapters.createPg();
   const pool = new pg.Pool();
   const store = createPlaceStore(pool);
   await store.init();
-  const server = buildApp({ store, uploader, contentSecurity: contentSecurity || {
+  const auth = authEnabled ? createAuth({ appid: 'local-app', secret: 'local-secret', signSecret: 'local-signing-key', store, fetchSession: async () => ({ openid: 'local-user' }) }) : undefined;
+  const server = buildApp({ store, uploader, auth, contentSecurity: contentSecurity || {
     checkText: async () => ({ checked: false, pass: true }),
   } }).listen(0, '127.0.0.1');
   await new Promise((resolve) => server.once('listening', resolve));
@@ -274,6 +276,47 @@ try {
   assert.ok(timeline.query.includes('map=PRIV23'));
   assert.equal(reported.map_code, 'PRIV23');
   results.push({ id: 'R09-PUBLIC-SHARE-PRIVATE-MAP', status: 'reproduced-with-page-api-mocks', evidence: { publicReadOnlyView: page.data.isPublicView, sharePath: share.path, timelineQuery: timeline.query, reportMapCode: reported.map_code } });
+
+  await record('R12-ENTRY-PROFILE-WITHOUT-LOGIN', async ({ request }) => {
+    const miniRoot = path.join(root, 'miniprogram');
+    const cache = new Map();
+    const values = new Map();
+    const calls = [];
+    const toasts = [];
+    let loginCalls = 0;
+    let entry;
+    const wx = {
+      getStorageSync: (key) => values.get(key),
+      setStorageSync: (key, value) => values.set(key, value),
+      showToast: (options) => toasts.push(options.title),
+      login: async () => { loginCalls += 1; return { code: 'local-login-code' }; },
+      cloud: { callContainer: (options) => {
+        calls.push(options.path);
+        request(options.method, options.path, options.data).then((response) => options.success({ statusCode: response.status, data: response.data }), options.fail);
+      } },
+    };
+    function load(filename) {
+      if (cache.has(filename)) return cache.get(filename).exports;
+      const module = { exports: {} };
+      cache.set(filename, module);
+      let source = fs.readFileSync(filename, 'utf8');
+      const names = [...source.matchAll(/export\s+(?:async\s+)?(?:const|let|function)\s+(\w+)/g)].map((match) => match[1]);
+      source = source.replace(/import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?/g, 'const {$1} = require("$2");').replace(/export\s+(?=(?:async\s+)?(?:const|let|function))/g, '');
+      source += '\n' + names.map((name) => `exports.${name} = ${name};`).join('\n');
+      vm.runInNewContext(source, { module, exports: module.exports, wx, getApp: () => ({ globalData: {} }), Page: (definition) => { entry = definition; }, Behavior: (definition) => definition, require: (target) => load(path.resolve(path.dirname(filename), target)) }, { filename });
+      return module.exports;
+    }
+    load(path.join(miniRoot, 'pages/entry/entry.js'));
+    entry.data = structuredClone(entry.data);
+    entry.setData = function (patch) { Object.assign(this.data, patch); };
+    entry.editNickname();
+    const behavior = load(path.join(miniRoot, 'utils/identity-behavior.js'));
+    await behavior.methods.onNickConfirm.call(entry, { detail: 'Local nickname' });
+    assert.equal(loginCalls, 0);
+    assert.deepEqual(calls, ['/api/auth/profile']);
+    assert.equal(toasts[0], '\u8bf7\u5148\u767b\u5f55');
+    return { loginCalls, apiCalls: calls, toast: toasts[0], modalStillOpen: entry.data.nickModalShow };
+  }, { authEnabled: true });
 } finally {
   console.warn = originalWarn;
   console.error = originalError;

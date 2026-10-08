@@ -60,10 +60,14 @@ export function createWechatRouter({ store, contentSecurity }) {
         // 只有明确 pass 才算通过；review / risky 一律先隐藏（保守处置）
         const moderation = suggest === 'pass' ? 'pass' : 'risky';
         const updated = await store.setPhotoModerationByTrace(traceId, moderation);
-        console.warn(
-          `[media-check] trace=${traceId} suggest=${suggest} -> ${moderation}` +
-            (updated ? ` photo=${updated.id}` : ' (未匹配到照片)')
-        );
+        if (updated) {
+          console.warn(`[media-check] trace=${traceId} suggest=${suggest} -> ${moderation} photo=${updated.id}`);
+        } else {
+          // 回调可能早于 trace_id 落库（上传链路还在等送审响应）：
+          // 结果先存起来，等照片写入 trace_id 后再补关联，避免违规结果永久丢失（二次复核 P1-4）
+          await store.saveMediaCheckResult(traceId, moderation, JSON.stringify(req.body).slice(0, 2000));
+          console.warn(`[media-check] trace=${traceId} suggest=${suggest} -> ${moderation}（结果先到，已暂存待关联）`);
+        }
       } else {
         console.warn('[media-check] 回调缺少 trace_id/suggest，已忽略');
       }

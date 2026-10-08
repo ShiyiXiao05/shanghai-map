@@ -46,7 +46,7 @@
         <view class="btn" bindtap="goTrash">🗑 回收站</view>
         <view class="btn" bindtap="rekeyMap">🔄 换邀请码</view>
       </view>
-      <view class="hint">换码后旧邀请码立即失效，已加入的同学不受影响，但需要用新码邀请新人</view>
+      <view class="hint">换码后旧码立即失效；已加入的同学需要用新码重新加入（他们设备里存的是旧码），你自己会自动切换</view>
     </view>
   </view>
 

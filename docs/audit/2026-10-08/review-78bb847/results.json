@@ -1,6 +1,6 @@
 {
-  "revision": "2f8b63b747ff08990824efbfd866b70f3dd62e39",
-  "generatedAt": "2026-10-08T07:53:39.890Z",
+  "revision": "017bff70da156233f2cd0a0f3c728ed841220f2c",
+  "generatedAt": "2026-10-08T07:56:48.325Z",
   "database": "isolated pg-mem only",
   "externalServices": "mocked; no production mutations",
   "results": [
@@ -147,6 +147,18 @@
         "sharePath": "/pages/index/index?map=PRIV23&place=789",
         "timelineQuery": "map=PRIV23&place=789",
         "reportMapCode": "PRIV23"
+      }
+    },
+    {
+      "id": "R12-ENTRY-PROFILE-WITHOUT-LOGIN",
+      "status": "reproduced",
+      "evidence": {
+        "loginCalls": 0,
+        "apiCalls": [
+          "/api/auth/profile"
+        ],
+        "toast": "请先登录",
+        "modalStillOpen": true
       }
     }
   ],

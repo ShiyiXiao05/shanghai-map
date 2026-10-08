@@ -53,6 +53,24 @@ export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecu
     res.json({ ok: true });
   });
 
+  // 就绪探针：/api/health 只代表进程活着；这里额外确认数据库可用（监控用，不改 Render 健康检查语义）
+  app.get('/api/ready', async (req, res) => {
+    let timer;
+    try {
+      await Promise.race([
+        store.ping(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('数据库检查超时')), 3000);
+        }),
+      ]);
+      res.json({ ok: true, db: 'up' });
+    } catch (err) {
+      res.status(503).json({ ok: false, db: 'down', error: err?.message ?? '数据库不可用' });
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+
   app.get('/api/map-config', (req, res) => {
     if (!mapConfig || !mapConfig.key) {
       return res.status(503).json({ error: '服务端未配置高德 key（AMAP_KEY）' });

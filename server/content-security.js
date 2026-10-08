@@ -15,6 +15,10 @@ const STABLE_TOKEN_URL = 'https://api.weixin.qq.com/cgi-bin/stable_token';
 const MSG_SEC_CHECK_URL = 'https://api.weixin.qq.com/wxa/msg_sec_check';
 const MEDIA_CHECK_URL = 'https://api.weixin.qq.com/wxa/media_check_async';
 const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
+// 外部调用一律带超时：否则微信侧抖动会把写请求一直挂住（fail-open 前必须能返回）
+const TOKEN_TIMEOUT_MS = 5000;
+const TEXT_CHECK_TIMEOUT_MS = 3000;
+const MEDIA_CHECK_TIMEOUT_MS = 5000;
 
 export const RISKY_ERRCODE = 87014;
 export const MEDIA_TYPE_IMAGE = 2;
@@ -53,6 +57,7 @@ export function createContentSecurity({
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ grant_type: 'client_credential', appid, secret }),
+      signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
     });
     const data = await res.json();
     if (!data.access_token) {
@@ -90,6 +95,7 @@ export function createContentSecurity({
             scene,
             ...(openid ? { openid } : {}),
           }),
+          signal: AbortSignal.timeout(TEXT_CHECK_TIMEOUT_MS),
         }
       );
       const data = await res.json();
@@ -134,6 +140,7 @@ export function createContentSecurity({
             scene,
             ...(openid ? { openid } : {}),
           }),
+          signal: AbortSignal.timeout(MEDIA_CHECK_TIMEOUT_MS),
         }
       );
       const data = await res.json();

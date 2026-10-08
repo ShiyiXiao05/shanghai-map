@@ -17,7 +17,8 @@ export function createAuth({ appid, secret, signSecret, store, fetchSession }) {
         'https://api.weixin.qq.com/sns/jscode2session' +
         `?appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}` +
         `&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
-      const res = await fetch(url);
+      // 登录接口也要有超时：微信侧慢时不能让写请求无限等待
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
       const data = await res.json();
       if (data.errcode) {
         const err = new Error(data.errmsg || `微信登录失败（${data.errcode}）`);

@@ -30,14 +30,32 @@ export function createPhotosRouter({ store, uploader, pusher, contentSecurity })
 
   // 图片内容审核（异步）：送审成功则先标记 pending，结果由 mp 后台回调更新为 pass/risky。
   // 未配置 WECHAT_MSG_TOKEN 或送审失败都不影响上传本身（可用性优先）。
+  //
+  // 审核策略：**先发后审** —— pending/none 的照片照常展示，只有明确判为 risky 才从所有
+  // 读取路径隐藏（列表/回忆/公共广场/单张取图）。这是产品取舍：上传即可见，体验优先。
+  // 若要改成"先审后发"，把 store.js 各处过滤条件由 `moderation <> 'risky'` 改为
+  // `moderation = 'pass'` 即可，无需改动其它代码。
   async function submitMediaCheck(photoId, mapCode, openid, cdnUrl) {
     if (!contentSecurity?.mediaCheckAsync) return;
     const mediaUrl = cdnUrl || `${publicBase}/api/photos/${photoId}?map=${encodeURIComponent(mapCode)}`;
     const result = await contentSecurity.mediaCheckAsync(mediaUrl, { openid });
-    if (result.submitted) {
-      await store
-        .setPhotoModeration(photoId, { moderation: 'pending', traceId: result.traceId })
-        .catch(() => {});
+    if (!result.submitted) return;
+    try {
+      await store.setPhotoModeration(photoId, { moderation: 'pending', traceId: result.traceId });
+    } catch (err) {
+      // trace_id 写不进去 = 这张图的审核结果永远关联不上，必须留日志而不是静默吞掉
+      console.warn('[media-check] trace_id 落库失败：', err?.message ?? err);
+      return;
+    }
+    // 回调可能比 trace_id 更早到达：补一次关联
+    try {
+      const early = await store.getMediaCheckResult(result.traceId);
+      if (early) {
+        await store.setPhotoModerationByTrace(result.traceId, early.moderation);
+        console.warn(`[media-check] 已补关联早到的审核结果 trace=${result.traceId} -> ${early.moderation}`);
+      }
+    } catch (err) {
+      console.warn('[media-check] 补关联失败：', err?.message ?? err);
     }
   }
 
@@ -106,15 +124,21 @@ export function createPhotosRouter({ store, uploader, pusher, contentSecurity })
         } catch (err) {
           return res.status(502).json({ error: `照片上传失败：${err.message}` });
         }
-        const photo = await store.createPhoto({
-          placeId: id,
-          mapCode: code,
-          mime: full.mime,
-          addedBy,
-          publicId: uploaded.publicId,
-          url: uploaded.url,
-          thumbUrl: uploaded.thumbUrl,
-        });
+        const photo = await store
+          .createPhoto({
+            placeId: id,
+            mapCode: code,
+            mime: full.mime,
+            addedBy,
+            publicId: uploaded.publicId,
+            url: uploaded.url,
+            thumbUrl: uploaded.thumbUrl,
+          })
+          .catch(async (err) => {
+            // 图已传到 CDN 但入库失败：销毁远端资源，避免孤儿文件占额度（二次复核 P2-8）
+            await uploader.destroy(uploaded.publicId).catch(() => {});
+            throw err;
+          });
         if (!(await enforcePhotoLimit(id, code, photo.id))) {
           return res.status(400).json({ error: `每个地点最多 ${MAX_PHOTOS_PER_PLACE} 张照片` });
         }
@@ -129,20 +153,20 @@ export function createPhotosRouter({ store, uploader, pusher, contentSecurity })
         return;
       }
 
-      // 缩略图可选：新客户端会按 /api/upload-config 的预算传一张小图；
-      // 未提供时退回用原图，保证功能不因缺字段而 400
-      let thumbB64 = full.b64;
+      // 未配置图床时缩略图必传：否则列表只能内联原图，响应体没有量级上限
+      // （客户端按 /api/upload-config 的 maxThumbBytes 预算压缩后再传）
       const thumbProvided = body.thumb !== undefined && body.thumb !== null && body.thumb !== '';
-      if (thumbProvided) {
-        const thumb = parseImageDataUrl(body.thumb, '缩略图');
-        if (thumb.error) return res.status(400).json({ error: thumb.error });
-        if (thumb.bytes > MAX_THUMB_BYTES) {
-          return res
-            .status(400)
-            .json({ error: `缩略图需小于 ${Math.floor(MAX_THUMB_BYTES / 1024)}KB，请重新选择照片` });
-        }
-        thumbB64 = thumb.b64;
+      if (!thumbProvided) {
+        return res.status(400).json({ error: '缺少缩略图（thumb）：未配置图床时需随原图一起上传' });
       }
+      const thumb = parseImageDataUrl(body.thumb, '缩略图');
+      if (thumb.error) return res.status(400).json({ error: thumb.error });
+      if (thumb.bytes > MAX_THUMB_BYTES) {
+        return res
+          .status(400)
+          .json({ error: `缩略图需小于 ${Math.floor(MAX_THUMB_BYTES / 1024)}KB，请重新选择照片` });
+      }
+      const thumbB64 = thumb.b64;
       const photo = await store.createPhoto({
         placeId: id,
         mapCode: code,

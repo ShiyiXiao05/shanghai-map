@@ -104,15 +104,39 @@ describe('上传能力协商与照片契约', () => {
     assert.equal(cfg.cdn, true);
   });
 
-  it('thumb 可省略：只传 full 也能入库，列表回退用原图渲染', async () => {
+  it('未配图床时缺少 thumb 返回 400（避免列表内联原图导致响应体失控）', async () => {
     ({ server, request, seed } = await startServer());
     const { map, place } = await seed();
     const up = await request('POST', `/api/places/${place.id}/photos`, {
       body: { map_code: map.code, full: png },
     });
-    assert.equal(up.status, 201);
-    const list = await (await request('GET', `/api/places/${place.id}/photos?map=${map.code}`)).json();
-    assert.match(list.photos[0].thumb, /^data:image\/png;base64,/);
+    assert.equal(up.status, 400);
+    assert.match((await up.json()).error, /缩略图/);
+  });
+
+  it('存量数据（有原图无缩略图）：小图内联兜底，大图不内联', async () => {
+    ({ server, request, store, seed } = await startServer());
+    const { map, place } = await seed();
+    const small = await store.createPhoto({
+      placeId: place.id,
+      mapCode: map.code,
+      mime: 'image/png',
+      fullB64: 'A'.repeat(1200), // 约 900B
+      thumbB64: '',
+    });
+    const big = await store.createPhoto({
+      placeId: place.id,
+      mapCode: map.code,
+      mime: 'image/png',
+      fullB64: 'B'.repeat(200 * 1024), // 约 150KB，超过内联上限
+      thumbB64: '',
+    });
+    const list = await (
+      await request('GET', `/api/places/${place.id}/photos?map=${map.code}`)
+    ).json();
+    const byId = new Map(list.photos.map((p) => [p.id, p]));
+    assert.match(byId.get(small.id).thumb, /^data:image\/png;base64,/);
+    assert.equal(byId.get(big.id).thumb, '', '大图不应内联进列表');
   });
 
   it('缩略图超过 64KB 返回 400 且给出可读原因', async () => {
@@ -827,6 +851,259 @@ describe('微信消息推送 URL 校验握手（否则后台保存不了）', ()
     } finally {
       server.closeAllConnections();
       await server.close();
+    }
+  });
+});
+
+
+
+// 每个用例自建服务并在 finally 中关闭，避免共享变量与残留监听
+describe('二次复核问题的回归测试', () => {
+  const uploaderOk = {
+    configured: true,
+    async upload() {
+      return { publicId: 'cdn-1', url: 'https://cdn.example/1.jpg', thumbUrl: 'https://cdn.example/1-t.jpg' };
+    },
+    async destroy() {},
+  };
+
+  function makeSecurity({ token, traceId }) {
+    const fetchImpl = async (url) => {
+      if (String(url).includes('stable_token')) {
+        return { json: async () => ({ access_token: 'tk', expires_in: 7200 }) };
+      }
+      if (String(url).includes('media_check_async')) {
+        return { json: async () => ({ errcode: 0, trace_id: traceId }) };
+      }
+      return { json: async () => ({ errcode: 0, result: { suggest: 'pass' } }) };
+    };
+    return createContentSecurity({ appid: 'wx', secret: 's', msgToken: token, fetchImpl, logger: { warn() {} } });
+  }
+
+  function signCallback(token, timestamp, nonce) {
+    return createHash('sha1').update([token, timestamp, nonce].sort().join('')).digest('hex');
+  }
+
+  it('P1-2 换码撞上已有地图的码：不搬走对方数据，换码最终成功', async () => {
+    let collisionCode = null;
+    const db = newDb();
+    const pgLib = db.adapters.createPg();
+    const pool = new pgLib.Pool();
+    // 注入可预测的生成器：第一次返回 B 的码（制造唯一约束碰撞），之后返回 ZZZZZZ
+    const store = createPlaceStore(pool, {
+      generateCode: () => {
+        if (collisionCode) {
+          const code = collisionCode;
+          collisionCode = null;
+          return code;
+        }
+        return 'ZZZZZZ';
+      },
+    });
+    await store.init();
+    const app = buildApp({ store, mapConfig: { key: 'k' } });
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const request = (method, route, body) =>
+      fetch(base + route, {
+        method,
+        headers: body === undefined ? {} : { 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    try {
+      const b = await (await request('POST', '/api/maps', { name: 'B' })).json();
+      const a = await (await request('POST', '/api/maps', { name: 'A' })).json();
+      const pa = await (await request('POST', '/api/places', { ...placeBody, map_code: a.code })).json();
+      const pb = await (await request('POST', '/api/places', { ...placeBody, map_code: b.code })).json();
+      assert.ok(pa.id && pb.id, '前置数据准备失败：' + JSON.stringify([pa, pb]));
+
+      collisionCode = b.code; // 下一次生成的码 = B 的码 → 制造唯一约束碰撞
+      const res = await request('POST', `/api/maps/${a.code}/rekey`, {});
+      assert.equal(res.status, 200);
+      const next = await res.json();
+      assert.notEqual(next.code, a.code);
+      assert.notEqual(next.code, b.code);
+
+      const aPlaces = await (await request('GET', `/api/places?map=${next.code}`)).json();
+      const bPlaces = await (await request('GET', `/api/places?map=${b.code}`)).json();
+      assert.equal(aPlaces.places.length, 1, 'A 的地点应跟着新码');
+      assert.equal(aPlaces.places[0].id, pa.id);
+      assert.equal(bPlaces.places.length, 1, 'B 的地点必须留在 B，不能被搬走');
+      assert.equal(bPlaces.places[0].id, pb.id);
+    } finally {
+      server.closeAllConnections();
+      await server.close();
+      await pool.end();
+    }
+  });
+
+  it('P1-3 判违规后原图缓存立即失效（不再返回 302/200）', async () => {
+    const token = 'regress-token';
+    const f = await startServer({ uploader: uploaderOk, contentSecurity: makeSecurity({ token, traceId: 'trace-risky' }) });
+    try {
+      const map = await (await f.request('POST', '/api/maps', { body: { name: 'M' } })).json();
+      const place = await (
+        await f.request('POST', '/api/places', { body: { ...placeBody, map_code: map.code } })
+      ).json();
+      const photo = await (
+        await f.request('POST', `/api/places/${place.id}/photos`, { body: { map_code: map.code, full: png } })
+      ).json();
+      const url = `/api/photos/${photo.id}?map=${map.code}`;
+      // 302 指向 CDN 域名，必须手动处理重定向，否则 fetch 会跟随并因 DNS 失败报错
+      const base = `http://127.0.0.1:${f.server.address().port}`;
+      const raw = (route) => fetch(base + route, { redirect: 'manual' });
+      assert.equal((await raw(url)).status, 302, '先建立缓存');
+      const ts = '1700000010';
+      const nonce = 'n1';
+      const sig = signCallback(token, ts, nonce);
+      const cb = await f.request(
+        'POST',
+        `/api/wechat/media-check-callback?signature=${sig}&timestamp=${ts}&nonce=${nonce}`,
+        { body: { trace_id: 'trace-risky', result: { suggest: 'risky' } } }
+      );
+      assert.equal(cb.status, 200);
+      assert.equal((await raw(url)).status, 404, '违规后原图必须不可读');
+    } finally {
+      f.server.closeAllConnections();
+      await f.server.close();
+    }
+  });
+
+  it('P1-4 回调早于 trace_id 落库时结果不丢：照片写入后立即按违规处理', async () => {
+    const token = 'regress-token-2';
+    const f = await startServer({ uploader: uploaderOk, contentSecurity: makeSecurity({ token, traceId: 'trace-early' }) });
+    try {
+      const ts = '1700000011';
+      const nonce = 'n2';
+      const sig = signCallback(token, ts, nonce);
+      const early = await f.request(
+        'POST',
+        `/api/wechat/media-check-callback?signature=${sig}&timestamp=${ts}&nonce=${nonce}`,
+        { body: { trace_id: 'trace-early', result: { suggest: 'risky' } } }
+      );
+      assert.equal(early.status, 200);
+      const map = await (await f.request('POST', '/api/maps', { body: { name: 'M' } })).json();
+      const place = await (
+        await f.request('POST', '/api/places', { body: { ...placeBody, map_code: map.code } })
+      ).json();
+      const up = await f.request('POST', `/api/places/${place.id}/photos`, {
+        body: { map_code: map.code, full: png },
+      });
+      assert.equal(up.status, 201);
+      const list = await (await f.request('GET', `/api/places/${place.id}/photos?map=${map.code}`)).json();
+      assert.equal(list.photos.length, 0, '早到的违规结果应在照片写入后立即生效');
+    } finally {
+      f.server.closeAllConnections();
+      await f.server.close();
+    }
+  });
+
+  it('P2-6 被判违规的照片不再占用 9 张配额', async () => {
+    const f = await startServer({ uploader: uploaderOk });
+    try {
+      const { map, place } = await f.seed();
+      for (let i = 0; i < 3; i += 1) {
+        const r = await f.request('POST', `/api/places/${place.id}/photos`, {
+          body: { map_code: map.code, full: png },
+        });
+        assert.equal(r.status, 201);
+      }
+      const list = await (await f.request('GET', `/api/places/${place.id}/photos?map=${map.code}`)).json();
+      for (const p of list.photos) await f.store.setPhotoModeration(p.id, { moderation: 'risky' });
+      for (let i = 0; i < 3; i += 1) {
+        const r = await f.request('POST', `/api/places/${place.id}/photos`, {
+          body: { map_code: map.code, full: png },
+        });
+        assert.equal(r.status, 201, '违规照片不应占用配额');
+      }
+      const after = await (await f.request('GET', `/api/places/${place.id}/photos?map=${map.code}`)).json();
+      assert.equal(after.photos.length, 3, '只显示新上传的 3 张');
+    } finally {
+      f.server.closeAllConnections();
+      await f.server.close();
+    }
+  });
+
+  it('P2-7 换码会迁移举报记录', async () => {
+    const f = await startServer();
+    try {
+      const map = await (await f.request('POST', '/api/maps', { body: { name: 'M' } })).json();
+      const place = await (
+        await f.request('POST', '/api/places', { body: { ...placeBody, map_code: map.code } })
+      ).json();
+      await f.request('POST', '/api/reports', {
+        body: { target_type: 'place', target_id: place.id, reason: '不实信息', map_code: map.code },
+      });
+      const changed = await (await f.request('POST', `/api/maps/${map.code}/rekey`, {})).json();
+      const list = await (await f.request('GET', `/api/reports?map=${changed.code}`)).json();
+      assert.equal(list.reports.length, 1, '举报应随码迁移');
+      assert.equal((await f.request('DELETE', `/api/maps/${changed.code}`)).status, 204);
+    } finally {
+      f.server.closeAllConnections();
+      await f.server.close();
+    }
+  });
+
+  it('P2-8 图片已上传但入库失败时销毁 CDN 资源，不留孤儿', async () => {
+    const destroyed = [];
+    const uploader = {
+      configured: true,
+      async upload() {
+        return { publicId: 'orphan-1', url: 'https://cdn.example/o.jpg', thumbUrl: 'https://cdn.example/o-t.jpg' };
+      },
+      async destroy(publicId) {
+        destroyed.push(publicId);
+      },
+    };
+    const f = await startServer({ uploader });
+    try {
+      const { map, place } = await f.seed();
+      f.store.createPhoto = async () => {
+        throw new Error('模拟入库失败');
+      };
+      const res = await f.request('POST', `/api/places/${place.id}/photos`, {
+        body: { map_code: map.code, full: png },
+      });
+      assert.equal(res.status, 500);
+      assert.deepEqual(destroyed, ['orphan-1']);
+    } finally {
+      f.server.closeAllConnections();
+      await f.server.close();
+    }
+  });
+
+  it('P2-11 导出包含数据库照片内容', async () => {
+    const f = await startServer();
+    try {
+      const { map, place } = await f.seed();
+      await f.request('POST', `/api/places/${place.id}/photos`, {
+        body: { map_code: map.code, full: png, thumb: png },
+      });
+      const data = await (await f.request('GET', `/api/maps/${map.code}/export`)).json();
+      const photo = data.places[0].photos[0];
+      assert.ok(photo.content_b64 && photo.content_b64.length > 0, '未走 CDN 的照片应导出内容');
+    } finally {
+      f.server.closeAllConnections();
+      await f.server.close();
+    }
+  });
+
+  it('P2-12 /api/ready 反映数据库状态', async () => {
+    const f = await startServer();
+    try {
+      const ok = await f.request('GET', '/api/ready');
+      assert.equal(ok.status, 200);
+      assert.equal((await ok.json()).db, 'up');
+      f.store.ping = async () => {
+        throw new Error('数据库挂了');
+      };
+      const down = await f.request('GET', '/api/ready');
+      assert.equal(down.status, 503);
+      assert.equal((await down.json()).db, 'down');
+    } finally {
+      f.server.closeAllConnections();
+      await f.server.close();
     }
   });
 });

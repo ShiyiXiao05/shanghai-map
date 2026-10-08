@@ -165,7 +165,7 @@ server/   Express 后端（API + 静态托管）
   pusher.js     Web Push 发送器（VAPID 未配置时停用）
   env.js        dotenv 引导
   routes/       auth / maps / places / photos / comments / itinerary / push 路由
-  test/         接口测试（node:test + pg-mem，100 个用例，含安全头/上传契约/数据一致性/限流/内容安全/举报/图片审核/缓存/进程健壮性）
+  test/         接口测试（node:test + pg-mem，111 个用例，含安全头/上传契约/数据一致性/限流/内容安全/举报/图片审核/缓存/换码原子性/回调时序/进程健壮性）
 public/   前端（index.html / css / js，js 含照片客户端压缩）
 miniprogram/  微信小程序（原生 map 组件，功能对齐网页版 + 登录署名；云托管 callContainer 通道，CLOUD_ENV_ID 留空回落 Render 直连）
 docs/     设计文档 + 微信云托管部署指引

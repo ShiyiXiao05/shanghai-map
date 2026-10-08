@@ -1,9 +1,9 @@
 {
-  "revision": "2f8b63b747ff08990824efbfd866b70f3dd62e39",
-  "generatedAt": "2026-10-08T07:53:52.506Z",
+  "revision": "017bff70da156233f2cd0a0f3c728ed841220f2c",
+  "generatedAt": "2026-10-08T07:57:03.731Z",
   "nodeVersion": "v26.3.0",
   "syntax": {
-    "fileCount": 55,
+    "fileCount": 54,
     "failures": []
   },
   "json": {
@@ -119,7 +119,7 @@
       "ℹ fail 0",
       "ℹ cancelled 0",
       "ℹ skipped 0",
-      "ℹ duration_ms 1410.154375"
+      "ℹ duration_ms 1591.861708"
     ]
   },
   "dependencies": {
@@ -150,13 +150,13 @@
     {
       "endpoint": "/api/health",
       "status": 200,
-      "elapsedMs": 962,
+      "elapsedMs": 917,
       "ok": true
     },
     {
       "endpoint": "/api/upload-config",
       "status": 200,
-      "elapsedMs": 627,
+      "elapsedMs": 259,
       "cdn": true,
       "maxFullBytes": 1572864,
       "maxThumbBytes": 65536
@@ -164,13 +164,13 @@
     {
       "endpoint": "/api/public/places",
       "status": 200,
-      "elapsedMs": 3240,
+      "elapsedMs": 2765,
       "publicPlaceCount": 5
     },
     {
       "endpoint": "/api/admin/wechat-privacy",
       "status": 404,
-      "elapsedMs": 411
+      "elapsedMs": 5027
     }
   ],
   "productionScope": "four public GETs; no production writes, private map queries, or external WeChat/Cloudinary calls"

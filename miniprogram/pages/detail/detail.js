@@ -34,6 +34,8 @@ Page({
 
   onLoad(query) {
     this.placeId = Number(query.placeId);
+    // 只读标记：进页面先按全局会话判定，refresh() 拿到接口结果后再以 found.publicOnly 为准
+    this.publicOnly = Boolean(app.globalData && app.globalData.isPublicView);
     if (!this.placeId) this.setData({ loading: false, loadError: '缺少地点参数，请从列表重新进入' });
   },
 
@@ -64,6 +66,8 @@ Page({
   },
 
   mapCode() {
+    // 公开广场的只读详情：即便本地已加入某张私人地图，也绝不能把它的邀请码带进分享/举报
+    if (this.publicOnly) return '';
     return app.globalData.map?.code ?? '';
   },
 
@@ -134,6 +138,8 @@ Page({
       return;
     }
     const place = found.place;
+    // 同步只读标记：公开回落的详情页据此不带邀请码分享/举报（isPublicView 仍照旧只用于 UI）
+    this.publicOnly = Boolean(found.publicOnly);
     if (!place) {
       this.setData({ loading: false, loadError: '地点不存在或已下架' });
       return;

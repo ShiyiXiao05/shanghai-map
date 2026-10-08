@@ -126,8 +126,24 @@ Page({
   },
 
   // 改昵称：直接复用既有昵称弹层（identity-behavior 的 onNickConfirm 会调 updateProfile 落库）
-  editNickname() {
+  async editNickname() {
+    try {
+      await auth.ensureLogin(); // 没有 token 时 /api/auth/profile 会 401「请先登录」，先静默登录
+    } catch (err) {
+      wx.showToast({ title: (err && err.message) || '登录失败，请重试', icon: 'none' });
+      return;
+    }
     this.setData({ nickModalShow: true });
+  },
+
+  // 覆盖 identity-behavior 的同名方法：多一步把新昵称同步到本页展示
+  async onNickConfirm(event) {
+    try {
+      const saved = await auth.confirmNickname(this, event.detail);
+      if (saved) this.setData({ nickname: saved });
+    } catch (err) {
+      wx.showToast({ title: (err && err.message) || '保存失败，请重试', icon: 'none' });
+    }
   },
 
   // 退出登录：清本地 token 与昵称。不清地图，重新写操作时会静默重新登录
@@ -150,7 +166,7 @@ Page({
     if (!oldCode) return;
     wx.showModal({
       title: '换邀请码',
-      content: '旧邀请码会立即失效。已经加入的同学不受影响，之后邀请新人要用新码。',
+      content: '旧邀请码会立即失效。其他同学设备里保存的还是旧码，需要用新码重新加入一次；你自己不受影响（会自动切换）。',
       confirmText: '确认更换',
       success: async (res) => {
         if (!res.confirm) return;
