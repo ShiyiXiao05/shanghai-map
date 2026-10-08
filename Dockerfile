@@ -1,5 +1,5 @@
 # 微信云托管镜像：构建上下文为仓库根目录（GitHub 绑定构建默认根上下文）
-# Render 不使用本文件（render.yaml 指定 rootDir: server + runtime: node）
+# Render 不使用本文件（render.yaml 使用仓库根目录 + runtime: node）
 FROM node:20-alpine AS deps
 WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./

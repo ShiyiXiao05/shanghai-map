@@ -16,3 +16,7 @@ server/.agents/
 
 # 系统文件
 .DS_Store
+
+# 本机生成的 Android 更新发布文件（由发布部署上传）
+public/android/*.apk
+public/android/update.json

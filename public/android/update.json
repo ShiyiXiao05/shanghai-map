@@ -1,0 +1,8 @@
+{
+  "packageName": "com.modu.explore",
+  "versionCode": 2,
+  "versionName": "0.2.0",
+  "apkUrl": "https://shanghai-wish-map.onrender.com/android/modu-explore-0.2.0.apk",
+  "sha256": "be92c6f47a8eec0f9ba2492e630add1fab4d102e610440f2b1ebfa6c77bdca6a",
+  "notes": "地图标记更清晰；点击地点先显示简介；支持应用内检查和下载更新。"
+}

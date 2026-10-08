@@ -40,6 +40,10 @@
 
 本地预览：微信开发者工具导入 `miniprogram/` 目录（AppID 已配置为正式号）。后端通道二选一：`utils/config.js` 填 `CLOUD_ENV_ID`（微信云托管，正式版通道，免域名备案，见 [docs/微信云托管部署指引.md](docs/微信云托管部署指引.md)）；留空则回落 `BASE_URL` 直连 Render（体验版需勾选「不校验合法域名」）。
 
+### Android 原生版
+
+`android/` 是 Kotlin + Jetpack Compose 原生客户端，沿用小程序页面布局与深浅配色，复用同一份后端数据。支持地图管理、地点/照片/留言、行程、回忆、海报和回收站。构建 APK、配置高德 Android Key 和正式签名的步骤见 [android/README.md](android/README.md)。
+
 ## 技术栈
 
 - 前端：原生 HTML/CSS/JS + 高德地图 JS API 2.0（无构建，克隆即用），PWA（manifest + Service Worker）
