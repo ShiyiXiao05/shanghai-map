@@ -479,7 +479,7 @@ Page({
       if (!confirm) return;
       try {
         await api.deletePlace(this.mapCode(), this.placeId);
-        wx.showToast({ title: '已移入回收站（网页版 30 天内可恢复）', icon: 'none' });
+        wx.showToast({ title: '已移入回收站（30 天内可在「切换 → 回收站」恢复）', icon: 'none' });
         setTimeout(() => wx.navigateBack(), 600);
       } catch (err) {
         wx.showToast({ title: err.message, icon: 'none' });

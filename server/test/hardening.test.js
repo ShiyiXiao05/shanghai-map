@@ -729,3 +729,42 @@ describe('内容举报（UGC 处置入口）', () => {
     }
   });
 });
+
+describe('照片缓存按字节计容', () => {
+  it('超过上限时淘汰最旧条目，占用不会无限增长', async () => {
+    const previous = process.env.PHOTO_CACHE_MAX_BYTES;
+    process.env.PHOTO_CACHE_MAX_BYTES = '1024';
+    try {
+      const { server, request, store } = await startServer();
+      try {
+        const map = await (await request('POST', '/api/maps', { body: { name: 'M' } })).json();
+        const place = await (
+          await request('POST', '/api/places', { body: { ...placeBody, map_code: map.code } })
+        ).json();
+        // 每张解码后约 900B，3 张必然超过 1KB 上限
+        const big = `data:image/png;base64,${'A'.repeat(1200)}`;
+        const ids = [];
+        for (let i = 0; i < 3; i += 1) {
+          const up = await request('POST', `/api/places/${place.id}/photos`, {
+            body: { map_code: map.code, full: big, thumb: big },
+          });
+          assert.equal(up.status, 201);
+          ids.push((await up.json()).id);
+        }
+        for (const id of ids) {
+          const res = await request('GET', `/api/photos/${id}?map=${map.code}`);
+          assert.equal(res.status, 200, '被淘汰后仍应能从数据库回源');
+        }
+        const stats = store.__photoCacheStats();
+        assert.ok(stats.bytes <= 1024, `缓存占用应受上限约束，实际 ${stats.bytes}`);
+        assert.ok(stats.size < 3, `应发生淘汰，实际保留 ${stats.size} 条`);
+      } finally {
+        server.closeAllConnections();
+        await server.close();
+      }
+    } finally {
+      if (previous === undefined) delete process.env.PHOTO_CACHE_MAX_BYTES;
+      else process.env.PHOTO_CACHE_MAX_BYTES = previous;
+    }
+  });
+});

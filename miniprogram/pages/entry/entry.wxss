@@ -118,3 +118,27 @@
   font-size: 22rpx;
   color: var(--ink-faint);
 }
+
+.section {
+  margin-top: 40rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid var(--line);
+}
+
+.section-title {
+  font-size: 24rpx;
+  color: var(--ink-faint);
+  margin-bottom: 16rpx;
+}
+
+.identity-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.identity-name {
+  flex: 1;
+  font-size: 28rpx;
+  color: var(--ink);
+}

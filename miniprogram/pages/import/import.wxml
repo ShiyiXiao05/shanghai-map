@@ -1,5 +1,6 @@
 <view class="page">
   <view class="hint">把高德 App 里分享出来的文本（含链接）粘贴到下面，自动解析地点与坐标。</view>
+  <view class="btn" bindtap="readClipboard">📋 读取剪贴板</view>
 
   <textarea class="input textarea" value="{{raw}}" maxlength="1000" placeholder="例如：我分享一个位置【武康大楼】位置：121.4375,31.2054 https://uri.amap.com/marker?..." bindinput="onRaw" />
   <view class="btn parse" bindtap="parse">解析</view>

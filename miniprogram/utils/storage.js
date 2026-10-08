@@ -19,6 +19,11 @@ export function saveJoinedMap(map) {
   wx.setStorageSync(KEYS.maps, maps);
 }
 
+export function removeJoinedMap(code) {
+  const maps = getJoinedMaps().filter((m) => m.code !== code);
+  wx.setStorageSync(KEYS.maps, maps);
+}
+
 export function getCurrentMapCode() {
   return wx.getStorageSync(KEYS.currentMap) || '';
 }

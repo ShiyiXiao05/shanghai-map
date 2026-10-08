@@ -1,21 +1,21 @@
 {
-  "checkedAt": "2026-10-08T07:04:59.968Z",
+  "checkedAt": "2026-10-08T07:15:52.688Z",
   "static": {
-    "jsFiles": 53,
+    "jsFiles": 54,
     "syntaxFailures": [],
-    "jsonFiles": 17,
+    "jsonFiles": 18,
     "jsonFailures": [],
-    "registeredPages": 8,
+    "registeredPages": 9,
     "missingPageFiles": [],
     "wxml": {
-      "fileCount": 9,
+      "fileCount": 10,
       "available": true,
       "status": 0,
       "stderr": "",
-      "outputBytes": 93971
+      "outputBytes": 99521
     },
     "wxss": {
-      "fileCount": 10,
+      "fileCount": 11,
       "available": true,
       "status": 0,
       "stderr": "",
@@ -29,7 +29,7 @@
       "photos.js 缩略图上限 64KB": true,
       "photos.js 有幂等裁剪": true,
       "store.js 换码迁移行程与订阅": true,
-      "store.js 软删清缓存": true,
+      "store.js 软删清缓存": false,
       "store.js 恢复有 30 天窗口": true,
       "auth.js 中间件有 try/catch": true,
       "ratelimit.js 存在": true,
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "RGPBY5",
+        "code": "HQSCV9",
         "placeId": 1
       }
     },
@@ -277,15 +277,15 @@
     "e2eSteps": 20,
     "e2eFailed": 0,
     "serverTests": {
-      "tests": 99,
-      "pass": 99,
+      "tests": 100,
+      "pass": 100,
       "fail": 0,
       "exitCode": 0
     }
   },
   "tests": {
-    "tests": 99,
-    "pass": 99,
+    "tests": 100,
+    "pass": 100,
     "fail": 0,
     "exitCode": 0
   }

@@ -120,4 +120,55 @@ Page({
   goPoster() {
     wx.navigateTo({ url: '/pages/poster/poster' });
   },
+
+  goTrash() {
+    wx.navigateTo({ url: '/pages/trash/trash' });
+  },
+
+  // 改昵称：直接复用既有昵称弹层（identity-behavior 的 onNickConfirm 会调 updateProfile 落库）
+  editNickname() {
+    this.setData({ nickModalShow: true });
+  },
+
+  // 退出登录：清本地 token 与昵称。不清地图，重新写操作时会静默重新登录
+  logout() {
+    wx.showModal({
+      title: '退出登录',
+      content: '退出后重新做写操作会再次静默登录，地图数据不受影响。',
+      success: (res) => {
+        if (!res.confirm) return;
+        auth.logout();
+        this.setData({ nickname: '' });
+        wx.showToast({ title: '已退出登录', icon: 'none' });
+      },
+    });
+  },
+
+  // 换邀请码：旧码立即失效，本地存的码同步替换，避免自己把自己锁在门外
+  rekeyMap() {
+    const oldCode = this.data.currentCode;
+    if (!oldCode) return;
+    wx.showModal({
+      title: '换邀请码',
+      content: '旧邀请码会立即失效。已经加入的同学不受影响，之后邀请新人要用新码。',
+      confirmText: '确认更换',
+      success: async (res) => {
+        if (!res.confirm) return;
+        wx.showLoading({ title: '更换中…' });
+        try {
+          const map = await api.rekey(oldCode);
+          storage.removeJoinedMap(oldCode);
+          storage.saveJoinedMap({ code: map.code, name: map.name });
+          storage.setCurrentMapCode(map.code);
+          app.enterMap({ code: map.code, name: map.name });
+          wx.hideLoading();
+          this.setData({ currentCode: map.code, createdCode: map.code, mode: 'created' });
+          wx.showToast({ title: '已生成新邀请码', icon: 'none' });
+        } catch (err) {
+          wx.hideLoading();
+          wx.showToast({ title: err?.message || '更换失败，请重试', icon: 'none' });
+        }
+      },
+    });
+  },
 });

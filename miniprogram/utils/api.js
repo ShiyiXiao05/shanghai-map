@@ -163,6 +163,14 @@ export const api = {
   deleteComment: (code, commentId) =>
     request('DELETE', `/api/comments/${commentId}`, { mapCode: code }),
 
+  // 回收站（服务端 30 天软删）：列表与恢复
+  trash: (code) =>
+    get(`/api/places?map=${encodeURIComponent(code)}&view=trash`).then((d) => d.places),
+  restorePlace: (code, id) =>
+    request('POST', `/api/places/${id}/restore`, { body: { map_code: code } }),
+  // 换邀请码（权限重置）：返回 { code, name, created_by }，旧码立即失效
+  rekey: (code) => request('POST', `/api/maps/${encodeURIComponent(code)}/rekey`, { body: {} }),
+
   // 内容举报：UGC 合规入口。地图内内容带 map_code；公共广场内容可不带（只允许举报公开内容）
   report: (data) => request('POST', '/api/reports', { body: data }),
 

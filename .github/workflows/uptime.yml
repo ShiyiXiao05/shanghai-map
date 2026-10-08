@@ -1,0 +1,32 @@
+# 免费可用性监控：定时打线上 /api/health，连续失败会让 workflow 变红，
+# GitHub 会给仓库拥有者发失败通知（相当于免费 uptime 告警，不需要第三方账号）。
+#
+# 注意：GitHub 对"仓库 60 天无提交"会暂停定时任务，届时手动 workflow_dispatch 或提交一次即可恢复。
+name: Uptime check
+
+on:
+  schedule:
+    # 每 30 分钟一次（UTC）
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /api/health
+        run: |
+          url="https://shanghai-wish-map.onrender.com/api/health"
+          for attempt in 1 2 3; do
+            # Render 免费实例休眠后首访会慢，超时给足；每次重试间隔 20s
+            code=$(curl -sS -o /tmp/body.txt -w "%{http_code}" --max-time 60 "$url" || true)
+            body=$(cat /tmp/body.txt 2>/dev/null || echo "")
+            echo "attempt $attempt: HTTP $code body=$body"
+            if [ "$code" = "200" ] && echo "$body" | grep -q '"ok":true'; then
+              echo "✅ 服务正常"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::健康检查连续 3 次失败：$url"
+          exit 1

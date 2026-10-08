@@ -28,6 +28,26 @@
     <view class="actions">
       <view class="btn" bindtap="enterPublic">🌐 进入公共广场</view>
     </view>
+
+    <!-- 我的身份：昵称可改、可退出登录（此前用户遇到昵称不一致时没有任何自救入口） -->
+    <view class="section">
+      <view class="section-title">我的身份</view>
+      <view class="identity-row">
+        <text class="identity-name">{{nickname || '未设置昵称'}}</text>
+        <view class="btn btn-mini" bindtap="editNickname">修改昵称</view>
+        <view class="btn btn-mini" bindtap="logout">退出登录</view>
+      </view>
+    </view>
+
+    <!-- 当前地图管理：回收站与换邀请码，此前只能去网页版操作 -->
+    <view class="section" wx:if="{{currentCode}}">
+      <view class="section-title">地图管理 · {{currentCode}}</view>
+      <view class="actions">
+        <view class="btn" bindtap="goTrash">🗑 回收站</view>
+        <view class="btn" bindtap="rekeyMap">🔄 换邀请码</view>
+      </view>
+      <view class="hint">换码后旧邀请码立即失效，已加入的同学不受影响，但需要用新码邀请新人</view>
+    </view>
   </view>
 
   <view wx:elif="{{mode === 'create'}}" class="body">

@@ -73,15 +73,20 @@ Page({
     this.setData({ nickname: storage.getNickname() });
   },
 
-  onLoad() {
-    // 高德 App 分享后直接进来：自动读剪贴板
+  // 不自动读剪贴板：iOS 进页面就弹"允许粘贴"很打扰，也可能被当成过度收集。
+  // 由用户点「读取剪贴板」按钮后再读（高德分享过来的文本一直在剪贴板里，随时可读）。
+  readClipboard() {
     wx.getClipboardData({
       success: (res) => {
-        if (res.data && res.data.trim()) {
-          this.setData({ raw: res.data.trim() });
-          this.parse();
+        const text = (res.data || '').trim();
+        if (!text) {
+          wx.showToast({ title: '剪贴板是空的', icon: 'none' });
+          return;
         }
+        this.setData({ raw: text });
+        this.parse();
       },
+      fail: () => wx.showToast({ title: '读不到剪贴板，请手动粘贴', icon: 'none' }),
     });
   },
 

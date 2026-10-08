@@ -255,7 +255,7 @@ export function createPlaceStore(pool) {
         );
         if (rows[0]) {
           // 照片缓存的键含邀请码：换码后旧键必须失效，否则旧码仍能读到照片
-          photoCache.clear();
+          cacheClear();
           return rows[0];
         }
         return null; // 地图不存在
@@ -287,7 +287,7 @@ export function createPlaceStore(pool) {
     await pool.query('DELETE FROM itinerary_stops WHERE map_code = $1', [code]);
     await pool.query('DELETE FROM push_subscriptions WHERE map_code = $1', [code]);
     const { rows } = await pool.query('DELETE FROM maps WHERE code = $1 RETURNING code', [code]);
-    photoCache.clear();
+    cacheClear();
     if (rows.length === 0) return false;
     return { photoPublicIds: photoRows.rows.map((r) => r.public_id).filter(Boolean) };
   }
@@ -519,7 +519,7 @@ export function createPlaceStore(pool) {
       'SELECT id FROM place_photos WHERE place_id = $1 AND map_code = $2',
       [id, mapCode]
     );
-    for (const row of photos.rows) photoCache.delete(`${Number(row.id)}:${mapCode}`);
+    for (const row of photos.rows) cacheDelete(`${Number(row.id)}:${mapCode}`);
     return true;
   }
 
@@ -564,7 +564,7 @@ export function createPlaceStore(pool) {
       await pool.query('DELETE FROM itinerary_stops WHERE place_id = $1 AND map_code = $2', [id, mapCode]);
       await pool.query('DELETE FROM public.places WHERE id = $1 AND map_code = $2', [id, mapCode]);
     }
-    if (expired.rows.length > 0) photoCache.clear();
+    if (expired.rows.length > 0) cacheClear();
     return publicIds;
   }
 
@@ -707,23 +707,45 @@ export function createPlaceStore(pool) {
     return rows[0];
   }
 
-  // 原图内容不可变，进程内 LRU；键含邀请码，避免绕过鉴权直接命中
-  const photoCache = new Map();
-  const PHOTO_CACHE_MAX = 200;
+  // 原图内容不可变，进程内 LRU；键含邀请码，避免绕过鉴权直接命中。
+  // 按"字节"计容而不是按条数：单张原图最大 1.5MB，若只限 200 条最坏占约 300MB，
+  // 而云托管容器只有 0.5G（审计 F-42）。CDN 直链条目只存一个 URL，按 512B 计。
+  const PHOTO_CACHE_MAX_BYTES =
+    Number(process.env.PHOTO_CACHE_MAX_BYTES) > 0
+      ? Number(process.env.PHOTO_CACHE_MAX_BYTES)
+      : 32 * 1024 * 1024;
+  const photoCache = new Map(); // key -> { entry, size }
+  let photoCacheBytes = 0;
+
+  function cacheClear() {
+    photoCache.clear();
+    photoCacheBytes = 0;
+  }
+
+  function cacheDelete(key) {
+    const item = photoCache.get(key);
+    if (!item) return false;
+    photoCacheBytes -= item.size;
+    photoCache.delete(key);
+    return true;
+  }
 
   function cacheGet(key) {
     if (!photoCache.has(key)) return null;
-    const entry = photoCache.get(key);
+    const item = photoCache.get(key);
     photoCache.delete(key);
-    photoCache.set(key, entry); // 重新插入到最新位置
-    return entry;
+    photoCache.set(key, item); // 重新插入到最新位置
+    return item.entry;
   }
 
   function cachePut(key, entry) {
-    if (photoCache.has(key)) photoCache.delete(key);
-    photoCache.set(key, entry);
-    if (photoCache.size > PHOTO_CACHE_MAX) {
-      photoCache.delete(photoCache.keys().next().value);
+    const size = entry.buf ? entry.buf.length : 512;
+    cacheDelete(key);
+    photoCache.set(key, { entry, size });
+    photoCacheBytes += size;
+    while (photoCacheBytes > PHOTO_CACHE_MAX_BYTES && photoCache.size > 0) {
+      const oldestKey = photoCache.keys().next().value;
+      cacheDelete(oldestKey);
     }
   }
 
@@ -753,7 +775,7 @@ export function createPlaceStore(pool) {
       'DELETE FROM place_photos WHERE id = $1 AND map_code = $2 RETURNING id, public_id',
       [id, mapCode]
     );
-    if (rows.length > 0) photoCache.delete(`${id}:${mapCode}`);
+    if (rows.length > 0) cacheDelete(`${id}:${mapCode}`);
     return rows[0] ?? null;
   }
 
@@ -1002,6 +1024,8 @@ export function createPlaceStore(pool) {
   }
 
   return {
+    // 仅用于测试断言缓存占用（不暴露内容）
+    __photoCacheStats: () => ({ size: photoCache.size, bytes: photoCacheBytes }),
     init,
     createMap,
     getMapByCode,

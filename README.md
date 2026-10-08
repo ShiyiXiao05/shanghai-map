@@ -4,6 +4,8 @@
 
 > **线上地址**：https://shanghai-wish-map.onrender.com
 >
+> 可用性监控：`.github/workflows/uptime.yml` 每 30 分钟打一次 `/api/health`，连续 3 次失败会让 workflow 变红并由 GitHub 通知仓库拥有者（免费，无需第三方账号）。
+>
 > 2026-10-08 可用性审计与修复记录见 `docs/audit/2026-10-08/`：`可用性审计报告.md`（问题清单与证据）、`修复报告.md`（根因与改动）、`fix-verification.mjs`（修复后回归脚本）
 > 新访客在欢迎页「创建地图」拿邀请码，或输入同学的邀请码加入；邀请链接形如 `/?map=邀请码` 可直接打开。
 
@@ -34,7 +36,7 @@
 
 ### 📱 微信小程序（体验版）
 
-`miniprogram/` 目录是功能对齐网页版的微信小程序：原生 `<map>` 组件（腾讯底图同为 GCJ-02 坐标，数据零转换）、微信原生选点添加（`wx.chooseLocation`，无需位置服务 key）、高德分享导入、详情（照片/留言/想去/打卡）、回忆时间线、行程单、分享海报（canvas 生成存相册）、深浅双主题跟随系统、地图全屏。**登录署名**：所有写操作要求登录（静默 `wx.login` + 首次昵称确认，服务端按登录昵称盖章署名），需在后端配置 `MINIPROGRAM_APPID/MINIPROGRAM_SECRET/AUTH_SECRET`。
+`miniprogram/` 目录是功能对齐网页版的微信小程序：原生 `<map>` 组件（腾讯底图同为 GCJ-02 坐标，数据零转换）、微信原生选点添加（`wx.chooseLocation`，无需位置服务 key）、高德分享导入（手动点「读取剪贴板」，不自动读）、详情（照片/留言/想去/打卡/举报）、回忆时间线、行程单、分享海报（canvas 生成存相册）、**回收站（30 天恢复）**、**换邀请码**、**我的身份（改昵称/退出登录）**、深浅双主题跟随系统、地图全屏。**登录署名**：所有写操作要求登录（静默 `wx.login` + 首次昵称确认，服务端按登录昵称盖章署名），需在后端配置 `MINIPROGRAM_APPID/MINIPROGRAM_SECRET/AUTH_SECRET`。
 
 本地预览：微信开发者工具导入 `miniprogram/` 目录（AppID 已配置为正式号）。后端通道二选一：`utils/config.js` 填 `CLOUD_ENV_ID`（微信云托管，正式版通道，免域名备案，见 [docs/微信云托管部署指引.md](docs/微信云托管部署指引.md)）；留空则回落 `BASE_URL` 直连 Render（体验版需勾选「不校验合法域名」）。
 
@@ -163,7 +165,7 @@ server/   Express 后端（API + 静态托管）
   pusher.js     Web Push 发送器（VAPID 未配置时停用）
   env.js        dotenv 引导
   routes/       auth / maps / places / photos / comments / itinerary / push 路由
-  test/         接口测试（node:test + pg-mem，99 个用例，含安全头/上传契约/数据一致性/限流/内容安全/进程健壮性）
+  test/         接口测试（node:test + pg-mem，100 个用例，含安全头/上传契约/数据一致性/限流/内容安全/举报/图片审核/缓存/进程健壮性）
 public/   前端（index.html / css / js，js 含照片客户端压缩）
 miniprogram/  微信小程序（原生 map 组件，功能对齐网页版 + 登录署名；云托管 callContainer 通道，CLOUD_ENV_ID 留空回落 Render 直连）
 docs/     设计文档 + 微信云托管部署指引
