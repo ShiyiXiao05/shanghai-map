@@ -27,9 +27,31 @@ export function setCurrentMapCode(code) {
   wx.setStorageSync(KEYS.currentMap, code);
 }
 
+// 公共广场意图：exitToPublic() 只改内存态的话，冷启动会被 restoreSession 拉回上一张地图
+export function setPublicView(on) {
+  wx.setStorageSync('wish-public-view', !!on);
+}
+
+export function isPublicView() {
+  return !!wx.getStorageSync('wish-public-view');
+}
+
 export function getCurrentMap() {
   const code = getCurrentMapCode();
   return getJoinedMaps().find((m) => m.code === code) ?? null;
+}
+
+// 排序偏好：只接受 newest|name|wishes，与 index 页 picker 的索引一一对应
+export const SORTS = ['newest', 'name', 'wishes'];
+
+export function getSort() {
+  const raw = wx.getStorageSync(KEYS.sort);
+  return SORTS.indexOf(raw) === -1 ? 'newest' : raw;
+}
+
+export function setSort(value) {
+  if (SORTS.indexOf(value) === -1) return;
+  wx.setStorageSync(KEYS.sort, value);
 }
 
 export function getNickname() {

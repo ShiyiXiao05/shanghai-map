@@ -57,7 +57,7 @@
           <switch checked="{{hideVisitedOnly}}" bindchange="toggleHideVisited" color="#0f766e" />
           <text>只看还没去的</text>
         </label>
-        <picker range="{{['最新添加', '按名称', '最想去']}}" value="{{0}}" bindchange="onSortChange">
+        <picker range="{{['最新添加', '按名称', '最想去']}}" value="{{sortIndex}}" bindchange="onSortChange">
           <text class="sort">排序 ▾</text>
         </picker>
       </view>
@@ -72,7 +72,17 @@
       refresher-default-style="{{isDark ? 'white' : 'black'}}"
       bindrefresherrefresh="onRefresherRefresh"
     >
-      <view wx:if="{{filtered.length === 0 && !loading}}" class="empty">
+      <!-- 加载失败：错误态 + 重试，不能伪装成「还没有地点」 -->
+      <view wx:if="{{loadError}}" class="empty">
+        <text class="empty-icon">⚠️</text>
+        <text>{{loadError}}</text>
+        <view class="btn btn-primary" bindtap="retryLoad">重试</view>
+      </view>
+      <view wx:elif="{{loading}}" class="empty">
+        <text class="empty-icon">🗺️</text>
+        <text>正在加载地点…</text>
+      </view>
+      <view wx:elif="{{filtered.length === 0}}" class="empty">
         <text class="empty-icon">🌃</text>
         <text>{{places.length === 0 ? '这张地图还没有地点' : '这个筛选下没有地点'}}</text>
         <view class="btn btn-primary" wx:if="{{!isPublicView}}" bindtap="goSearch">＋ 搜索添加地点</view>

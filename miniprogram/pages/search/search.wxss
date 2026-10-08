@@ -79,6 +79,11 @@
   font-size: 32rpx;
 }
 
+/* 提交中：按钮置灰，配合 JS 的 in-flight 守卫防连点 */
+.btn-busy {
+  opacity: 0.6;
+}
+
 .import-link {
   margin-top: 28rpx;
   text-align: center;

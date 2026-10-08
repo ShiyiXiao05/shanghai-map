@@ -30,12 +30,14 @@ Page({
     activeCategories: CATEGORIES.map((c) => c.id),
     hideVisitedOnly: false,
     sort: 'newest',
+    sortIndex: 0, // picker 索引，与 storage.SORTS 顺序一致
     places: [],
     filtered: [],
     markers: [],
     longitude: SHANGHAI_CENTER.longitude,
     latitude: SHANGHAI_CENTER.latitude,
     loading: true,
+    loadError: '', // 加载失败时展示错误态 + 重试，而不是空态
     markerIcons: {}, // categoryId -> 临时图标路径
     isMapFs: false, // 地图全屏态
     refreshing: false, // 列表下拉刷新中
@@ -50,6 +52,7 @@ Page({
 
   mapCtx: null,
   randomTimer: null,
+  pendingPlaceId: null, // 分享链接 ?place=ID，仅消费一次
 
   noop() {},
 
@@ -67,12 +70,18 @@ Page({
       this.setData({ navRightInset: 100, navBottomPad: 8 });
     }
     this.mapCtx = wx.createMapContext('mainMap', this);
-    this.prepareMarkerIcons();
+    this.restoreSort();
 
-    // 分享链接直达：?map=CODE
+    // 分享链接直达：?map=CODE（加入地图）与 ?place=ID（打开详情，列表就绪后仅消费一次）
+    if (query && query.place) this.pendingPlaceId = Number(query.place) || null;
     if (query && query.map) {
       this.joinByCode(query.map);
     }
+  },
+
+  onReady() {
+    // canvas 节点要等首次渲染完成才存在，放 onLoad 会取到空节点 → marker 永远没图标
+    this.prepareMarkerIcons();
   },
 
   onShow() {
@@ -81,8 +90,29 @@ Page({
       this.enterEntry();
       return;
     }
+    this.restoreSort();
     this.setData({ mapName: g.map ? g.map.name : '公共广场', isPublicView: g.isPublicView });
-    this.loadPlaces();
+    this.loadPlaces().finally(() => {
+      // 正在加入分享地图时，由 joinByCode 负责打开详情
+      if (!this._joining) this.openPendingPlace();
+    });
+  },
+
+  // 排序偏好：picker 用索引，storage 存 newest|name|wishes
+  restoreSort() {
+    const sort = storage.getSort();
+    const index = storage.SORTS.indexOf(sort);
+    this.setData({ sort, sortIndex: index === -1 ? 0 : index });
+  },
+
+  // 分享链接带的 ?place=ID：地点列表加载完成后打开详情，只消费一次（返回时不重复跳转）
+  openPendingPlace() {
+    const id = this.pendingPlaceId;
+    if (!id) return;
+    this.pendingPlaceId = null;
+    const place = this.data.places.find((p) => p.id === id);
+    if (place) app.globalData.detailPlace = place;
+    wx.navigateTo({ url: `/pages/detail/detail?placeId=${id}` });
   },
 
   onShareAppMessage() {
@@ -94,6 +124,14 @@ Page({
       };
     }
     return { title: '魔都·Explore · 和同学一起标记上海', path: '/pages/index/index' };
+  },
+
+  onShareTimeline() {
+    const g = app.globalData;
+    return {
+      title: g.map ? `「${g.map.name}」· 魔都Explore` : '魔都·Explore · 和同学一起标记上海',
+      query: g.map ? `map=${g.map.code}` : '',
+    };
   },
 
   // 页面本身 disableScroll（防止拖地图时页面跟着动），下拉刷新由列表 scroll-view 承担
@@ -108,6 +146,7 @@ Page({
   },
 
   onUnload() {
+    this._unloaded = true; // 图标兜底超时回调可能晚于卸载，用它拦住 setData
     clearInterval(this.randomTimer);
   },
 
@@ -206,23 +245,21 @@ Page({
 
   async joinByCode(code) {
     wx.showLoading({ title: '加入地图…' });
+    this._joining = true;
     try {
       const map = await api.getMap(code.trim().toUpperCase());
       app.enterMap(map);
-      this.setData({
-        mapName: map.name,
-        isPublicView: false,
-        places: [],
-        filtered: [],
-        markers: [],
-        loading: true,
-      });
+      this.setData({ mapName: map.name, isPublicView: false });
       await this.loadPlaces();
       wx.hideLoading();
       wx.showToast({ title: `已加入「${map.name}」`, icon: 'none' });
     } catch (err) {
       wx.hideLoading();
       wx.showToast({ title: err.message, icon: 'none' });
+    } finally {
+      this._joining = false;
+      // 分享链接同时带了 ?place=ID 时，等新地图地点就绪后再打开详情
+      this.openPendingPlace();
     }
   },
 
@@ -230,16 +267,22 @@ Page({
     const code = app.globalData.map?.code || '';
     const requestId = (this._placesRequestId || 0) + 1;
     this._placesRequestId = requestId;
+    // 先清空：避免「新地图名 + 旧地图数据」，也避免旧数据在失败时被当成有效结果
+    this.setData({ places: [], filtered: [], markers: [], loading: true, loadError: '' });
     try {
       const places = code ? await api.listPlaces(code) : await api.publicPlaces();
       if (requestId !== this._placesRequestId || code !== (app.globalData.map?.code || '')) return;
-      this.setData({ places, loading: false });
+      this.setData({ places, loading: false, loadError: '' });
       this.applyFilters();
     } catch (err) {
       if (requestId !== this._placesRequestId || code !== (app.globalData.map?.code || '')) return;
-      this.setData({ loading: false });
-      wx.showToast({ title: err.message, icon: 'none' });
+      // 失败展示错误态 + 重试按钮，不再伪装成「这张地图还没有地点」
+      this.setData({ loading: false, loadError: (err && err.message) || '加载失败，请重试' });
     }
+  },
+
+  retryLoad() {
+    this.loadPlaces();
   },
 
   applyFilters() {
@@ -269,68 +312,113 @@ Page({
     this.renderMarkers(decorated);
   },
 
-  // 用 canvas 生成分类色圆点作为 marker 图标（免打包图片资源）
-  prepareMarkerIcons() {
+  // 用 canvas 生成分类色圆点作为 marker 图标（免打包图片资源）。
+  // 7 个图标串行绘制：共用同一 canvas 时并发会互相串色；
+  // 整体加 4s 超时兜底，无论如何都会 setData 一次，避免 marker 永久缺失
+  async prepareMarkerIcons() {
+    if (this._markerIconsRunning) return;
+    this._markerIconsRunning = true;
     const categories = [...CATEGORIES.map((c) => c.id + '|' + c.color), 'visited|#8a94a3'];
     const icons = {};
-    let pending = categories.length;
-    categories.forEach((item) => {
-      const [id, color] = item.split('|');
-      this.drawDotIcon(color).then((path) => {
-        icons[id] = path;
-        pending -= 1;
-        if (pending === 0) {
-          this.setData({ markerIcons: icons });
-          this.renderMarkers(this.data.filtered);
+    let finished = false;
+    const apply = () => {
+      if (this._unloaded) return;
+      this.setData({ markerIcons: { ...icons } });
+      this.renderMarkers(this.data.filtered); // 图标就绪后重新渲染一次 markers
+    };
+    const run = (async () => {
+      try {
+        for (const item of categories) {
+          const [id, color] = item.split('|');
+          icons[id] = await this.drawDotIcon(color); // 串行绘制：共用 canvas 并发会串色
         }
-      });
-    });
+      } catch (err) {
+        console.warn('[index] 生成 marker 图标失败，改用系统默认标记', err);
+      } finally {
+        finished = true;
+        this._markerIconsRunning = false;
+        apply();
+      }
+    })();
+    // 兜底超时：4s 还没画完也先渲染一次，保证地图一定有点位（缺图标用系统默认标记）
+    const timeout = new Promise((resolve) =>
+      setTimeout(() => {
+        if (!finished) apply();
+        resolve();
+      }, 4000)
+    );
+    await Promise.race([run, timeout]);
   },
 
   drawDotIcon(color) {
     return new Promise((resolve) => {
-      const query = this.createSelectorQuery();
-      query
-        .select('#icon-factory')
-        .fields({ node: true, size: true })
-        .exec((res) => {
-          const canvas = res[0].node;
-          const ctx = canvas.getContext('2d');
-          const dpr = 2;
-          canvas.width = 44 * dpr;
-          canvas.height = 44 * dpr;
-          ctx.scale(dpr, dpr);
-          ctx.beginPath();
-          ctx.arc(22, 22, 17, 0, Math.PI * 2);
-          ctx.fillStyle = color;
-          ctx.fill();
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = '#ffffff';
-          ctx.stroke();
-          wx.canvasToTempFilePath({
-            canvas,
-            width: 44,
-            height: 44,
-            destWidth: 88,
-            destHeight: 88,
-            success: (out) => resolve(out.tempFilePath),
-            fail: () => resolve(''),
+      // 任何一步异常都 resolve('')，保证 Promise 一定 settle（页面用系统默认标记兜底）
+      try {
+        const query = this.createSelectorQuery();
+        query
+          .select('#icon-factory')
+          .fields({ node: true, size: true })
+          .exec((res) => {
+            const canvas = res && res[0] && res[0].node;
+            if (!canvas) {
+              console.warn('[index] marker 图标画布未就绪，改用系统默认标记');
+              resolve('');
+              return;
+            }
+            try {
+              const ctx = canvas.getContext('2d');
+              const dpr = 2;
+              canvas.width = 44 * dpr; // 重置尺寸同时清空画布，避免上一张图残留
+              canvas.height = 44 * dpr;
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.scale(dpr, dpr);
+              ctx.beginPath();
+              ctx.arc(22, 22, 17, 0, Math.PI * 2);
+              ctx.fillStyle = color;
+              ctx.fill();
+              ctx.lineWidth = 4;
+              ctx.strokeStyle = '#ffffff';
+              ctx.stroke();
+              wx.canvasToTempFilePath({
+                canvas,
+                width: 44,
+                height: 44,
+                destWidth: 88,
+                destHeight: 88,
+                success: (out) => resolve((out && out.tempFilePath) || ''),
+                fail: (err) => {
+                  console.warn('[index] marker 图标导出失败', err);
+                  resolve('');
+                },
+              });
+            } catch (err) {
+              console.warn('[index] marker 图标绘制失败', err);
+              resolve('');
+            }
           });
-        });
+      } catch (err) {
+        console.warn('[index] marker 图标画布查询失败', err);
+        resolve('');
+      }
     });
   },
 
   renderMarkers(places) {
-    const { markerIcons } = this.data;
-    if (!markerIcons['visited']) return;
-    const markers = places.map((p) => {
+    const markerIcons = this.data.markerIcons || {};
+    const hasIcon = !!markerIcons.visited || CATEGORIES.some((c) => markerIcons[c.id]);
+    if (!hasIcon && (places || []).length > 0 && !this._warnedNoIcon) {
+      // 图标没生成成功也要把点位画出来：不带 iconPath 时地图用系统默认标记
+      this._warnedNoIcon = true;
+      console.warn('[index] marker 图标缺失，改用系统默认标记');
+    }
+    const markers = (places || []).map((p) => {
       const meta = categoryMeta(p.category);
       const iconKey = p.visited ? 'visited' : p.category;
-      return {
+      const iconPath = markerIcons[iconKey] || markerIcons.visited || '';
+      const marker = {
         id: p.id,
         latitude: p.lat,
         longitude: p.lng,
-        iconPath: markerIcons[iconKey] || markerIcons['visited'],
         width: p.visited ? 22 : 26,
         height: p.visited ? 22 : 26,
         callout: {
@@ -343,6 +431,8 @@ Page({
           color: '#1f2d2a',
         },
       };
+      if (iconPath) marker.iconPath = iconPath; // 缺图标时不传该字段，交给系统默认标记
+      return marker;
     });
     this.setData({ markers });
   },
@@ -383,9 +473,11 @@ Page({
     this.applyFilters();
   },
 
+  // picker 的 bindchange 给的是索引（'0'/'1'/'2'），必须映射成 newest|name|wishes 才能排序
   onSortChange(event) {
-    this.setData({ sort: event.detail.value });
-    wx.setStorageSync(storage.KEYS.sort, event.detail.value);
+    const sort = storage.SORTS[Number(event.detail.value)] || 'newest';
+    storage.setSort(sort);
+    this.setData({ sort, sortIndex: storage.SORTS.indexOf(sort) });
     this.applyFilters();
   },
 

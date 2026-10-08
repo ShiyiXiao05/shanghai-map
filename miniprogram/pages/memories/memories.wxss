@@ -13,6 +13,17 @@
   line-height: 1.8;
 }
 
+/* 无地图 / 加载失败时的操作入口 */
+.actions {
+  display: flex;
+  justify-content: center;
+  padding: 0 30rpx;
+}
+
+.actions .btn {
+  padding: 18rpx 48rpx;
+}
+
 .group {
   margin-bottom: 32rpx;
 }

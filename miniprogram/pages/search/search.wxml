@@ -43,7 +43,7 @@
   <view class="identity" wx:if="{{nickname}}">📮 将以「{{nickname}}」的身份添加</view>
   <view class="identity" wx:else>📮 保存时需登录并确认昵称</view>
 
-  <view class="btn btn-primary save" bindtap="save">{{saving ? '保存中…' : '保存到地图'}}</view>
+  <view class="btn btn-primary save {{saving ? 'btn-busy' : ''}}" bindtap="save">{{saving ? '保存中…' : '保存到地图'}}</view>
 
   <view class="import-link" bindtap="goImport">📋 粘贴高德分享导入 →</view>
 

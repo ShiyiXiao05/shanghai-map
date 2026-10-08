@@ -25,6 +25,9 @@
       <view class="btn" bindtap="goMemories">📷 回忆时间线</view>
       <view class="btn" bindtap="goPoster">🖼 分享海报</view>
     </view>
+    <view class="actions">
+      <view class="btn" bindtap="enterPublic">🌐 进入公共广场</view>
+    </view>
   </view>
 
   <view wx:elif="{{mode === 'create'}}" class="body">
@@ -56,6 +59,7 @@
     <view class="title">地图创建好了 🎉</view>
     <view class="hint">把邀请码发给同学，输入同样的码就能一起标记</view>
     <view class="invite-code">{{createdCode}}</view>
+    <view class="hint">对方在小程序首页「切换 → 输入邀请码」即可加入</view>
     <view class="actions">
       <view class="btn" bindtap="copyInvite">复制邀请码</view>
       <view class="btn btn-primary" bindtap="back">开始标记</view>

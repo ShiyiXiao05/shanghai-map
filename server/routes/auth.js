@@ -1,12 +1,16 @@
 import { Router } from 'express';
+import { limiters } from '../ratelimit.js';
+import { guardTexts } from '../content-security.js';
 
 const MAX_NICKNAME_CHARS = 30;
 
-export function createAuthRouter({ auth, store }) {
+export function createAuthRouter({ auth, store, contentSecurity }) {
   const router = Router();
+  // 登录会调用微信 code2Session：限流避免被刷
+  const loginLimiter = limiters.login();
 
   // 小程序登录：body { code }（wx.login 的登录凭证）→ { token, nickname, needs_nickname }
-  router.post('/login', async (req, res, next) => {
+  router.post('/login', loginLimiter, async (req, res, next) => {
     try {
       if (!auth.configured) {
         return res
@@ -33,6 +37,10 @@ export function createAuthRouter({ auth, store }) {
       if (nickname.length > MAX_NICKNAME_CHARS) {
         return res.status(400).json({ error: `昵称不能超过 ${MAX_NICKNAME_CHARS} 字` });
       }
+      const guard = await guardTexts(contentSecurity, [['昵称', nickname]], {
+        openid: req.user.openid,
+      });
+      if (guard.error) return res.status(400).json({ error: guard.error });
       const user = await store.setNickname(req.user.openid, nickname);
       res.json({ nickname: user.nickname });
     } catch (err) {

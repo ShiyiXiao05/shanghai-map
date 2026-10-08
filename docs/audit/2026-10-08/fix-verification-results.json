@@ -1,0 +1,292 @@
+{
+  "checkedAt": "2026-10-08T06:42:08.425Z",
+  "static": {
+    "jsFiles": 53,
+    "syntaxFailures": [],
+    "jsonFiles": 17,
+    "jsonFailures": [],
+    "registeredPages": 8,
+    "missingPageFiles": [],
+    "wxml": {
+      "fileCount": 9,
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 93971
+    },
+    "wxss": {
+      "fileCount": 10,
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 1379
+    },
+    "fixMarkers": {
+      "server/app.js 有 /api/upload-config": true,
+      "server/app.js 有 413 分支": true,
+      "server/app.js 有安全响应头": true,
+      "server/app.js 有公共广场单点接口": true,
+      "photos.js 缩略图上限 64KB": true,
+      "photos.js 有幂等裁剪": true,
+      "store.js 换码迁移行程与订阅": true,
+      "store.js 软删清缓存": true,
+      "store.js 恢复有 30 天窗口": true,
+      "auth.js 中间件有 try/catch": true,
+      "ratelimit.js 存在": true,
+      "小程序 image.js 存在": true,
+      "小程序上传按 upload-config 预算": true,
+      "小程序 marker 移到 onReady": true,
+      "小程序登录失败保留旧 token": true,
+      "小程序排序按索引映射": true,
+      "小程序请求超时 15s": true,
+      "小程序删除地点提示三态": true,
+      "网页 fetch 超时": true,
+      "网页上传走 upload-config": true,
+      "网页 SW 用 allSettled": true,
+      "网页焦点轮廓恢复": true,
+      "内容安全模块存在": true,
+      "举报路由存在": true,
+      "微信回调路由存在": true,
+      "照片审核状态字段": true,
+      "违规照片被列表过滤": true,
+      "小程序有举报入口": true,
+      "网页有举报入口": true
+    }
+  },
+  "endToEnd": [
+    {
+      "id": "E2E-01",
+      "name": "GET /api/health",
+      "ok": true,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "id": "E2E-02",
+      "name": "上传配置（无图床）",
+      "ok": true,
+      "evidence": {
+        "cdn": false,
+        "maxFullBytes": 1572864,
+        "maxThumbBytes": 65536
+      }
+    },
+    {
+      "id": "E2E-03",
+      "name": "建图 + 加地点",
+      "ok": true,
+      "evidence": {
+        "code": "BXEVXZ",
+        "placeId": 1
+      }
+    },
+    {
+      "id": "E2E-04",
+      "name": "照片上传（full+thumb，模拟压缩后体积）",
+      "ok": true,
+      "evidence": {
+        "status": 201,
+        "bodyBytes": 69720,
+        "under100K": true
+      }
+    },
+    {
+      "id": "E2E-05",
+      "name": "照片列表带缩略图",
+      "ok": true,
+      "evidence": {
+        "count": 1,
+        "thumbPrefix": "data:image/jpeg;base64"
+      }
+    },
+    {
+      "id": "E2E-06",
+      "name": "原图端点可读",
+      "ok": true,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "id": "E2E-07",
+      "name": "留言 / 想去 / 行程",
+      "ok": true,
+      "evidence": {
+        "comment": 201,
+        "wish": true,
+        "stops": 1
+      }
+    },
+    {
+      "id": "E2E-08",
+      "name": "全量导出含行程",
+      "ok": true,
+      "evidence": {
+        "places": 1,
+        "itinerary": 1,
+        "comments": 1
+      }
+    },
+    {
+      "id": "E2E-09",
+      "name": "公共广场单点接口",
+      "ok": true,
+      "evidence": {
+        "isPublic": true,
+        "leaksMapCode": false
+      }
+    },
+    {
+      "id": "E2E-10",
+      "name": "软删后照片立即不可读",
+      "ok": true,
+      "evidence": {
+        "delete": 204,
+        "photo": 404
+      }
+    },
+    {
+      "id": "E2E-11",
+      "name": "回收站恢复",
+      "ok": true,
+      "evidence": {
+        "status": 200
+      }
+    },
+    {
+      "id": "E2E-12",
+      "name": "换码：旧码失效、行程随迁、旧码照片不可读",
+      "ok": true,
+      "evidence": {
+        "oldMap": 404,
+        "stops": 1,
+        "oldPhoto": 404
+      }
+    },
+    {
+      "id": "E2E-13",
+      "name": "删除地图",
+      "ok": true,
+      "evidence": {
+        "status": 204
+      }
+    },
+    {
+      "id": "E2E-14",
+      "name": "CDN 模式：只传 full 即可上传并返回 CDN 缩略图",
+      "ok": true,
+      "evidence": {
+        "cdn": true,
+        "uploadStatus": 201,
+        "thumb": "https://cdn.example/1-t.jpg",
+        "uploadedBytes": 55319
+      }
+    },
+    {
+      "id": "E2E-15",
+      "name": "登录 → 昵称 → 服务端盖章署名（忽略客户端伪造）",
+      "ok": true,
+      "evidence": {
+        "needsNickname": true,
+        "withoutNickname": 400,
+        "stampedAuthor": "同学A"
+      }
+    },
+    {
+      "id": "E2E-16",
+      "name": "失效 token：写请求 401、读请求按匿名放行",
+      "ok": true,
+      "evidence": {
+        "write": 401,
+        "read": 200
+      }
+    },
+    {
+      "id": "E2E-17",
+      "name": "未知接口 404 / 超大请求体 413",
+      "ok": true,
+      "evidence": {
+        "missing": 404,
+        "tooLarge": 413
+      }
+    },
+    {
+      "id": "E2E-18",
+      "name": "坐标 null/false 被拒（不再静默存成 0）",
+      "ok": true,
+      "evidence": {
+        "status": 400,
+        "error": "lng必须是 -180 ~ 180 之间的数字"
+      }
+    },
+    {
+      "id": "E2E-19",
+      "name": "匿名举报公开内容 → owner 查看 → 结单",
+      "ok": true,
+      "evidence": {
+        "create": 201,
+        "openCount": 1,
+        "resolve": 200
+      }
+    },
+    {
+      "id": "E2E-20",
+      "name": "图片送审 → 伪造签名被拒 → 判违规后列表隐藏",
+      "ok": true,
+      "evidence": {
+        "upload": 201,
+        "visibleBefore": 1,
+        "badSignature": 403,
+        "callback": 200,
+        "visibleAfter": 0
+      }
+    }
+  ],
+  "miniProgram": {
+    "photoUpload": {
+      "calls": 2,
+      "cdnModeHasThumb": false,
+      "cdnModeBodyBytes": 40994,
+      "dbModeHasThumb": true,
+      "dbModeBodyBytes": 54340,
+      "dbModeThumbBytes": 13335
+    },
+    "sort": {
+      "afterName": {
+        "sort": "name",
+        "index": 1,
+        "stored": "name"
+      },
+      "afterWishes": {
+        "sort": "wishes",
+        "stored": "wishes"
+      }
+    },
+    "markerFallback": {
+      "markers": 1,
+      "hasIconPath": false
+    },
+    "share": {
+      "path": "/pages/index/index?map=MAP123&place=42",
+      "timeline": "map=MAP123&place=42"
+    }
+  },
+  "summary": {
+    "staticOk": true,
+    "e2eSteps": 20,
+    "e2eFailed": 0,
+    "serverTests": {
+      "tests": 99,
+      "pass": 99,
+      "fail": 0,
+      "exitCode": 0
+    }
+  },
+  "tests": {
+    "tests": 99,
+    "pass": 99,
+    "fail": 0,
+    "exitCode": 0
+  }
+}

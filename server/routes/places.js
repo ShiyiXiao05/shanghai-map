@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { CATEGORIES } from '../store.js';
 import { identityOr401 } from './identity.js';
+import { guardTexts } from '../content-security.js';
 
 const LIMITS = {
   name: 100,
@@ -27,11 +28,14 @@ function readString(value, field, { fallback = '' } = {}) {
 }
 
 function readCoord(value, field) {
-  const num = typeof value === 'number' ? value : Number(value);
   const range = field === 'lng' ? 180 : 90;
-  if (!Number.isFinite(num) || Math.abs(num) > range) {
-    return { error: `${field}必须是 ${-range} ~ ${range} 之间的数字` };
-  }
+  const error = { error: `${field}必须是 ${-range} ~ ${range} 之间的数字` };
+  // 只接受数字或纯数字字符串：null / false / '' 过去会被 Number() 静默转成 0 并入库
+  let num;
+  if (typeof value === 'number') num = value;
+  else if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value.trim())) num = Number(value.trim());
+  else return error;
+  if (!Number.isFinite(num) || Math.abs(num) > range) return error;
   return { value: num };
 }
 
@@ -104,7 +108,7 @@ function parseId(raw) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
-export function createPlacesRouter({ store, uploader, pusher }) {
+export function createPlacesRouter({ store, uploader, pusher, contentSecurity }) {
   const router = Router();
 
   router.get('/', async (req, res, next) => {
@@ -161,6 +165,18 @@ export function createPlacesRouter({ store, uploader, pusher }) {
       }
       const checked = validatePlace(req.body, { partial: false });
       if (checked.error) return res.status(400).json({ error: checked.error });
+      // 内容安全：UGC 文本写入前先过一遍微信内容检测（未配置时自动跳过）
+      const guard = await guardTexts(
+        contentSecurity,
+        [
+          ['名称', checked.value.name],
+          ['描述', checked.value.description],
+          ['地址', checked.value.address],
+          ['标签', checked.value.tags],
+        ],
+        { openid: req.user?.openid }
+      );
+      if (guard.error) return res.status(400).json({ error: guard.error });
       const addedBy = identityOr401(req, res, checked.value.added_by);
       if (addedBy === null) return;
       const place = await store.create({ ...checked.value, added_by: addedBy, map_code: code });
@@ -227,6 +243,17 @@ export function createPlacesRouter({ store, uploader, pusher }) {
       if (id === null) return res.status(400).json({ error: 'id 必须是正整数' });
       const checked = validatePlace(req.body, { partial: true });
       if (checked.error) return res.status(400).json({ error: checked.error });
+      const guard = await guardTexts(
+        contentSecurity,
+        [
+          ['名称', checked.value.name],
+          ['描述', checked.value.description],
+          ['地址', checked.value.address],
+          ['标签', checked.value.tags],
+        ],
+        { openid: req.user?.openid }
+      );
+      if (guard.error) return res.status(400).json({ error: guard.error });
       // 已登录时编辑不改原作者：忽略客户端传的 added_by（编辑本身不记录昵称）
       if (req.user && checked.value.added_by !== undefined) delete checked.value.added_by;
       const place = await store.update(id, req.mapCode, checked.value);

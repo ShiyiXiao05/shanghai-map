@@ -1,0 +1,297 @@
+{
+  "auditedAt": "2026-10-08T05:34:33.472Z",
+  "commit": "274cc1b224852da5f6d4dde1205890c33bfa976f",
+  "nodeVersion": "v26.3.0",
+  "database": "isolated pg-mem only",
+  "productionMutations": false,
+  "interpretation": "reproduced means the defect was observed; it does not mean the feature passed",
+  "scenarios": [
+    {
+      "id": "CONTROL",
+      "name": "Cross-map access remains isolated",
+      "verification": "control-passed",
+      "evidence": {
+        "status": 404
+      }
+    },
+    {
+      "id": "AUTH-OMISSION",
+      "name": "Omitting the token bypasses identity stamping even when login is configured",
+      "verification": "reproduced",
+      "evidence": {
+        "authConfigured": true,
+        "tokenProvided": false,
+        "createStatus": 201,
+        "createAuthor": "Impersonated author",
+        "editedAuthor": "Another fake author"
+      }
+    },
+    {
+      "id": "AUTH-DATABASE-FAILURE",
+      "name": "An authentication database failure terminates an Express 4 server process",
+      "verification": "reproduced",
+      "evidence": {
+        "fault": "store.getUser rejects",
+        "expected": "HTTP 500 with live server",
+        "childExitCode": 1,
+        "unhandledRejectionTerminatedServer": true,
+        "productionServerAffected": false
+      }
+    },
+    {
+      "id": "WISH-IDENTITY",
+      "name": "Two authenticated users with the same nickname cancel each other vote",
+      "verification": "reproduced",
+      "evidence": {
+        "distinctAuthenticatedUsers": 2,
+        "firstVote": true,
+        "secondVote": false,
+        "finalWishCount": 0
+      }
+    },
+    {
+      "id": "PHOTO-SOFT-DELETE",
+      "name": "Cached photo remains readable after soft delete",
+      "verification": "reproduced",
+      "evidence": {
+        "expected": 404,
+        "actual": 200,
+        "cacheControl": "public, max-age=31536000, immutable"
+      }
+    },
+    {
+      "id": "REKEY",
+      "name": "Rekey leaves cached old-code photo, itinerary and subscriptions behind",
+      "verification": "reproduced",
+      "evidence": {
+        "oldMapStatus": 404,
+        "oldPhotoStatus": 200,
+        "newItineraryCount": 0,
+        "oldSubscriptionCount": 1,
+        "newSubscriptionCount": 0
+      }
+    },
+    {
+      "id": "REKEY-COLLISION",
+      "name": "A generated-code collision moves another map place into the original map",
+      "verification": "reproduced",
+      "evidence": {
+        "fault": "force collision with map B on all five attempts",
+        "status": 500,
+        "mapAPlaceCount": 2,
+        "mapBPlaceCount": 0
+      }
+    },
+    {
+      "id": "UPLOAD-THUMB",
+      "name": "A 200 KiB photo sent as its own thumbnail is rejected by database storage",
+      "verification": "reproduced",
+      "evidence": {
+        "fullAndThumbBytes": 204800,
+        "status": 400,
+        "error": "缩略图异常，请重试",
+        "note": "synthetic payload tests size handling, not image decoding"
+      }
+    },
+    {
+      "id": "UPLOAD-BODY",
+      "name": "A 1.3 MiB photo duplicated into thumb exceeds the 3 MiB JSON limit",
+      "verification": "reproduced",
+      "evidence": {
+        "originalBytes": 1363148,
+        "jsonBytes": 3635152,
+        "expected": 413,
+        "actual": 500,
+        "error": "服务器内部错误"
+      }
+    },
+    {
+      "id": "COORD-TYPE",
+      "name": "Null and boolean coordinates are coerced to zero",
+      "verification": "reproduced",
+      "evidence": {
+        "expected": 400,
+        "actual": 201,
+        "storedLng": 0,
+        "storedLat": 0
+      }
+    },
+    {
+      "id": "RESTORE-EXPIRED",
+      "name": "A 31-day deleted place can be restored without first opening trash",
+      "verification": "reproduced",
+      "evidence": {
+        "deletedDaysAgo": 31,
+        "expected": 404,
+        "actual": 200
+      }
+    },
+    {
+      "id": "EXPORT-DB-PHOTO",
+      "name": "JSON export omits stored photo contents and itinerary",
+      "verification": "reproduced",
+      "evidence": {
+        "photoUrl": "",
+        "photoThumbUrl": "",
+        "photoContainsImageData": false,
+        "containsItinerary": false
+      }
+    },
+    {
+      "id": "UNSUBSCRIBE-AUTH",
+      "name": "An invalid nonempty map code can unsubscribe another map endpoint",
+      "verification": "reproduced",
+      "evidence": {
+        "invalidMapCodeAccepted": true,
+        "status": 204,
+        "remainingSubscriptions": 0
+      }
+    },
+    {
+      "id": "PUSH-ENDPOINT",
+      "name": "Subscription API accepts loopback destinations and pusher builds an outbound HTTPS request",
+      "verification": "reproduced",
+      "evidence": {
+        "status": 201,
+        "outboundRequestOptions": {
+          "hostname": "127.0.0.1",
+          "port": "12345",
+          "path": "/internal",
+          "method": "POST",
+          "timeoutConfigured": false
+        },
+        "transportIntercepted": true,
+        "realNetworkRequestSent": false
+      }
+    },
+    {
+      "id": "ITINERARY-ATOMICITY",
+      "name": "A failed second INSERT leaves an incomplete replacement itinerary",
+      "verification": "reproduced",
+      "evidence": {
+        "fault": "second itinerary INSERT fails",
+        "previousStopCount": 2,
+        "actualStopCountAfterFailure": 1,
+        "previousOrderPreserved": false
+      }
+    },
+    {
+      "id": "PHOTO-CONCURRENCY",
+      "name": "Two concurrent uploads bypass the nine-photo limit",
+      "verification": "reproduced",
+      "evidence": {
+        "initialPhotoCount": 8,
+        "uploadStatuses": [
+          201,
+          201
+        ],
+        "expectedMaximum": 9,
+        "actualPhotoCount": 10
+      }
+    },
+    {
+      "id": "PAGE-SORT",
+      "name": "Picker indices never match name/wishes sort keys",
+      "verification": "reproduced-with-page-api-mocks",
+      "evidence": {
+        "nameOrder": [
+          2,
+          1
+        ],
+        "wishOrder": [
+          2,
+          1
+        ],
+        "expectedBoth": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "PAGE-SHARE-JOIN",
+      "name": "Latest revision correctly refreshes the page after a shared-link join",
+      "verification": "control-passed-fixed-since-b1fa516",
+      "evidence": {
+        "globalMap": "Joined map",
+        "displayedMap": "Joined map",
+        "displayedPlace": 200,
+        "viewStillPublic": false
+      }
+    },
+    {
+      "id": "PAGE-STALE-DATA",
+      "name": "Failed map switch displays previous map data under the new map name",
+      "verification": "reproduced-with-page-api-mocks",
+      "evidence": {
+        "displayedMap": "B",
+        "displayedPlace": "A place",
+        "loading": false
+      }
+    },
+    {
+      "id": "PAGE-IMPORT",
+      "name": "Malformed URL percent encoding throws without a user-facing error",
+      "verification": "reproduced-with-page-api-mocks",
+      "evidence": {
+        "actualException": "URIError"
+      }
+    },
+    {
+      "id": "PAGE-PHOTO-CANCEL",
+      "name": "Latest revision handles photo picker cancellation",
+      "verification": "control-passed-fixed-since-b1fa516",
+      "evidence": {
+        "handlerRejects": false
+      }
+    },
+    {
+      "id": "PAGE-DETAIL-SHARE",
+      "name": "Place detail share path omits the place ID",
+      "verification": "reproduced-with-page-api-mocks",
+      "evidence": {
+        "actualPath": "/pages/index/index?map=AUDITA",
+        "containsPlaceId": false
+      }
+    },
+    {
+      "id": "PAGE-POSTER-ERROR",
+      "name": "A failed API request still generates a ready zero-statistics poster",
+      "verification": "reproduced-with-page-api-mocks",
+      "evidence": {
+        "ready": true,
+        "total": 0
+      }
+    },
+    {
+      "id": "PAGE-NEARBY",
+      "name": "Nearby sorting selects the nearest five locations",
+      "verification": "control-passed-with-location-mock",
+      "evidence": {
+        "resultCount": 5,
+        "nearestId": 1,
+        "showLocation": true
+      }
+    },
+    {
+      "id": "PAGE-RANDOM",
+      "name": "Random drawing completes and closing it clears the timer",
+      "verification": "control-passed-with-page-api-mocks",
+      "evidence": {
+        "drawingCompleted": true,
+        "resultBelongsToMap": true,
+        "timerCleared": true
+      }
+    }
+  ],
+  "serverErrors": [
+    {
+      "code": "23505",
+      "message": "ERROR: insert into \"maps\" (code, name, created_by, id, created_at) values ($1, $2, $3, $4, $5) returning \"code\" - duplicate key value violates unique constraint \"maps_pkey\"\nDETAIL: Key (code)=(ZXJUFS) already exists.\n\n🐜 This seems to be an execution error, which means that your request syntax seems okay,\n    but the resulting statement cannot be executed → Probably not a pg-mem error.\n\n*️⃣ Failed SQL statement: UPDATE maps SET code = 'ZXJUFS' WHERE code = 'K7RWBN' RETURNING code, name, created_by;\n\n👉 You can file an issue at https://github.com/oguimbal/pg-mem along with a way to reproduce this error (if you can), and  the stacktrace:\n\n"
+    },
+    {
+      "type": "entity.too.large",
+      "message": "request entity too large"
+    }
+  ]
+}

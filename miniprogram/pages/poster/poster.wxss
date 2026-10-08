@@ -31,3 +31,59 @@
   font-size: 22rpx;
   color: var(--ink-faint);
 }
+
+/* 未加入地图：给返回 / 去加入的入口，避免停在空白页 */
+.empty {
+  padding: 140rpx 40rpx 60rpx;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.empty-sub {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: var(--ink-faint);
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  gap: 20rpx;
+  width: 100%;
+  margin-top: 20rpx;
+}
+
+.actions .btn {
+  flex: 1;
+}
+
+/* 加载/生成失败：页面内提示 + 重试 */
+.error-box {
+  width: 100%;
+  margin-top: 28rpx;
+  padding: 28rpx;
+  border-radius: 20rpx;
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.error-text {
+  font-size: 26rpx;
+  color: var(--ink-soft);
+}
+
+.retry {
+  margin-top: 20rpx;
+  padding: 18rpx 48rpx;
+}
+
+/* 保存中：按钮置灰 */
+.btn-busy {
+  opacity: 0.6;
+}

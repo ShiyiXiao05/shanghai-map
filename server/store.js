@@ -155,6 +155,35 @@ export function createPlaceStore(pool) {
     await pool.query(
       'CREATE INDEX IF NOT EXISTS idx_itinerary_map_pos ON itinerary_stops (map_code, position)'
     );
+    // 内容举报（UGC 平台的处置入口）：owner 凭邀请码查看与处理
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS content_reports (
+        id SERIAL PRIMARY KEY,
+        target_type TEXT NOT NULL,
+        target_id INTEGER NOT NULL,
+        map_code TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        detail TEXT NOT NULL DEFAULT '',
+        reporter TEXT NOT NULL DEFAULT '',
+        openid TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'open',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        resolved_at TIMESTAMPTZ
+      )
+    `);
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_reports_map ON content_reports (map_code, status)'
+    );
+    // 照片审核状态：none=未送审 / pending=审核中 / pass=通过 / risky=违规（列表隐藏）
+    await pool.query(
+      "ALTER TABLE place_photos ADD COLUMN IF NOT EXISTS moderation TEXT NOT NULL DEFAULT 'none'"
+    );
+    await pool.query(
+      "ALTER TABLE place_photos ADD COLUMN IF NOT EXISTS trace_id TEXT NOT NULL DEFAULT ''"
+    );
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS idx_photos_trace ON place_photos (trace_id)'
+    );
     await pool.query(
       'CREATE INDEX IF NOT EXISTS idx_places_map_created ON public.places (map_code, created_at DESC)'
     );
@@ -201,7 +230,15 @@ export function createPlaceStore(pool) {
 
   // 换邀请码（权限重置）：子表 map_code 一并迁移；唯一冲突时迁回旧码并重试
   async function rekeyMap(code) {
-    const CHILD_TABLES = ['public.places', 'place_photos', 'place_comments', 'place_wishes'];
+    // 行程与推送订阅也必须迁移，否则换码后行程丢失、旧码仍能收到通知
+    const CHILD_TABLES = [
+      'public.places',
+      'place_photos',
+      'place_comments',
+      'place_wishes',
+      'itinerary_stops',
+      'push_subscriptions',
+    ];
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const newCode = generateMapCode();
       if (newCode === code) continue;
@@ -216,7 +253,11 @@ export function createPlaceStore(pool) {
           'UPDATE maps SET code = $1 WHERE code = $2 RETURNING code, name, created_by',
           [newCode, code]
         );
-        if (rows[0]) return rows[0];
+        if (rows[0]) {
+          // 照片缓存的键含邀请码：换码后旧键必须失效，否则旧码仍能读到照片
+          photoCache.clear();
+          return rows[0];
+        }
         return null; // 地图不存在
       } catch (err) {
         // 新码撞唯一约束：把子表迁回旧码后重试
@@ -233,8 +274,9 @@ export function createPlaceStore(pool) {
   }
 
   async function deleteMap(code) {
-    const { rows } = await pool.query('DELETE FROM maps WHERE code = $1 RETURNING code', [code]);
-    if (rows.length === 0) return false;
+    // 顺序：先子表、最后 maps。中途失败只会留下"地图还在、部分内容已删"，
+    // 不会出现"地图没了、子数据成孤儿"这种更难收拾的状态（无事务可用时的取舍）
+    if (!(await getMapByCode(code))) return false;
     const photoRows = await pool.query(
       'DELETE FROM place_photos WHERE map_code = $1 RETURNING public_id',
       [code]
@@ -244,7 +286,9 @@ export function createPlaceStore(pool) {
     await pool.query('DELETE FROM place_wishes WHERE map_code = $1', [code]);
     await pool.query('DELETE FROM itinerary_stops WHERE map_code = $1', [code]);
     await pool.query('DELETE FROM push_subscriptions WHERE map_code = $1', [code]);
+    const { rows } = await pool.query('DELETE FROM maps WHERE code = $1 RETURNING code', [code]);
     photoCache.clear();
+    if (rows.length === 0) return false;
     return { photoPublicIds: photoRows.rows.map((r) => r.public_id).filter(Boolean) };
   }
 
@@ -338,6 +382,7 @@ export function createPlaceStore(pool) {
     const wishesBy = byPlace(wishRows.rows);
     return {
       map: { ...map, exported_at: new Date().toISOString() },
+      itinerary: await listItinerary(code),
       places: placeRows.rows.map((row) => ({
         ...row,
         photos: (photosBy.get(row.id) ?? []).map((p) => ({
@@ -367,7 +412,8 @@ export function createPlaceStore(pool) {
     // 分组计数后内存合并，避免在每行上做关联子查询
     const [photoRows, commentRows, wishRows] = await Promise.all([
       pool.query(
-        'SELECT place_id, count(*) AS n FROM place_photos WHERE map_code = $1 GROUP BY place_id',
+        `SELECT place_id, count(*) AS n FROM place_photos
+         WHERE map_code = $1 AND moderation <> 'risky' GROUP BY place_id`,
         [mapCode]
       ),
       pool.query(
@@ -467,7 +513,14 @@ export function createPlaceStore(pool) {
        WHERE id = $1 AND map_code = $2 AND deleted_at IS NULL RETURNING id`,
       [id, mapCode]
     );
-    return rows.length > 0;
+    if (rows.length === 0) return false;
+    // 软删后照片不应再可读：清掉进程内缓存（缓存键含邀请码，不清就会继续返回 200）
+    const photos = await pool.query(
+      'SELECT id FROM place_photos WHERE place_id = $1 AND map_code = $2',
+      [id, mapCode]
+    );
+    for (const row of photos.rows) photoCache.delete(`${Number(row.id)}:${mapCode}`);
+    return true;
   }
 
   // 回收站列表（最近删除的在前）
@@ -479,11 +532,14 @@ export function createPlaceStore(pool) {
     return rows;
   }
 
-  // 恢复：清空 deleted_at，连带行程/照片/留言全部回来
+  // 恢复：清空 deleted_at，连带行程/照片/留言全部回来。
+  // 超过 30 天窗口的软删地点不可恢复，与"打开回收站时惰性彻底清理"的语义保持一致
   async function restorePlace(id, mapCode) {
     const { rows } = await pool.query(
       `UPDATE public.places SET deleted_at = NULL, updated_at = now()
-       WHERE id = $1 AND map_code = $2 AND deleted_at IS NOT NULL RETURNING *`,
+       WHERE id = $1 AND map_code = $2 AND deleted_at IS NOT NULL
+         AND deleted_at > now() - interval '30 days'
+       RETURNING *`,
       [id, mapCode]
     );
     return rows[0] ?? null;
@@ -536,7 +592,7 @@ export function createPlaceStore(pool) {
         ordered.push(raw);
       }
     }
-    let valid = new Set();
+    let valid = [];
     if (ordered.length > 0) {
       // 不用 ANY($2::int[])：pg-mem 对数组参数的 cast 匹配不上；IN + 纯占位符两端都稳
       const placeholders = ordered.map((_, i) => `$${i + 2}`).join(', ');
@@ -545,17 +601,29 @@ export function createPlaceStore(pool) {
         [mapCode, ...ordered]
       );
       // pg-mem 会把整数列按字符串返回，统一 Number 规避双端差异
-      valid = new Set(rows.map((r) => Number(r.id)));
+      const validSet = new Set(rows.map((r) => Number(r.id)));
+      valid = ordered.filter((id) => validSet.has(id));
     }
-    await pool.query('DELETE FROM itinerary_stops WHERE map_code = $1', [mapCode]);
-    let position = 0;
-    for (const id of ordered) {
-      if (!valid.has(id)) continue;
-      position += 1;
+
+    // 顺序：先把新顺序逐条 UPSERT，全部成功后再删除不在列表中的站点。
+    // 中途失败最坏是"多留了几站/部分站点仍是旧位置"，而不是旧写法那样
+    // "先 DELETE 全部、再逐条 INSERT"导致行程被截断（审计 F-11）。
+    // 注：不用多行 VALUES + ON CONFLICT —— pg-mem 只保留最后一行，会让本地测试失真。
+    if (valid.length > 0) {
+      for (let i = 0; i < valid.length; i += 1) {
+        await pool.query(
+          `INSERT INTO itinerary_stops (map_code, place_id, position) VALUES ($1, $2, $3)
+           ON CONFLICT (map_code, place_id) DO UPDATE SET position = EXCLUDED.position`,
+          [mapCode, valid[i], i + 1]
+        );
+      }
+      const keep = valid.map((_, i) => `$${i + 2}`).join(', ');
       await pool.query(
-        'INSERT INTO itinerary_stops (map_code, place_id, position) VALUES ($1, $2, $3)',
-        [mapCode, id, position]
+        `DELETE FROM itinerary_stops WHERE map_code = $1 AND place_id NOT IN (${keep})`,
+        [mapCode, ...valid]
       );
+    } else {
+      await pool.query('DELETE FROM itinerary_stops WHERE map_code = $1', [mapCode]);
     }
     return listItinerary(mapCode);
   }
@@ -570,16 +638,45 @@ export function createPlaceStore(pool) {
 
   async function listPhotos(placeId, mapCode) {
     const { rows } = await pool.query(
-      `SELECT id, mime, thumb_b64, thumb_url, url, added_by, created_at
-       FROM place_photos WHERE place_id = $1 AND map_code = $2 ORDER BY id ASC`,
+      `SELECT id, mime, thumb_b64, thumb_url, url, full_b64, added_by, created_at
+       FROM place_photos
+       WHERE place_id = $1 AND map_code = $2 AND moderation <> 'risky'
+       ORDER BY id ASC`,
       [placeId, mapCode]
     );
-    return rows.map(({ thumb_b64, thumb_url, url, mime, ...rest }) => ({
+    return rows.map(({ thumb_b64, thumb_url, url, mime, full_b64, ...rest }) => ({
       ...rest,
-      thumb: thumb_url || `data:${mime};base64,${thumb_b64}`,
+      // 缩略图缺失（老数据，或客户端未传 thumb）时退回原图，保证列表仍能渲染
+      thumb:
+        thumb_url ||
+        (thumb_b64 ? `data:${mime};base64,${thumb_b64}` : `data:${mime};base64,${full_b64}`),
       // CDN 原图直链：小程序大图预览直接走 Cloudinary，不依赖后端域名；存量 DB 照片为 null
       full: url || null,
     }));
+  }
+
+  // 超出上限时按 id 顺序裁掉多出来的照片（幂等、并发安全）。
+  // 与"插入后 count 再删自己"的补偿式写法不同：并发场景下所有调用者都会收敛到
+  // 同一组"id 最小的 keep 张"，不会互相把对方删掉。返回被删除的行。
+  async function trimPhotos(placeId, mapCode, keep) {
+    const { rows } = await pool.query(
+      'SELECT id FROM place_photos WHERE place_id = $1 AND map_code = $2 ORDER BY id ASC LIMIT $3',
+      [placeId, mapCode, keep]
+    );
+    const keepIds = rows.map((r) => Number(r.id));
+    let removed = [];
+    if (keepIds.length >= keep) {
+      const placeholders = keepIds.map((_, i) => `$${i + 3}`).join(', ');
+      const deleted = await pool.query(
+        `DELETE FROM place_photos WHERE place_id = $1 AND map_code = $2 AND id NOT IN (${placeholders})
+         RETURNING id, public_id`,
+        [placeId, mapCode, ...keepIds]
+      );
+      removed = deleted.rows;
+    }
+    // 关键：把"保留集合"一并返回。并发上传时另一路可能已经把本行删掉，
+    // 只看 removed 会误判成功（实测会出现两个 201 但实际只剩 9 张）。
+    return { removed, keepIds };
   }
 
   async function countPhotos(placeId, mapCode) {
@@ -639,7 +736,8 @@ export function createPlaceStore(pool) {
       `SELECT ph.mime, ph.full_b64, ph.url
        FROM place_photos ph
        JOIN public.places pl ON pl.id = ph.place_id AND pl.map_code = ph.map_code
-       WHERE ph.id = $1 AND ph.map_code = $2 AND pl.deleted_at IS NULL`,
+       WHERE ph.id = $1 AND ph.map_code = $2 AND pl.deleted_at IS NULL
+         AND ph.moderation <> 'risky'`,
       [id, mapCode]
     );
     if (!rows[0]) return null;
@@ -699,7 +797,9 @@ export function createPlaceStore(pool) {
     );
     if (rows.length === 0) return [];
     const [photoRows, commentRows, wishRows] = await Promise.all([
-      pool.query('SELECT place_id, count(*) AS n FROM place_photos GROUP BY place_id'),
+      pool.query(
+        "SELECT place_id, count(*) AS n FROM place_photos WHERE moderation <> 'risky' GROUP BY place_id"
+      ),
       pool.query('SELECT place_id, count(*) AS n FROM place_comments GROUP BY place_id'),
       pool.query('SELECT place_id, who FROM place_wishes ORDER BY id ASC'),
     ]);
@@ -726,6 +826,126 @@ export function createPlaceStore(pool) {
       [id, mapCode]
     );
     return rows[0] ?? null;
+  }
+
+  // ---------- 内容举报 ----------
+
+  const REPORT_TARGETS = {
+    place: { table: 'public.places', placeColumn: 'id' },
+    comment: { table: 'place_comments', placeColumn: 'place_id' },
+    photo: { table: 'place_photos', placeColumn: 'place_id' },
+  };
+
+  // 定位被举报对象所属地图与地点（用于权限判断与通知）
+  async function findReportTarget(targetType, targetId) {
+    const config = REPORT_TARGETS[targetType];
+    if (!config) return null;
+    const { rows } = await pool.query(
+      `SELECT map_code, ${config.placeColumn} AS place_id FROM ${config.table} WHERE id = $1`,
+      [targetId]
+    );
+    if (!rows[0]) return null;
+    return { mapCode: rows[0].map_code, placeId: Number(rows[0].place_id) };
+  }
+
+  // 该地点当前是否公开可见（公共广场语境下的举报只允许针对公开内容）
+  async function isPlacePublic(placeId) {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM public.places WHERE id = $1 AND is_public = TRUE AND deleted_at IS NULL',
+      [placeId]
+    );
+    return rows.length > 0;
+  }
+
+  async function createReport({
+    targetType,
+    targetId,
+    mapCode,
+    reason,
+    detail,
+    reporter,
+    openid,
+  }) {
+    const { rows } = await pool.query(
+      `INSERT INTO content_reports (target_type, target_id, map_code, reason, detail, reporter, openid)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, target_type, target_id, reason, status, created_at`,
+      [targetType, targetId, mapCode, reason, detail ?? '', reporter ?? '', openid ?? '']
+    );
+    return rows[0];
+  }
+
+  async function listReports(mapCode, { status = 'open' } = {}) {
+    const { rows } = await pool.query(
+      `SELECT id, target_type, target_id, reason, detail, reporter, status, created_at
+       FROM content_reports
+       WHERE map_code = $1 AND ($2 = '' OR status = $2)
+       ORDER BY created_at DESC, id DESC`,
+      [mapCode, status]
+    );
+    return rows;
+  }
+
+  async function resolveReport(id, mapCode) {
+    const { rows } = await pool.query(
+      `UPDATE content_reports SET status = 'resolved', resolved_at = now()
+       WHERE id = $1 AND map_code = $2 AND status = 'open' RETURNING id`,
+      [id, mapCode]
+    );
+    return rows.length > 0;
+  }
+
+  // ---------- 照片内容审核（mediaCheckAsync）----------
+
+  async function getPhotoForModeration(id, mapCode) {
+    const { rows } = await pool.query(
+      'SELECT id, map_code, url FROM place_photos WHERE id = $1 AND map_code = $2',
+      [id, mapCode]
+    );
+    return rows[0] ?? null;
+  }
+
+  async function setPhotoModeration(id, { moderation, traceId } = {}) {
+    await pool.query(
+      `UPDATE place_photos
+       SET moderation = COALESCE($2, moderation), trace_id = COALESCE($3, trace_id)
+       WHERE id = $1`,
+      [id, moderation ?? null, traceId ?? null]
+    );
+  }
+
+  async function setPhotoModerationByTrace(traceId, moderation) {
+    const { rows } = await pool.query(
+      'UPDATE place_photos SET moderation = $2 WHERE trace_id = $1 RETURNING id, map_code',
+      [traceId, moderation]
+    );
+    return rows[0] ?? null;
+  }
+
+  // 公共广场单个地点：字段与列表视图一致，且绝不返回 map_code
+  async function getPublicPlace(id) {
+    const { rows } = await pool.query(
+      `SELECT id, name, description, category, lng, lat, address, added_by,
+              visited, created_at, updated_at, visited_at, is_public
+       FROM public.places
+       WHERE id = $1 AND is_public = TRUE AND deleted_at IS NULL`,
+      [id]
+    );
+    if (!rows[0]) return null;
+    const [photoRows, commentRows, wishRows] = await Promise.all([
+      pool.query(
+        "SELECT count(*) AS n FROM place_photos WHERE place_id = $1 AND moderation <> 'risky'",
+        [id]
+      ),
+      pool.query('SELECT count(*) AS n FROM place_comments WHERE place_id = $1', [id]),
+      pool.query('SELECT who FROM place_wishes WHERE place_id = $1 ORDER BY id ASC', [id]),
+    ]);
+    return {
+      ...rows[0],
+      photo_count: Number(photoRows.rows[0].n),
+      comment_count: Number(commentRows.rows[0].n),
+      wishes: wishRows.rows.map((r) => r.who),
+    };
   }
 
   async function toggleWish(placeId, mapCode, who) {
@@ -758,14 +978,16 @@ export function createPlaceStore(pool) {
     );
     if (rows.length === 0) return [];
     const photos = await pool.query(
-      'SELECT place_id, thumb_url, thumb_b64, mime FROM place_photos WHERE map_code = $1 ORDER BY id ASC',
+      `SELECT place_id, thumb_url, thumb_b64, full_b64, mime FROM place_photos
+       WHERE map_code = $1 AND moderation <> 'risky' ORDER BY id ASC`,
       [mapCode]
     );
     const thumbsByPlace = new Map();
     for (const row of photos.rows) {
       const list = thumbsByPlace.get(row.place_id) ?? [];
       if (list.length < 3) {
-        list.push(row.thumb_url || `data:${row.mime};base64,${row.thumb_b64}`);
+        const b64 = row.thumb_b64 || row.full_b64;
+        list.push(row.thumb_url || `data:${row.mime};base64,${b64}`);
         thumbsByPlace.set(row.place_id, list);
       }
     }
@@ -793,6 +1015,7 @@ export function createPlaceStore(pool) {
     getPlace,
     listPhotos,
     countPhotos,
+    trimPhotos,
     createPhoto,
     getPhoto,
     removePhoto,
@@ -803,6 +1026,15 @@ export function createPlaceStore(pool) {
     listWishes,
     listMemories,
     listPublicPlaces,
+    getPublicPlace,
+    findReportTarget,
+    isPlacePublic,
+    createReport,
+    listReports,
+    resolveReport,
+    getPhotoForModeration,
+    setPhotoModeration,
+    setPhotoModerationByTrace,
     togglePublic,
     listItinerary,
     setItinerary,

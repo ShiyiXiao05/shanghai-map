@@ -58,6 +58,10 @@
         <view class="btn btn-primary btn-mini" bindtap="sendComment">发送</view>
       </view>
     </view>
+    <!-- 内容举报入口：UGC 合规要求，任何人（含公共广场只读视图）都可见 -->
+    <view class="report-row">
+      <text class="report-link" bindtap="report">举报该内容</text>
+    </view>
   </block>
 
   <!-- 编辑态 -->
@@ -99,4 +103,24 @@
   </block>
 
   <nickname-modal show="{{nickModalShow}}" bind:confirm="onNickConfirm" bind:cancel="onNickCancel" />
+</view>
+
+<!-- 加载中：整页占位（原来是 wx:if="{{place}}" 导致首屏空白） -->
+<view class="page" wx:elif="{{loading}}">
+  <view class="state-box">
+    <text class="state-icon">⏳</text>
+    <text class="state-text">正在加载地点…</text>
+  </view>
+</view>
+
+<!-- 加载失败：错误原因 + 重试 -->
+<view class="page" wx:else>
+  <view class="state-box">
+    <text class="state-icon">⚠️</text>
+    <text class="state-text">{{loadError || '地点加载失败'}}</text>
+    <view class="actions">
+      <view class="btn" bindtap="goBack">返回</view>
+      <view class="btn btn-primary" bindtap="retryLoad">重试</view>
+    </view>
+  </view>
 </view>

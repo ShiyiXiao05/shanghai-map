@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { identityOr401 } from './identity.js';
+import { limiters } from '../ratelimit.js';
 
 export function createMapsRouter({ store, uploader }) {
   const router = Router();
+  // 建图无需登录：必须限流，否则可被无限写库
+  const createMapLimiter = limiters.createMap();
 
   // 回忆时间线：已打卡地点 + 缩略图（要放在 /:code 之前定义更清晰）
   router.get('/:code/memories', async (req, res, next) => {
@@ -16,7 +19,7 @@ export function createMapsRouter({ store, uploader }) {
     }
   });
 
-  router.post('/', async (req, res, next) => {
+  router.post('/', createMapLimiter, async (req, res, next) => {
     try {
       const body = typeof req.body === 'object' && req.body !== null ? req.body : {};
       const name = typeof body.name === 'string' ? body.name.trim() : '';

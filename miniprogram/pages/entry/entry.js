@@ -38,6 +38,16 @@ Page({
   },
 
   async createMap() {
+    if (this.creating) return; // 防连点：弱网下重复点会建出多张地图
+    this.creating = true;
+    try {
+      await this.createMapInner();
+    } finally {
+      this.creating = false;
+    }
+  },
+
+  async createMapInner() {
     const name = this.data.name.trim();
     if (!name) {
       wx.showToast({ title: '给地图起个名字吧', icon: 'none' });
@@ -60,7 +70,7 @@ Page({
 
   async joinMap() {
     const code = this.data.code.trim().toUpperCase();
-    if (!/^[A-Z0-9]{4,10}$/.test(code)) {
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
       wx.showToast({ title: '邀请码是 6 位字母数字', icon: 'none' });
       return;
     }
@@ -91,12 +101,10 @@ Page({
     });
   },
 
-  copyInviteLink() {
-    const code = this.data.createdCode;
-    wx.setClipboardData({
-      data: `#小程序://魔都Explore/${code}`,
-      success: () => wx.showToast({ title: '口令已复制', icon: 'none' }),
-    });
+  // 退出当前地图会话，切到公共广场只读视图
+  enterPublic() {
+    app.exitToPublic();
+    wx.reLaunch({ url: '/pages/index/index' });
   },
 
   back() {

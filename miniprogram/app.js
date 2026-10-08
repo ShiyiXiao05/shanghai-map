@@ -1,4 +1,11 @@
-const { getJoinedMaps, getCurrentMapCode, setCurrentMapCode, saveJoinedMap } = require('./utils/storage.js');
+const {
+  getJoinedMaps,
+  getCurrentMapCode,
+  setCurrentMapCode,
+  saveJoinedMap,
+  setPublicView,
+  isPublicView,
+} = require('./utils/storage.js');
 const { CLOUD_ENV_ID } = require('./utils/config.js');
 
 App({
@@ -20,6 +27,12 @@ App({
   },
 
   restoreSession() {
+    // 上次主动进了公共广场：保持只读广场，不再自动跳回上一张地图
+    if (isPublicView()) {
+      this.globalData.map = null;
+      this.globalData.isPublicView = true;
+      return;
+    }
     const code = getCurrentMapCode();
     const map = getJoinedMaps().find((m) => m.code === code) ?? getJoinedMaps()[0] ?? null;
     this.globalData.map = map;
@@ -31,6 +44,7 @@ App({
   enterMap(map) {
     this.globalData.map = map;
     this.globalData.isPublicView = false;
+    setPublicView(false);
     saveJoinedMap(map);
     setCurrentMapCode(map.code);
   },
@@ -39,5 +53,6 @@ App({
   exitToPublic() {
     this.globalData.map = null;
     this.globalData.isPublicView = true;
+    setPublicView(true);
   },
 });

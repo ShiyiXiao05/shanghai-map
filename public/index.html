@@ -25,6 +25,9 @@
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 </head>
 <body>
+  <noscript>
+    <p class="noscript-hint">本应用需要启用 JavaScript 才能显示地图、地点与照片，请在浏览器设置里开启后刷新页面。</p>
+  </noscript>
   <div class="map-stage">
     <div id="map" class="map"></div>
 
@@ -217,7 +220,36 @@
           <button type="submit" class="btn btn-primary btn-small">发送</button>
         </form>
       </section>
+      <!-- UGC 合规：任何可见内容都提供举报入口（含公共广场只读视图） -->
+      <p class="detail-report">
+        <button type="button" class="btn-link" id="btn-report">举报该内容</button>
+      </p>
     </div>
+  </dialog>
+
+  <dialog id="report-dialog" class="dialog dialog-confirm">
+    <form id="report-form" class="confirm-body">
+      <h2>举报内容</h2>
+      <p class="dialog-hint">举报会同时提交给地图创建者与运营方，核实后会处理并可能下架内容。</p>
+      <div class="field">
+        <span>举报原因</span>
+        <select id="report-reason" required>
+          <option value="不实信息">不实信息</option>
+          <option value="广告营销">广告营销</option>
+          <option value="侵权/抄袭">侵权/抄袭</option>
+          <option value="违法违规">违法违规</option>
+          <option value="其他">其他</option>
+        </select>
+      </div>
+      <div class="field">
+        <span>补充说明（可选）</span>
+        <textarea id="report-detail" maxlength="200" rows="3"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="btn-report-cancel">取消</button>
+        <button type="submit" class="btn btn-primary" id="btn-report-submit">提交举报</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="lightbox" class="lightbox">
@@ -225,6 +257,7 @@
       <img id="lightbox-img" alt="地点照片" />
       <figcaption id="lightbox-caption" class="lightbox-caption"></figcaption>
     </figure>
+    <button type="button" class="lightbox-close" id="btn-lightbox-close" aria-label="关闭">✕</button>
   </dialog>
 
   <dialog id="memories-dialog" class="dialog dialog-memories">

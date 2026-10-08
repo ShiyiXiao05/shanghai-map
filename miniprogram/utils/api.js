@@ -6,6 +6,23 @@ import { getAuthToken } from './storage.js';
 // 留空时回落 wx.request 直连 BASE_URL（体验版/本地调试，需勾选「不校验合法域名」）。
 // 两种通道的 success 回调同为 { statusCode, data } 结构，页面代码无感知。
 // 已登录时自动携带 Bearer token：服务端据此把署名（added_by/author/who）盖章为登录昵称
+
+// 请求超时：兜底 15s，避免弱网下 Promise 永不 settle（服务端还有温和限流，客户端不做高频重试）
+const REQUEST_TIMEOUT = 15000;
+
+// 401 恢复回调由 auth.js 在模块顶层注册（避免 api.js ↔ auth.js 循环依赖）；
+// 未注册时回退到 require('./auth.js')，保证任何加载顺序都能工作
+let authRecovery = null;
+
+export function setAuthRecovery(fn) {
+  authRecovery = typeof fn === 'function' ? fn : null;
+}
+
+async function recoverAuth(error) {
+  const handler = authRecovery || ((opts) => require('./auth.js').ensureLogin(opts));
+  await handler({ force: getAuthToken() === error.authToken });
+}
+
 function sendRequest(method, path, { body, mapCode } = {}) {
   return new Promise((resolve, reject) => {
     const token = getAuthToken();
@@ -25,7 +42,8 @@ function sendRequest(method, path, { body, mapCode } = {}) {
       error.authToken = token;
       reject(error);
     };
-    const fail = (err) => reject(new Error('网络异常：' + (err.errMsg || '')));
+    // 网络层失败不带 status，供上层区分「网络异常」与「HTTP 错误码」
+    const fail = (err) => reject(new Error('网络异常：' + ((err && err.errMsg) || '请求未完成')));
     if (CLOUD_ENV_ID) {
       wx.cloud.callContainer({
         config: { env: CLOUD_ENV_ID },
@@ -33,6 +51,7 @@ function sendRequest(method, path, { body, mapCode } = {}) {
         method,
         data: body ?? undefined,
         header: { ...header, 'X-WX-SERVICE': CLOUD_SERVICE_NAME },
+        timeout: REQUEST_TIMEOUT,
         success,
         fail,
       });
@@ -42,6 +61,7 @@ function sendRequest(method, path, { body, mapCode } = {}) {
         method,
         data: body ?? undefined,
         header,
+        timeout: REQUEST_TIMEOUT,
         success,
         fail,
       });
@@ -50,13 +70,30 @@ function sendRequest(method, path, { body, mapCode } = {}) {
 }
 
 async function request(method, path, opts) {
-  try {
-    return await sendRequest(method, path, opts);
-  } catch (err) {
-    if (err.status !== 401 || err.code !== 'AUTH_EXPIRED' || path === '/api/auth/login') throw err;
-    const { ensureLogin } = require('./auth.js');
-    await ensureLogin({ force: getAuthToken() === err.authToken });
-    return sendRequest(method, path, opts);
+  let authRetried = false;
+  let networkRetried = false;
+  for (;;) {
+    try {
+      return await sendRequest(method, path, opts);
+    } catch (err) {
+      // 登录过期：重新登录后原样重放一次（写请求也重放，因为服务端未执行）
+      if (
+        !authRetried &&
+        err.status === 401 &&
+        err.code === 'AUTH_EXPIRED' &&
+        path !== '/api/auth/login'
+      ) {
+        authRetried = true;
+        await recoverAuth(err); // 恢复失败（登录接口 503/超时）时直接抛出，不再重放
+        continue;
+      }
+      // 幂等 GET 网络失败重试 1 次；写请求不自动重试，避免重复写入
+      if (!networkRetried && method === 'GET' && err.status === undefined) {
+        networkRetried = true;
+        continue;
+      }
+      throw err;
+    }
   }
 }
 
@@ -66,6 +103,9 @@ function get(path) {
 
 export const api = {
   health: () => get('/api/health'),
+
+  // 上传配置：{ cdn, maxFullBytes, maxThumbBytes }；无需邀请码、无需登录
+  uploadConfig: () => get('/api/upload-config'),
 
   // 登录（小程序）：code 换 token；昵称由服务端盖章，写接口不再传署名字段
   login: (code) => request('POST', '/api/auth/login', { body: { code } }),
@@ -101,10 +141,13 @@ export const api = {
   // 照片
   listPhotos: (code, placeId) =>
     get(`/api/places/${placeId}/photos?map=${encodeURIComponent(code)}`).then((d) => d.photos),
+  // CDN 模式（cfg.cdn=true）只传 full，服务端自行派生缩略图；无 CDN 时 thumb 必传
   uploadPhoto: (code, placeId, { full, thumb }) =>
     request('POST', `/api/places/${placeId}/photos`, {
-      body: { map_code: code, full, thumb },
+      body: { map_code: code, full, ...(thumb ? { thumb } : {}) },
     }),
+  // 注意：这里硬编码了 Render 域名 BASE_URL。云托管通道（CLOUD_ENV_ID）下仍依赖 Render：
+  // 存量 DB 照片只能通过该端点取出；后续若迁移到服务端下发 URL，再统一替换
   photoUrl: (code, photoId) =>
     `${BASE_URL}/api/photos/${photoId}?map=${encodeURIComponent(code)}`,
   deletePhoto: (code, photoId) =>
@@ -120,6 +163,11 @@ export const api = {
   deleteComment: (code, commentId) =>
     request('DELETE', `/api/comments/${commentId}`, { mapCode: code }),
 
+  // 内容举报：UGC 合规入口。地图内内容带 map_code；公共广场内容可不带（只允许举报公开内容）
+  report: (data) => request('POST', '/api/reports', { body: data }),
+
   // 公共广场
   publicPlaces: () => get('/api/public/places').then((d) => d.places),
+  // 公共广场单个地点（只读、无邀请码）：详情页冷启动直达时用，非公开/已删除返回 404
+  publicPlace: (id) => get(`/api/public/places/${id}`).then((d) => d.place),
 };

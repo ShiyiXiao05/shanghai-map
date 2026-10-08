@@ -1,0 +1,175 @@
+{
+  "auditedAt": "2026-10-08T05:34:24.238Z",
+  "commit": "274cc1b224852da5f6d4dde1205890c33bfa976f",
+  "nodeVersion": "v26.3.0",
+  "sourceSyntax": {
+    "fileCount": 47,
+    "failures": []
+  },
+  "json": {
+    "fileCount": 32,
+    "failures": []
+  },
+  "registeredPages": 8,
+  "missingPageFiles": [],
+  "wxml": {
+    "fileCount": 9,
+    "available": true,
+    "status": 0,
+    "stderr": "",
+    "outputBytes": 88216,
+    "outputSha256": "bd64da0724a1d52aed7bd930bdcc5993a956e95d27a74db333411c639783ca8d"
+  },
+  "wxss": {
+    "available": true,
+    "status": 0,
+    "fileCount": 10,
+    "files": [
+      {
+        "file": "app.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 1379,
+        "outputSha256": "60a3830fcdb58d451e5347e3b039f3a5d5e337d310156c9501fe90a6fa28756f"
+      },
+      {
+        "file": "components/nickname-modal/nickname-modal.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 1258,
+        "outputSha256": "010b2db84ac053cb63c347ca0db0f92f4e02d8e9a9b6900eacef1c3b57652ea6"
+      },
+      {
+        "file": "pages/detail/detail.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 4295,
+        "outputSha256": "a1907c4164619f4cb3329dec916ba85f3b37abf283e8123a006737cd43ded68b"
+      },
+      {
+        "file": "pages/entry/entry.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 2083,
+        "outputSha256": "81dfa158b1957f9d6bde93b73a306c8e234d666523529ac4dea9b75e5d77b5f1"
+      },
+      {
+        "file": "pages/import/import.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 1434,
+        "outputSha256": "961dbfa3cb25424819e70f4ea12bc49e66f03dfe0b17a29923fc8faa764b4d35"
+      },
+      {
+        "file": "pages/index/index.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 6870,
+        "outputSha256": "dc454563eee9b525218b6b73e9cb5bc7c21514759b791b3dbcab4356d9c7908b"
+      },
+      {
+        "file": "pages/itinerary/itinerary.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 2565,
+        "outputSha256": "45fac0cee9505f5cd32a4cabdbc24af9b0d6c8e7ba8c38ab2634801116110d28"
+      },
+      {
+        "file": "pages/memories/memories.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 964,
+        "outputSha256": "a9c10e30c8ade0483ad8f1f194406b8d632d8f52995357d6b8358065dff04bf0"
+      },
+      {
+        "file": "pages/poster/poster.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 607,
+        "outputSha256": "91f7861475bfc72f33a14e475b21aca8e97f7d360bd59e52c1093148ccf4fa73"
+      },
+      {
+        "file": "pages/search/search.wxss",
+        "available": true,
+        "status": 0,
+        "stderr": "",
+        "outputBytes": 1779,
+        "outputSha256": "2eaded55291e5ab30e4fc2bf1f715c29f9af30ddffbaf33c1e3f02791f0207fd"
+      }
+    ]
+  },
+  "templateRuntime": {
+    "scope": "compiler-generated WXML renderer in Node VM; not a simulator screenshot",
+    "categoryIndexOfWorks": true,
+    "chips": [
+      {
+        "class": "chip chip-on",
+        "style": "background:#1234561f; border-color:#123456"
+      }
+    ],
+    "warnings": []
+  },
+  "dependencies": {
+    "all": {
+      "info": 0,
+      "low": 0,
+      "moderate": 4,
+      "high": 1,
+      "critical": 2,
+      "total": 7
+    },
+    "production": {
+      "info": 0,
+      "low": 0,
+      "moderate": 2,
+      "high": 1,
+      "critical": 2,
+      "total": 5
+    }
+  },
+  "network": [
+    {
+      "endpoint": "/api/health",
+      "status": 200,
+      "elapsedMs": 1022,
+      "ok": true,
+      "headers": {
+        "cacheControl": null,
+        "hsts": null,
+        "referrerPolicy": null
+      }
+    },
+    {
+      "endpoint": "/api/public/places",
+      "status": 200,
+      "elapsedMs": 2831,
+      "placeCount": 5,
+      "headers": {
+        "cacheControl": null,
+        "hsts": null,
+        "referrerPolicy": null
+      }
+    },
+    {
+      "endpoint": "/api/push/key",
+      "status": 503,
+      "elapsedMs": 2258,
+      "pushConfigured": false,
+      "headers": {
+        "cacheControl": null,
+        "hsts": null,
+        "referrerPolicy": null
+      }
+    }
+  ],
+  "productionRequests": "three public GETs only; no private data read and no mutations"
+}

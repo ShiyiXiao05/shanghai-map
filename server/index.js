@@ -7,6 +7,7 @@ import { placeStore as productionStore, createPlaceStore } from './store.js';
 import { createCloudinaryUploader } from './uploader.js';
 import { createPusher } from './pusher.js';
 import { createAuth } from './auth.js';
+import { createContentSecurity } from './content-security.js';
 
 async function resolveStore() {
   if (productionStore) return productionStore;
@@ -55,12 +56,29 @@ if (auth.ephemeralSecret) {
   console.warn('未配置 AUTH_SECRET：登录 token 重启后失效，生产环境建议配置');
 }
 
+const contentSecurity = createContentSecurity({
+  appid: process.env.MINIPROGRAM_APPID,
+  secret: process.env.MINIPROGRAM_SECRET,
+  // mp 后台「消息推送」的 Token：配置后才启用图片异步审核（回调走 /api/wechat/media-check-callback）
+  msgToken: process.env.WECHAT_MSG_TOKEN,
+  // 需要临时关闭时设 CONTENT_SECURITY=off（例如微信接口故障期间）
+  enabled: process.env.CONTENT_SECURITY !== 'off',
+});
+if (contentSecurity.configured) {
+  console.log(
+    `内容安全：文本检测已启用（msgSecCheck）${contentSecurity.mediaCheckEnabled ? '；图片异步审核已启用（mediaCheckAsync）' : '；图片异步审核未启用（缺少 WECHAT_MSG_TOKEN）'}`
+  );
+} else {
+  console.warn('未配置 MINIPROGRAM_APPID/MINIPROGRAM_SECRET：内容安全检测停用');
+}
+
 const app = buildApp({
   store,
   mapConfig: { key: process.env.AMAP_KEY, securityJsCode: process.env.AMAP_SECURITY_CODE },
   uploader,
   pusher,
   auth,
+  contentSecurity,
 });
 app.use(
   express.static(publicDir, {
@@ -80,6 +98,16 @@ const port = Number(process.env.PORT) || 3000;
 
 const server = app.listen(port, () => {
   console.log(`上海地点地图已启动：http://localhost:${port}`);
+});
+
+// 请求级异常不应终止进程：Express 4 不会捕获 async 中间件/路由的 Promise 拒绝，
+// 过去一次数据库抖动就会让服务崩溃重启（审计 F-07）。未捕获异常仍然退出，交给平台重启。
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException] 进程即将退出：', err);
+  process.exit(1);
 });
 
 const shutdown = () => {

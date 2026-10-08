@@ -1,6 +1,6 @@
 import { api } from './api.js';
 import { loadAmap, createMapView } from './map.js';
-import { compressPhoto } from './photos.js';
+import { compressToLimit, compressThumbToLimit } from './photos.js';
 import { generatePoster } from './poster.js';
 
 // 深色霓虹底下用的亮色分类色板（色值与 css/style.css 的 --cat-* 保持一致）
@@ -1142,10 +1142,13 @@ async function refreshPhotos() {
     img.src = photo.thumb;
     img.alt = `${detailPlace.name}的照片`;
     img.loading = 'lazy';
-    const del = document.createElement('span');
+    // 删除热区必须是可聚焦元素：键盘用户也要能删照片
+    const del = document.createElement('button');
+    del.type = 'button';
     del.className = 'photo-del';
     del.textContent = '✕';
     del.title = '删除照片';
+    del.setAttribute('aria-label', '删除照片');
     cell.append(img, del);
     cell.addEventListener('click', (event) => {
       if (event.target === del) {
@@ -1153,7 +1156,10 @@ async function refreshPhotos() {
         deletePhoto(photo.id);
         return;
       }
-      $('#lightbox-img').src = api.photoUrl(state.map.code, photo.id);
+      const lightboxImg = $('#lightbox-img');
+      lightboxImg.src = api.photoUrl(state.map.code, photo.id);
+      // alt 要跟着当前照片走，否则读屏用户听到的还是上一张的描述
+      lightboxImg.alt = `${detailPlace.name}的照片`;
       $('#lightbox-caption').textContent = `${detailPlace.name} · ${who} · ${formatDateTime(photo.created_at)}`;
       $('#lightbox').showModal();
     });
@@ -1175,17 +1181,38 @@ async function deletePhoto(photoId) {
   }
 }
 
+// 上传配置拿不到时按「CDN 模式」兜底：只传 full，缩略图由服务端派生
+const UPLOAD_FALLBACK = { cdn: true, maxFullBytes: 1536 * 1024, maxThumbBytes: 64 * 1024 };
+
 async function uploadPhotos(files) {
   if (!state.map || !detailPlace) return;
+  const cfg = await api.uploadConfig().catch(() => UPLOAD_FALLBACK);
+  const maxFullBytes = cfg?.maxFullBytes > 0 ? cfg.maxFullBytes : UPLOAD_FALLBACK.maxFullBytes;
+  const maxThumbBytes = cfg?.maxThumbBytes > 0 ? cfg.maxThumbBytes : UPLOAD_FALLBACK.maxThumbBytes;
+  const useCdn = cfg?.cdn !== false;
+  // 非 CDN 模式 thumb 必须自带；服务端按 base64 长度算 64KB，解码后约 48KB，故按 3/4 折算目标
+  const thumbBytes = Math.floor((maxThumbBytes * 3) / 4);
+
   let ok = 0;
   for (const file of files) {
     try {
-      const { full, thumb } = await compressPhoto(file);
-      await api.addPhoto(state.map.code, detailPlace.id, {
-        full,
-        thumb,
+      // 上传前先在本地压到上限内，避免白传一趟再被服务端 400 顶回来
+      const full = await compressToLimit(file, maxFullBytes);
+      if (full.bytes > maxFullBytes) {
+        throw new Error('图片过大，已压缩仍超过限制，请换一张');
+      }
+      const payload = {
+        full: full.dataUrl,
         added_by: localStorage.getItem(NICKNAME_KEY) ?? '',
-      });
+      };
+      if (!useCdn) {
+        const thumb = await compressThumbToLimit(file, thumbBytes);
+        if (thumb.bytes > thumbBytes) {
+          throw new Error('图片过大，已压缩仍超过限制，请换一张');
+        }
+        payload.thumb = thumb.dataUrl;
+      }
+      await api.addPhoto(state.map.code, detailPlace.id, payload);
       ok += 1;
     } catch (err) {
       toast(`「${file.name}」上传失败：${err.message}`, 'error');
@@ -1269,6 +1296,36 @@ function bindDetailDialog() {
       toast(link, 'info');
     }
   });
+  // 举报：详情弹层入口 → 独立弹层选择原因 → POST /api/reports
+  $('#btn-report').addEventListener('click', () => {
+    $('#report-detail').value = '';
+    $('#report-dialog').showModal();
+  });
+  $('#btn-report-cancel').addEventListener('click', () => $('#report-dialog').close());
+  $('#report-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!detailPlace) return;
+    const reason = $('#report-reason').value || '其他';
+    const note = $('#report-detail').value.trim();
+    const submit = $('#btn-report-submit');
+    submit.disabled = true;
+    try {
+      await api.report({
+        target_type: 'place',
+        target_id: detailPlace.id,
+        reason,
+        detail: note,
+        ...(state.map ? { map_code: state.map.code } : {}),
+      });
+      $('#report-dialog').close();
+      toast('已收到举报，感谢反馈');
+    } catch (err) {
+      toast(`举报失败：${err.message}`, 'error');
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
   $('#btn-detail-edit').addEventListener('click', () => {
     if (!detailPlace) return;
     closeDetail();
@@ -1305,8 +1362,14 @@ function bindDetailDialog() {
       sendBtn.disabled = false;
     }
   });
+  // 点空白处关闭灯箱；close() 对已关闭的 dialog 会抛错，所以统一先判断 open
   $('#lightbox').addEventListener('click', () => {
-    $('#lightbox').close();
+    const lightbox = $('#lightbox');
+    if (lightbox.open) lightbox.close();
+  });
+  $('#btn-lightbox-close').addEventListener('click', () => {
+    const lightbox = $('#lightbox');
+    if (lightbox.open) lightbox.close();
   });
 }
 
@@ -1726,7 +1789,8 @@ function renderMemories(memories) {
       placeholder.textContent = '📷';
       strip.appendChild(placeholder);
     } else {
-      for (const thumb of memory.photos.slice(0, 4)) {
+      // 服务端每个地点最多给 3 张缩略图，取 4 会让第 4 格永远空着
+      for (const thumb of memory.photos.slice(0, 3)) {
         const img = document.createElement('img');
         img.src = thumb;
         img.alt = memory.name;

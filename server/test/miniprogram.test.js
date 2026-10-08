@@ -172,14 +172,15 @@ describe('miniprogram regressions', () => {
     assert.equal(client.loginCount(), 1);
   });
 
-  it('重登失败清除失效 token 并返回错误，不执行写操作', async () => {
+  it('重登失败时保留旧 token、返回错误且不重复写请求', async () => {
     const client = createLoginRuntime(
       (options) => options.success({ statusCode: 401, data: { code: 'AUTH_EXPIRED' } }),
       new Error('微信登录失败')
     );
     const { api } = client.runtime.load('utils/api.js');
     await assert.rejects(api.createMap({ name: '地图' }), /微信登录失败/);
-    assert.equal(client.values.get('wish-wmp-token'), '');
+    // 关键：登录没成功就不该动本地 token（旧实现先清空 → 用户永久掉登录态且无自救入口）
+    assert.equal(client.values.get('wish-wmp-token'), 'expired-token');
     assert.equal(client.requests.length, 1);
   });
 
@@ -224,4 +225,96 @@ describe('miniprogram regressions', () => {
       assert.equal(toasts.length, cancelled ? 0 : 1);
     });
   }
+
+  it('排序：picker 索引映射为 sort key 并写入本地存储', async () => {
+    const values = new Map();
+    const runtime = createRuntime({
+      wx: { getStorageSync: (key) => values.get(key), setStorageSync: (key, value) => values.set(key, value) },
+      modules: { [path.join(miniRoot, 'utils/api.js')]: { api: { listPlaces: async () => [] } } },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [], activeCategories: [], hideVisitedOnly: false });
+    page.onSortChange({ detail: { value: '1' } });
+    assert.equal(page.data.sort, 'name');
+    assert.equal(page.data.sortIndex, 1);
+    assert.equal(values.get('wish-sort'), 'name');
+    page.onSortChange({ detail: { value: '2' } });
+    assert.equal(page.data.sort, 'wishes');
+    assert.equal(page.data.sortIndex, 2);
+  });
+
+  it('照片上传：CDN 模式只传 full，无 CDN 时带一张预算内的缩略图', async () => {
+    const uploads = [];
+    let cfg = { cdn: true, maxFullBytes: 1.5 * 1024 * 1024, maxThumbBytes: 64 * 1024 };
+    const fileSizes = { '/tmp/orig.jpg': 4 * 1024 * 1024, '/tmp/small.jpg': 30 * 1024, '/tmp/thumb.jpg': 10 * 1024 };
+    const contents = { '/tmp/small.jpg': 40 * 1024, '/tmp/thumb.jpg': 13 * 1024 };
+    const runtime = createRuntime({
+      app: { globalData: { map: { code: 'MAP123', name: '地图' } } },
+      wx: {
+        chooseMedia: async () => ({ tempFiles: [{ tempFilePath: '/tmp/orig.jpg', size: 4 * 1024 * 1024 }] }),
+        compressImage: ({ compressedWidth, success }) =>
+          success({ tempFilePath: compressedWidth >= 800 ? '/tmp/small.jpg' : '/tmp/thumb.jpg' }),
+        getFileSystemManager: () => ({
+          getFileInfo: ({ filePath, success }) => success({ size: fileSizes[filePath] || 4 * 1024 * 1024 }),
+          readFile: ({ filePath, success }) => success({ data: 'A'.repeat(contents[filePath] || 0) }),
+        }),
+        showLoading() {},
+        hideLoading() {},
+        showToast() {},
+      },
+      modules: {
+        [path.join(miniRoot, 'utils/auth.js')]: { requireIdentity: async () => '同学' },
+        [path.join(miniRoot, 'utils/identity-behavior.js')]: {},
+        [path.join(miniRoot, 'utils/api.js')]: {
+          api: {
+            uploadConfig: async () => cfg,
+            uploadPhoto: async (code, placeId, body) => {
+              uploads.push(body);
+              return { id: uploads.length };
+            },
+            listPhotos: async () => [],
+          },
+        },
+      },
+    });
+    const page = runtime.page('pages/detail/detail.js');
+    page.placeId = 7;
+
+    await page.addPhoto();
+    assert.equal(uploads.length, 1);
+    assert.match(uploads[0].full, /^data:image\/jpeg;base64,/);
+    assert.equal(uploads[0].thumb, undefined, 'CDN 模式不应携带 thumb（会撞 callContainer 100K 上限）');
+
+    cfg = { cdn: false, maxFullBytes: 1.5 * 1024 * 1024, maxThumbBytes: 64 * 1024 };
+    await page.addPhoto();
+    assert.equal(uploads.length, 2);
+    assert.match(uploads[1].thumb || '', /^data:image\/jpeg;base64,/);
+    assert.ok(uploads[1].thumb.length <= 64 * 1024, '缩略图 base64 需在服务端 64KB 上限内');
+    assert.ok(uploads[1].full.length + uploads[1].thumb.length < 100 * 1024, '请求体需在 100K 以内');
+  });
+
+  it('详情页分享路径带上 place id（并支持分享朋友圈）', async () => {
+    const runtime = createRuntime({
+      app: { globalData: { map: { code: 'MAP123', name: '地图' } } },
+      wx: {},
+      modules: { [path.join(miniRoot, 'utils/api.js')]: { api: {}, setAuthRecovery() {} } },
+    });
+    const page = runtime.page('pages/detail/detail.js');
+    page.placeId = 42;
+    page.data.place = { id: 42, name: '某地点' };
+    assert.match(page.onShareAppMessage().path, /place=42/);
+    assert.match(page.onShareTimeline().query, /place=42/);
+  });
+
+  it('图标未生成时地图仍渲染点位（使用系统默认标记）', async () => {
+    const runtime = createRuntime({
+      app: { globalData: { map: { code: 'MAP123' } } },
+      wx: { showToast() {}, setNavigationBarTitle() {} },
+      modules: { [path.join(miniRoot, 'utils/api.js')]: { api: { listPlaces: async () => [] } } },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.renderMarkers([{ id: 1, name: 'A', category: '景点', lat: 31, lng: 121, visited: false }]);
+    assert.equal(page.data.markers.length, 1, '没有图标也必须画出点位');
+    assert.equal(page.data.markers[0].iconPath, undefined);
+  });
 });

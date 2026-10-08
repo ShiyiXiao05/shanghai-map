@@ -3,6 +3,8 @@
 在魔都的夜色里，和同学一起标记想去的上海角落：搜索定位、吸附选点、添加描述、分类管理、去过后打卡，每个地点还能传照片、写留言。**邀请码共享多地图**：每张地图有独立邀请码，同码即可共建。
 
 > **线上地址**：https://shanghai-wish-map.onrender.com
+>
+> 2026-10-08 可用性审计与修复记录见 `docs/audit/2026-10-08/`：`可用性审计报告.md`（问题清单与证据）、`修复报告.md`（根因与改动）、`fix-verification.mjs`（修复后回归脚本）
 > 新访客在欢迎页「创建地图」拿邀请码，或输入同学的邀请码加入；邀请链接形如 `/?map=邀请码` 可直接打开。
 
 ## 功能
@@ -63,7 +65,7 @@ npm --prefix server run dev
 2. **地图 key**：注册 [高德开放平台](https://console.amap.com)（需阿里云/淘宝账号）→ 创建应用 → 添加 Key，服务平台选 **Web端(JS API)** → 得到 key 与安全密钥，填入 `.env` 的 `AMAP_KEY`、`AMAP_SECURITY_CODE`
 3. **图床（推荐）**：注册 [Cloudinary](https://console.cloudinary.com)（免费、无需信用卡）→ Dashboard 的 API Keys 复制 `CLOUDINARY_URL` 填入 `.env`。配置后照片存 CDN、数据库只存链接（不占 Neon 存储）；不配置则照片存数据库。存量照片迁移：`cd server && node scripts/migrate-photos.mjs`
 4. **推送通知（可选）**：生成 VAPID 密钥对 `npx web-push generate-vapid-keys`，填入 `.env` 的 `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`（另加 `VAPID_SUBJECT=mailto:你的邮箱`）。不配置则 🔔 推送功能静默停用，其余功能不受影响
-5. **小程序登录（可选）**：在 [mp.weixin.qq.com](https://mp.weixin.qq.com) → 开发管理 → 开发设置 复制 AppID / AppSecret，填入 `MINIPROGRAM_APPID`、`MINIPROGRAM_SECRET`；再用 `openssl rand -base64 32` 生成 `AUTH_SECRET`。配置后小程序所有写操作要求登录（静默 `wx.login` + 首次确认昵称），地点/留言/想去/照片的署名由服务端按登录昵称盖章，不可冒名。不配置则小程序登录停用，写接口退回客户端昵称
+5. **小程序登录（可选）**：在 [mp.weixin.qq.com](https://mp.weixin.qq.com) → 开发管理 → 开发设置 复制 AppID / AppSecret，填入 `MINIPROGRAM_APPID`、`MINIPROGRAM_SECRET`；再用 `openssl rand -base64 32` 生成 `AUTH_SECRET`。配置后小程序所有写操作要求登录（静默 `wx.login` + 首次确认昵称），地点/留言/想去/照片的署名由服务端按登录昵称盖章，不可冒名。不配置则小程序登录停用、内容安全检测停用，写接口退回客户端昵称。配置后服务端会在写入地点/留言/昵称前调用微信 `security.msgSecCheck` 做文本检测（命中违规返回 400 且不入库；微信接口异常时放行不阻断，可用 `CONTENT_SECURITY=off` 临时整体关闭）
 
 ## 和同学协作
 
@@ -88,14 +90,15 @@ npm --prefix server run dev
 | DELETE | /api/places/:id | 删除地点（软删除，进回收站 30 天） | 头 `x-map-code` |
 | POST | /api/places/:id/restore | 从回收站恢复地点 | body `map_code` |
 | GET | /api/places?map=码&view=trash | 回收站列表（顺带清理超期项） | query 传入 |
-| GET | /api/maps/:code/export | 全量导出 JSON（地点/照片链接/留言/想去） | — |
+| GET | /api/maps/:code/export | 全量导出 JSON（地点/照片链接/留言/想去/行程） | — |
 | GET | /api/itinerary?map=码 | 行程单（按序返回站点） | query 传入 |
 | PUT | /api/itinerary | 保存行程（place_ids 数组顺序即行程顺序） | body `map_code` |
 | GET | /api/push/key | Web Push 公钥（未配置 VAPID 时 503） | — |
 | POST | /api/push/subscribe | 订阅推送通知 | body `map_code` |
 | DELETE | /api/push/subscribe | 退订推送 | 头 `x-map-code` |
 | GET | /api/places/:id/photos?map=码 | 照片列表（含缩略图） | query 传入 |
-| POST | /api/places/:id/photos | 上传照片（base64，≤9 张/地点） | body `map_code` |
+| GET | /api/upload-config | 上传口径：`{cdn, maxFullBytes, maxThumbBytes}`（客户端据此压缩与决定是否传 thumb） | — |
+| POST | /api/places/:id/photos | 上传照片（base64，≤9 张/地点；配了图床时只传 `full`，否则需带 `thumb`≤64KB） | body `map_code` |
 | GET | /api/photos/:id?map=码 | 照片原图（二进制） | query 传入 |
 | DELETE | /api/photos/:id | 删除照片 | 头 `x-map-code` |
 | GET | /api/places/:id/comments?map=码 | 留言列表 | query 传入 |
@@ -104,6 +107,7 @@ npm --prefix server run dev
 | POST | /api/places/:id/wish | 「我也想去」投票（切换式） | body `map_code` |
 | GET | /api/maps/:code/memories | 回忆时间线（已打卡+缩略图） | — |
 | GET | /api/public/places | 公共广场（所有人可见的公开地点聚合，只读） | — |
+| GET | /api/public/places/:id | 公共广场单个地点（只读，不含邀请码） | — |
 | POST | /api/places/:id/public | 公开 / 取消公开到公共广场（切换式） | body `map_code` |
 
 地点列表每项附带 `photo_count` / `comment_count` / `wishes`（想去的昵称数组）。
@@ -159,7 +163,7 @@ server/   Express 后端（API + 静态托管）
   pusher.js     Web Push 发送器（VAPID 未配置时停用）
   env.js        dotenv 引导
   routes/       auth / maps / places / photos / comments / itinerary / push 路由
-  test/         接口测试（node:test + pg-mem，56 个用例）
+  test/         接口测试（node:test + pg-mem，99 个用例，含安全头/上传契约/数据一致性/限流/内容安全/进程健壮性）
 public/   前端（index.html / css / js，js 含照片客户端压缩）
 miniprogram/  微信小程序（原生 map 组件，功能对齐网页版 + 登录署名；云托管 callContainer 通道，CLOUD_ENV_ID 留空回落 Render 直连）
 docs/     设计文档 + 微信云托管部署指引

@@ -1,7 +1,31 @@
 <view class="page">
-  <view class="canvas-wrap">
-    <canvas type="2d" id="poster-canvas" class="poster"></canvas>
-  </view>
-  <view class="btn btn-primary save" bindtap="saveToAlbum">{{saving ? '保存中…' : '⬇️ 保存海报到相册'}}</view>
-  <view class="hint">保存后发到群里，同学扫码/输邀请码就能加入</view>
+  <block wx:if="{{noMap}}">
+    <view class="empty">
+      <view class="empty-title">还没有加入地图</view>
+      <view class="empty-sub">先创建一张地图或用邀请码加入，再来生成分享海报</view>
+    </view>
+    <view class="actions">
+      <view class="btn" bindtap="backHome">返回</view>
+      <view class="btn btn-primary" bindtap="goJoin">去加入地图</view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view class="canvas-wrap">
+      <canvas type="2d" id="poster-canvas" class="poster"></canvas>
+    </view>
+
+    <!-- 加载/生成失败：不产出「0 个地点」的海报，页面给重试入口 -->
+    <view wx:if="{{loadError}}" class="error-box">
+      <view class="error-text">{{loadError}}</view>
+      <view class="btn btn-primary retry" bindtap="retryLoad">重试</view>
+    </view>
+
+    <view wx:if="{{!ready && !loadError}}" class="hint">海报生成中…</view>
+
+    <block wx:if="{{ready}}">
+      <view class="btn btn-primary save {{saving ? 'btn-busy' : ''}}" bindtap="saveToAlbum">{{saving ? '保存中…' : '⬇️ 保存海报到相册'}}</view>
+      <view class="hint">保存后发到群里，同学扫码/输邀请码就能加入</view>
+    </block>
+  </block>
 </view>

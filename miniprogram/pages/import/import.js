@@ -5,6 +5,9 @@ const auth = require('../../utils/auth.js');
 const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
 
+// 畸形百分号编码（如 %E0%A4%A）会让 decodeURIComponent 抛 URIError，统一兜底文案
+const BAD_LINK_TIP = '链接格式不正确，请在高德 App 里重新分享';
+
 // 解析逻辑与网页版 app.js 的 parseAmapShare 保持一致
 function parseAmapShare(raw) {
   const text = (raw ?? '').trim();
@@ -46,6 +49,11 @@ function parseAmapShare(raw) {
     return { error: '这个链接只有地点编号。请粘贴高德 App 分享的完整文本（含地点名或「位置：经度,纬度」），或改用搜索选点。' };
   }
 
+  // 是高德 marker 链接但没解析出坐标（缺 position 或数值越界）
+  if (marker) {
+    return { error: '这个高德链接里没有可用的坐标，请在高德 App 里重新分享，或改用搜索选点。' };
+  }
+
   return { error: '没有识别出坐标或地点名，确认粘贴的是高德分享文本/链接。' };
 }
 
@@ -82,7 +90,14 @@ Page({
   },
 
   parse() {
-    const result = parseAmapShare(this.data.raw);
+    let result;
+    try {
+      // 畸形链接（非法百分号编码等）会在这里抛异常，兜住并提示，不留下半解析状态
+      result = parseAmapShare(this.data.raw);
+    } catch (err) {
+      wx.showToast({ title: BAD_LINK_TIP, icon: 'none' });
+      result = { error: BAD_LINK_TIP };
+    }
     this.setData({ result });
   },
 
@@ -91,13 +106,15 @@ Page({
   },
 
   async save() {
+    if (this.submitting) return; // 防重复提交：弱网连点会导入多个相同地点
     const r = this.data.result;
     if (!r || r.error || r.keyword) return;
-    // 登录守卫：未登录静默登录；昵称未确认时弹层，确认后自动重试导入
-    const nickname = await auth.requireIdentity(this, () => this.save());
-    if (!nickname) return;
-    this.setData({ saving: true });
+    this.submitting = true;
     try {
+      // 登录守卫：未登录静默登录；昵称未确认时弹层，确认后自动重试导入
+      const nickname = await auth.requireIdentity(this, () => this.save());
+      if (!nickname) return;
+      this.setData({ saving: true });
       await api.createPlace(app.globalData.map.code, {
         name: r.name || '未命名地点',
         category: this.data.category,
@@ -110,6 +127,8 @@ Page({
     } catch (err) {
       this.setData({ saving: false });
       wx.showToast({ title: err.message, icon: 'none' });
+    } finally {
+      this.submitting = false;
     }
   },
 

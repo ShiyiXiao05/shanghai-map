@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { identityOr401 } from './identity.js';
+import { guardTexts } from '../content-security.js';
 
 const MAX_BODY_CHARS = 280;
 const MAX_AUTHOR_CHARS = 30;
@@ -10,7 +11,7 @@ function parseId(raw) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
-export function createCommentsRouter({ store, pusher }) {
+export function createCommentsRouter({ store, pusher, contentSecurity }) {
   const router = Router();
 
   router.get('/places/:id/comments', async (req, res, next) => {
@@ -45,6 +46,10 @@ export function createCommentsRouter({ store, pusher }) {
       if (text.length > MAX_BODY_CHARS) {
         return res.status(400).json({ error: `留言最多 ${MAX_BODY_CHARS} 字` });
       }
+      const guard = await guardTexts(contentSecurity, [['留言', text]], {
+        openid: req.user?.openid,
+      });
+      if (guard.error) return res.status(400).json({ error: guard.error });
       const clientAuthor =
         typeof body.author === 'string' ? body.author.trim().slice(0, MAX_AUTHOR_CHARS) : '';
       const author = identityOr401(req, res, clientAuthor);

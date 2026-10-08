@@ -1,7 +1,7 @@
 /* 魔都·Explore Service Worker
    策略：核心静态资源预缓存 + stale-while-revalidate；API 一律走网络；跨域直通 */
 
-const CACHE_NAME = 'wishmap-static-v14';
+const CACHE_NAME = 'wishmap-static-v15';
 const CORE_ASSETS = [
   '/',
   '/css/style.css',
@@ -13,15 +13,18 @@ const CORE_ASSETS = [
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
 ];
 
 self.addEventListener('install', (event) => {
-  // cache:'reload' 绕过浏览器 HTTP 强缓存，确保发版后拿到的一定是新资源
+  // cache:'reload' 绕过浏览器 HTTP 强缓存，确保发版后拿到的一定是新资源。
+  // 用 allSettled：单个资源拉取失败（离线 / CDN 抖动）不再 reject install，
+  // 否则 skipWaiting 永不执行，用户会一直卡在旧版本。
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then((cache) =>
-        Promise.all(
+        Promise.allSettled(
           CORE_ASSETS.map(async (url) => {
             const response = await fetch(url, { cache: 'reload' });
             if (response.ok) await cache.put(url, response);
@@ -83,6 +86,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return; // 高德等第三方直通
   if (url.pathname.startsWith('/api/')) return; // 接口不缓存
+
+  // 只接管核心静态资源与图标；其它同源 GET（动态响应、临时资源等）交给浏览器直连网络，不写缓存
+  const managed = CORE_ASSETS.includes(url.pathname) || url.pathname.startsWith('/icons/');
+  if (!managed) return;
 
   event.respondWith(
     (async () => {

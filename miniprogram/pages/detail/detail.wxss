@@ -179,6 +179,18 @@
   padding: 6rpx;
 }
 
+.report-row {
+  display: flex;
+  justify-content: center;
+  padding: 18px 0 6px;
+}
+
+.report-link {
+  font-size: 12px;
+  color: var(--ink-soft, #8a94a3);
+  text-decoration: underline;
+}
+
 .comment-form {
   display: flex;
   gap: 14rpx;
@@ -237,4 +249,29 @@
   font-size: 24rpx;
   color: var(--ink-soft);
   white-space: nowrap;
+}
+
+/* 加载中 / 加载失败占位 */
+.state-box {
+  margin-top: 160rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24rpx;
+  color: var(--ink-soft);
+  font-size: 28rpx;
+}
+
+.state-icon {
+  font-size: 72rpx;
+}
+
+.state-text {
+  line-height: 1.5;
+  text-align: center;
+}
+
+.state-box .actions {
+  justify-content: center;
+  margin-top: 12rpx;
 }

@@ -22,7 +22,8 @@ export function createPusher({ publicKey, privateKey, subject, store }) {
         try {
           await webpush.sendNotification(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-            body
+            body,
+            { timeout: 8000 }
           );
         } catch (err) {
           if (err?.statusCode === 404 || err?.statusCode === 410) {

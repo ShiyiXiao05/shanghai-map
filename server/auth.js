@@ -71,8 +71,19 @@ export function createAuth({ appid, secret, signSecret, store, fetchSession }) {
       const header = req.get('authorization') ?? '';
       const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
       if (!token) return next();
-      const payload = verifyToken(token);
-      const user = payload ? await store.getUser(payload.o) : null;
+      let user = null;
+      try {
+        const payload = verifyToken(token);
+        user = payload ? await store.getUser(payload.o) : null;
+      } catch (err) {
+        // Express 4 不捕获 async 中间件的拒绝，未处理会终止整个进程；
+        // 数据库瞬时故障时：读请求按匿名放行，写请求回 503 让客户端重试
+        console.error('[auth] 解析登录态失败：', err?.message ?? err);
+        if (req.method !== 'GET') {
+          return res.status(503).json({ error: '服务暂时不可用，请稍后重试' });
+        }
+        return next();
+      }
       if (user) {
         req.user = user;
         return next();
