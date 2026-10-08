@@ -23,7 +23,7 @@ data class Place(
     @SerialName("is_public") val isPublic: Boolean = false,
     @SerialName("photo_count") val photoCount: Int = 0,
     @SerialName("comment_count") val commentCount: Int = 0,
-    val wishes: List<String> = emptyList()
+    val wishes: List<String> = emptyList(), val emoji: String = ""
 )
 @Serializable data class PlacesResponse(val places: List<Place>)
 @Serializable data class Photo(val id: Long, val thumb: String = "", val full: String? = null,
@@ -43,6 +43,24 @@ val categories = listOf(Category("景点", 0xff2fa877), Category("美食", 0xffe
     Category("展馆", 0xff4d82d4), Category("购物", 0xffe0568f),
     Category("娱乐", 0xff8e63d8), Category("其他", 0xff7e8f9c))
 fun category(name: String) = categories.find { it.name == name } ?: categories.last()
+fun defaultEmoji(name: String) = when (name) {
+    "景点" -> "🏞️"; "美食" -> "🍜"; "展馆" -> "🏛️"
+    "购物" -> "🛍️"; "娱乐" -> "🎡"; else -> "📍"
+}
+val emojiChoices = listOf("🏞️", "🍜", "🏛️", "🛍️", "🎡", "📍", "🌳", "🌸", "🌆", "🌉", "🏖️", "🏰",
+    "☕", "🍰", "🍣", "🍕", "🍔", "🥟", "🍲", "🍻", "🎨", "📚", "🎭", "🎬", "🎵", "🎮", "⚽", "💎", "❤️", "⭐")
+val Place.displayEmoji: String get() = emoji.ifBlank { defaultEmoji(category) }
+fun validEmoji(value: String): Boolean {
+    if (value.isBlank()) return true
+    if (value.length > 32) return false
+    val iterator = android.icu.text.BreakIterator.getCharacterInstance(java.util.Locale.ROOT)
+    iterator.setText(value)
+    iterator.first()
+    if (iterator.next() != value.length) return false
+    val first = value.codePointAt(0)
+    return first in 0x1F000..0x1FAFF || first in 0x2300..0x27FF || first in listOf(0x00A9, 0x00AE, 0x3030, 0x303D, 0x3297, 0x3299) ||
+        (first in 48..57 || first == 35 || first == 42) && value.contains('\u20E3')
+}
 enum class PlaceSort(val label: String) { NEWEST("最新添加"), NAME("按名称"), WISHES("最想去") }
 fun filterPlaces(places: List<Place>, selected: Set<String>, hideVisited: Boolean, sort: PlaceSort): List<Place> {
     val filtered = places.filter { (selected.isEmpty() || it.category in selected) && (!hideVisited || !it.visited) }

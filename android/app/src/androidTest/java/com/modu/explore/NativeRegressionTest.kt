@@ -29,14 +29,14 @@ class NativeRegressionTest {
     private val app: Application get() = ApplicationProvider.getApplicationContext()
     private fun onMain(action: () -> Unit) = InstrumentationRegistry.getInstrumentation().runOnMainSync(action)
 
-    @Test fun foodMarkersRemainOpaqueWithWhiteRingAndVisitedBadge() {
+    @Test fun emojiMarkersKeepStableSizeWhiteBackgroundAndVisitedBadge() {
         val bitmap = placeMarkerBitmap("美食", true, false, 1f)
         try {
-            assertEquals(android.graphics.Color.WHITE, bitmap.getPixel(24, 7))
-            val fill = bitmap.getPixel(14, 24)
-            assertEquals(255, android.graphics.Color.alpha(fill))
-            assertTrue(android.graphics.Color.red(fill) > android.graphics.Color.green(fill) * 2)
-            assertEquals(255, android.graphics.Color.alpha(bitmap.getPixel(39, 9)))
+            assertEquals(56, bitmap.width)
+            assertEquals(60, bitmap.height)
+            assertEquals(android.graphics.Color.WHITE, bitmap.getPixel(28, 8))
+            assertEquals(0, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
+            assertEquals(255, android.graphics.Color.alpha(bitmap.getPixel(49, 10)))
         } finally { bitmap.recycle() }
     }
 
@@ -72,7 +72,7 @@ class NativeRegressionTest {
         }
     }
 
-    @Test fun previewKeepsHomeAndLoadsMediaOnlyWhenDetailsOpen() = runBlocking {
+    @Test fun previewPrefetchesMediaAndKeepsHomeUntilDetailsOpen() = runBlocking {
         app.getSharedPreferences("explore", 0).edit().clear().commit()
         SessionStore(app).apply { saveMap(ExploreMap("AB12CD", "测试地图")); code = "AB12CD" }
         MockWebServer().use { server ->

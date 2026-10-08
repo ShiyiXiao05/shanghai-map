@@ -14,8 +14,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.modu.explore.UpdateViewModel
+import com.modu.explore.BuildConfig
+import com.modu.explore.data.channelLabel
 
-@Composable fun UpdateDialog(vm: UpdateViewModel) {
+@Composable fun UpdateDialog(vm: UpdateViewModel, onHistory: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var launchError by remember { mutableStateOf<String?>(null) }
@@ -27,8 +29,14 @@ import com.modu.explore.UpdateViewModel
         else launchError = "尚未允许此应用安装更新，可点击安装后在系统设置中开启"
     }
     if (!state.open) return
-    AlertDialog(onDismissRequest = vm::dismiss, title = { Text(if (state.info == null) "检查更新" else "新版本 ${state.info!!.versionName}") },
+    AlertDialog(onDismissRequest = vm::dismiss, title = { Text(if (state.info == null) "检查更新" else "${state.info!!.versionName} ${channelLabel(state.info!!.channel)}") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("当前 ${BuildConfig.VERSION_NAME} · ${channelLabel(BuildConfig.RELEASE_CHANNEL)}", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text("体验版更新", Modifier.weight(1f))
+                Switch(state.previewEnabled, vm::previewUpdates, enabled = !state.downloading)
+            }
             when {
                 state.checking -> { CircularProgressIndicator(Modifier.size(28.dp)); Text("正在检查更新…") }
                 state.downloading -> {
@@ -41,6 +49,7 @@ import com.modu.explore.UpdateViewModel
                 state.error == null -> Text("当前已是最新版本")
             }
             (state.error ?: launchError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            TextButton(onClick = onHistory) { Text("查看更新日志") }
         } },
         confirmButton = {
             when {

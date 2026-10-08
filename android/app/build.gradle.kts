@@ -20,8 +20,12 @@ android {
         applicationId = "com.modu.explore"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
+        val releaseChannel = config("RELEASE_CHANNEL", "preview")
+        require(releaseChannel in listOf("stable", "preview")) { "RELEASE_CHANNEL must be stable or preview" }
+        if (releaseChannel == "preview") versionNameSuffix = "-preview"
+        buildConfigField("String", "RELEASE_CHANNEL", literal(releaseChannel))
         buildConfigField("String", "API_BASE_URL", literal(config("API_BASE_URL", "https://shanghai-wish-map.onrender.com")))
         buildConfigField("String", "AMAP_KEY", literal(config("AMAP_ANDROID_KEY")))
         buildConfigField("String", "UPDATE_MANIFEST_URL", literal(config("UPDATE_MANIFEST_URL", config("API_BASE_URL", "https://shanghai-wish-map.onrender.com").trimEnd('/') + "/android/update.json")))
@@ -49,6 +53,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 dependencies {
@@ -69,6 +74,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
+    testImplementation("org.robolectric:robolectric:4.15.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")

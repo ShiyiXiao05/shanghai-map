@@ -40,7 +40,7 @@ import kotlinx.serialization.json.*
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(place.name, style = MaterialTheme.typography.headlineSmall)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CategoryIcon(place.category); Text(place.category, color = Color(category(place.category).color))
+                    CategoryIcon(place.category, emoji = place.displayEmoji); Text(place.category, color = Color(category(place.category).color))
                     if (place.visited) Text("已去过", color = MaterialTheme.colorScheme.primary)
                 }
                 if (place.addedBy.isNotBlank()) Text("${place.addedBy} 标记", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -54,39 +54,41 @@ import kotlinx.serialization.json.*
             }
             if (state.map != null) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
                 Tool(if (place.visited) Icons.AutoMirrored.Outlined.Undo else Icons.Outlined.CheckCircle, if (place.visited) "取消打卡" else "打卡", !state.busy) { vm.placeAction("visited") }
-                Tool(if (state.nickname in place.wishes) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, "想去", !state.busy) { vm.placeAction("wish") }
+                Tool(if (state.nickname in place.wishes) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder, "想去", !state.busy && place.id !in state.pendingPlaces) { vm.placeAction("wish") }
                 Tool(if (place.isPublic) Icons.Outlined.Public else Icons.Outlined.PublicOff, if (place.isPublic) "取消公开" else "公开", !state.busy) {
                     if (place.isPublic) vm.placeAction("public") else confirm("公开后地点名称、位置和描述将出现在公共广场，所有人都可以查看。", { vm.placeAction("public") })
                 }
-                Tool(Icons.Outlined.Edit, "编辑", !state.busy, vm::startEdit)
+                Tool(Icons.Outlined.Edit, "编辑", !state.busy && place.id !in state.pendingPlaces, vm::startEdit)
                 Tool(Icons.Outlined.DeleteOutline, "删除", !state.busy) { confirm("删除「${place.name}」？30 天内可从回收站恢复。", { vm.placeAction("delete") }) }
             }
-            MenuRow("高德地图导航", Icons.Outlined.Navigation) { openUrl(context, placeNavUrl(place)) }
+            MenuRow("高德 App 导航", Icons.Outlined.Navigation) { openAmap(context, listOf(place), vm::notice) }
             if (state.map == null) Text("来自公共广场 · 只读", Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             else {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("照片 ${state.photos.size}/9", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                    Tool(Icons.Outlined.AddPhotoAlternate, "添加照片", !state.busy && !state.detailLoading && state.detailError == null && state.photos.size < 9) { picker.launch("image/*") }
+                    Tool(Icons.Outlined.AddPhotoAlternate, "添加照片", !state.busy && !state.photosLoading && state.photosError == null && state.photos.size < 9) { picker.launch("image/*") }
                 }
-                if (state.detailLoading) EmptyState("正在加载照片和留言…", true)
-                if (state.detailError != null) EmptyState(state.detailError, retry = vm::loadDetail)
+                if (state.photosLoading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                if (state.photosError != null) EmptyState(state.photosError, retry = vm::loadDetail)
                 state.photos.chunked(3).forEach { group ->
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         group.forEach { photo ->
                             Box(Modifier.weight(1f).aspectRatio(1f)) {
-                                AsyncImage(imageModel(photo.thumb), "地点照片", contentScale = ContentScale.Crop,
+                                AsyncImage(remember(photo.thumb) { imageModel(photo.thumb) }, "地点照片", contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize().clickable { preview = photo.full ?: vm.api.photoUrl(state.map.code, photo.id) })
                                 Surface(Modifier.align(Alignment.TopEnd), color = MaterialTheme.colorScheme.surface.copy(alpha = .85f)) {
-                                    Tool(Icons.Outlined.Close, "删除照片", !state.busy) { confirm("删除这张照片？", { vm.removePhoto(photo.id) }) }
+                                    Tool(Icons.Outlined.Close, "删除照片", !state.busy && !state.photosLoading) { confirm("删除这张照片？", { vm.removePhoto(photo.id) }) }
                                 }
                             }
                         }
                         repeat(3 - group.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
-                if (!state.detailLoading && state.detailError == null && state.photos.isEmpty()) Text("还没有照片", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!state.photosLoading && state.photosError == null && state.photos.isEmpty()) Text("还没有照片", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 SectionLabel("留言 ${state.comments.size}")
+                if (state.commentsLoading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                if (state.commentsError != null) EmptyState(state.commentsError, retry = vm::loadDetail)
             }
         }
         if (state.map != null) {
@@ -96,13 +98,14 @@ import kotlinx.serialization.json.*
                         Text(c.author.ifBlank { "同学" }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         Text(c.body); if (c.createdAt.isNotBlank()) Text(c.createdAt.take(10), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Tool(Icons.Outlined.Close, "删除留言", !state.busy) { confirm("删除这条留言？", { vm.removeComment(c.id) }) }
+                    if (c.id < 0) Text("发送中", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else Tool(Icons.Outlined.Close, "删除留言", !state.busy && !state.commentsLoading) { confirm("删除这条留言？", { vm.removeComment(c.id) }) }
                 }
             }
             item {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(comment, { comment = it.take(280) }, placeholder = { Text("说点什么…") }, modifier = Modifier.weight(1f), enabled = !state.busy, maxLines = 4)
-                    Tool(Icons.AutoMirrored.Outlined.Send, "发送留言", !state.busy && comment.isNotBlank()) { vm.addComment(comment) { comment = "" } }
+                    Tool(Icons.AutoMirrored.Outlined.Send, "发送留言", !state.busy && !state.commentsLoading && state.commentsError == null && comment.isNotBlank()) { vm.addComment(comment) { comment = "" } }
                 }
             }
         }
@@ -121,11 +124,13 @@ import kotlinx.serialization.json.*
 
 @Composable fun EditScreen(state: ExploreState, vm: ExploreViewModel) {
     val point = state.draft ?: return
-    val p = state.selected
+    val p = state.draftFields?.let { wireJson.decodeFromJsonElement<Place>(it) } ?: state.selected
     var name by rememberSaveable(point, p?.id) { mutableStateOf(point.name) }
     var address by rememberSaveable(point, p?.id) { mutableStateOf(point.address) }
     var description by rememberSaveable(point, p?.id) { mutableStateOf(p?.description.orEmpty()) }
     var category by rememberSaveable(point, p?.id) { mutableStateOf(p?.category ?: "景点") }
+    var emoji by rememberSaveable(point, p?.id) { mutableStateOf(p?.emoji.orEmpty()) }
+    var emojiPicker by remember { mutableStateOf(false) }
     var price by rememberSaveable(point, p?.id) { mutableStateOf(p?.priceHint.orEmpty()) }
     var hours by rememberSaveable(point, p?.id) { mutableStateOf(p?.hours.orEmpty()) }
     var tags by rememberSaveable(point, p?.id) { mutableStateOf(p?.tags.orEmpty()) }
@@ -137,6 +142,10 @@ import kotlinx.serialization.json.*
             DropdownMenu(categoryMenu, { categoryMenu = false }) { categories.forEach { c -> DropdownMenuItem(text = { Text(c.name) }, onClick = { category = c.name; categoryMenu = false }) } }
         }
         EditField("描述", description, 500, !state.busy, singleLine = false) { description = it }
+        ListItem(headlineContent = { Text("地点图标") }, supportingContent = { Text(if (emoji.isBlank()) "分类默认图标" else "自定义图标") },
+            leadingContent = { Text(emoji.ifBlank { defaultEmoji(category) }, style = MaterialTheme.typography.headlineMedium) },
+            trailingContent = { Tool(Icons.Outlined.Edit, "修改 emoji", !state.busy) { emojiPicker = true } },
+            modifier = Modifier.clickable(enabled = !state.busy) { emojiPicker = true })
         EditField("地址", address, 200, !state.busy) { address = it }
         EditField("人均", price, 50, !state.busy) { price = it }
         EditField("营业时间", hours, 100, !state.busy) { hours = it }
@@ -147,10 +156,35 @@ import kotlinx.serialization.json.*
             vm.savePlace(buildJsonObject {
                 put("name", name.trim()); put("category", category); put("address", address.trim()); put("description", description.trim())
                 put("lng", point.lng); put("lat", point.lat); put("price_hint", price.trim()); put("hours", hours.trim()); put("tags", tags.trim())
+                put("emoji", emoji)
             })
         }, modifier = Modifier.fillMaxWidth()) { Text("保存地点") }
     }
+    if (emojiPicker) EmojiPicker(emoji, category, onDismiss = { emojiPicker = false }, onSelect = { emoji = it; emojiPicker = false })
 }
+@Composable private fun EmojiPicker(selected: String, categoryName: String, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
+    var custom by rememberSaveable { mutableStateOf(selected) }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("地点 emoji") }, text = {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            emojiChoices.chunked(4).forEach { group ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    group.forEach { emoji ->
+                        Surface(color = if (emoji == selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)) {
+                            TextButton(onClick = { onSelect(emoji) }, contentPadding = PaddingValues(0.dp), modifier = Modifier.size(48.dp)) {
+                                Text(emoji, style = MaterialTheme.typography.titleLarge)
+                            }
+                        }
+                    }
+                }
+            }
+            OutlinedTextField(custom, { custom = it.take(32) }, label = { Text("自定义 emoji") }, singleLine = true,
+                isError = !validEmoji(custom), supportingText = { if (!validEmoji(custom)) Text("请输入一个 emoji") }, modifier = Modifier.fillMaxWidth())
+        }
+    }, confirmButton = { TextButton(enabled = custom.isNotBlank() && validEmoji(custom), onClick = { onSelect(custom.trim()) }) { Text("使用") } },
+        dismissButton = { TextButton(onClick = { onSelect("") }) { Text("恢复 ${defaultEmoji(categoryName)} 默认") } })
+}
+
 @Composable fun EditField(label: String, value: String, limit: Int, enabled: Boolean = true, singleLine: Boolean = true, onChange: (String) -> Unit) {
     OutlinedTextField(value, { onChange(it.take(limit)) }, label = { Text(label) }, enabled = enabled, singleLine = singleLine,
         minLines = if (singleLine) 1 else 3, maxLines = if (singleLine) 1 else 6, modifier = Modifier.fillMaxWidth())

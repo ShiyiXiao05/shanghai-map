@@ -112,4 +112,37 @@ describe('place fields: price_hint / hours / tags', () => {
     });
     assert.equal(res2.status, 400);
   });
+  it('emoji 创建、部分更新、公共读取和导出保持一致', async () => {
+    const code = await setupMap(request);
+    const place = await (await request('POST', '/api/places', {
+      body: { ...basePlace, map_code: code, emoji: '🍜' },
+    })).json();
+    assert.equal(place.emoji, '🍜');
+    const edited = await (await request('PUT', `/api/places/${place.id}`, {
+      mapCode: code, body: { emoji: '👨‍🍳' },
+    })).json();
+    assert.equal(edited.emoji, '👨‍🍳');
+    assert.equal(edited.name, basePlace.name);
+    await request('POST', `/api/places/${place.id}/public`, { body: { map_code: code } });
+    const publicPlace = await (await request('GET', `/api/public/places/${place.id}`)).json();
+    assert.equal(publicPlace.place.emoji, '👨‍🍳');
+    assert.equal(publicPlace.place.map_code, undefined);
+    const exported = await (await request('GET', `/api/maps/${code}/export`)).json();
+    assert.equal(exported.places[0].emoji, '👨‍🍳');
+    const restored = await (await request('PUT', `/api/places/${place.id}`, {
+      mapCode: code, body: { emoji: '' },
+    })).json();
+    assert.equal(restored.emoji, '');
+  });
+  it('拒绝多 emoji、普通文字、错误类型及超长图标', async () => {
+    const code = await setupMap(request);
+    for (const emoji of ['🍜🍕', '餐厅', '1', 7, '🍜'.repeat(20)]) {
+      const response = await request('POST', '/api/places', { body: { ...basePlace, map_code: code, emoji } });
+      assert.equal(response.status, 400, String(emoji));
+    }
+    for (const emoji of ['🇨🇳', '1️⃣', '❤️', '🏳️‍🌈']) {
+      const response = await request('POST', '/api/places', { body: { ...basePlace, map_code: code, emoji } });
+      assert.equal(response.status, 201, emoji);
+    }
+  });
 });

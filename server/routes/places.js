@@ -11,6 +11,7 @@ const LIMITS = {
   price_hint: 50,
   hours: 100,
   tags: 100,
+  emoji: 32,
 };
 
 function readString(value, field, { fallback = '' } = {}) {
@@ -58,11 +59,16 @@ function validatePlace(body, { partial }) {
     if (description.error) return fail(description.error);
     out.description = description.value;
   }
-  for (const field of ['price_hint', 'hours', 'tags']) {
+  for (const field of ['price_hint', 'hours', 'tags', 'emoji']) {
     if (body[field] !== undefined) {
       const checked = readString(body[field], field);
       if (checked.error) return fail(checked.error);
       out[field] = checked.value;
+      if (field === 'emoji' && checked.value &&
+          (!/^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3)/u.test(checked.value) ||
+           [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(checked.value)].length !== 1)) {
+        return fail('请选择一个 emoji');
+      }
     }
   }
   if (!partial || body.category !== undefined) {

@@ -1,0 +1,42 @@
+{
+  "releases": [
+    {
+      "packageName": "com.modu.explore",
+      "versionCode": 4,
+      "versionName": "0.4.0-preview",
+      "channel": "preview",
+      "publishedAt": "2026-10-09",
+      "apkUrl": "https://shanghai-wish-map.onrender.com/android/modu-explore-0.4.0-preview.apk",
+      "sha256": "f725a72109952fe57055a1b698910807e4671cc03fe1cf00dccd06ed532ba92a",
+      "notes": "更换蓝发城市探索少女图标。\n地图地点支持分类默认和自定义 emoji。\n导航直接打开高德 App。\n优化点赞、新增、刷新、照片和留言加载响应。\n优化界面配色与控件。\n新增正式版/体验版更新渠道和历史更新日志。"
+    },
+    {
+      "packageName": "com.modu.explore",
+      "versionCode": 3,
+      "versionName": "0.3.0",
+      "channel": "stable",
+      "publishedAt": "2026-10-08",
+      "apkUrl": "https://shanghai-wish-map.onrender.com/android/modu-explore-0.3.0.apk",
+      "sha256": "aef005d421f49631bf979692f647b05698075c4277591b1da192db53a8a590d8",
+      "notes": "沪娘应用图标。\n地图与地点列表的比例支持拖动调整。\n地图定位标记更加简洁。\n随机抽取加入滚轮动画。\n点赞、留言等操作减少重复请求和等待。"
+    },
+    {
+      "packageName": "com.modu.explore",
+      "versionCode": 2,
+      "versionName": "0.2.0",
+      "channel": "stable",
+      "publishedAt": "2026-10-08",
+      "apkUrl": "https://shanghai-wish-map.onrender.com/android/modu-explore-0.2.0.apk",
+      "sha256": "be92c6f47a8eec0f9ba2492e630add1fab4d102e610440f2b1ebfa6c77bdca6a",
+      "notes": "点击地图标记或列表先显示地点简介，再进入完整详情。\n优化标记对比度、已去过角标和地点范围适配。\n加入应用内检查、下载与覆盖安装更新。\n改善照片方向与上传压缩。"
+    },
+    {
+      "packageName": "com.modu.explore",
+      "versionCode": 1,
+      "versionName": "0.1.0",
+      "channel": "stable",
+      "publishedAt": "2026-10-08",
+      "notes": "Android 原生客户端首次推出。\n支持公共广场、地图创建与加入、地点管理、高德地图、照片和留言。\n加入行程单、回忆时间线、分享海报、地图导出与回收站。"
+    }
+  ]
+}

@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.Color
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -85,6 +84,8 @@ fun initializeMaps(context: android.content.Context) {
     var size by remember(view) { mutableStateOf(IntSize.Zero) }
     val density = context.resources.displayMetrics.density
     val icons = remember(view) { mutableMapOf<Triple<String, Boolean, Boolean>, BitmapDescriptor>() }
+    val markers = remember(view) { mutableMapOf<Long, Marker>() }
+    val rendered = remember(view) { mutableMapOf<Long, List<Any>>() }
     DisposableEffect(view, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) { Lifecycle.Event.ON_RESUME -> view.onResume(); Lifecycle.Event.ON_PAUSE -> view.onPause(); else -> Unit }
@@ -105,16 +106,23 @@ fun initializeMaps(context: android.content.Context) {
         }
         onDispose { lifecycle.removeObserver(observer); view.onPause(); view.onDestroy(); icons.values.forEach { it.recycle() }; icons.clear() }
     }
-    val markerState = places.map { listOf(it.id, it.name, it.category, it.lng, it.lat, it.visited) }
+    val markerState = places.map { listOf(it.id, it.name, it.displayEmoji, it.lng, it.lat, it.visited) }
     LaunchedEffect(loaded, markerState, dark, selectedId) {
         if (!loaded) return@LaunchedEffect
         view.map.apply {
-            clear(); mapType = if (dark) AMap.MAP_TYPE_NIGHT else AMap.MAP_TYPE_NORMAL
-            places.filter { it.lat.isFinite() && it.lng.isFinite() && it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }.forEach { p ->
-                val key = Triple(p.category, p.visited, p.id == selectedId)
-                val icon = icons.getOrPut(key) { BitmapDescriptorFactory.fromBitmap(placeMarkerBitmap(p.category, p.visited, p.id == selectedId, density)) }
-                addMarker(MarkerOptions().position(LatLng(p.lat, p.lng)).title(p.name)
-                    .anchor(.5f, 1f).zIndex(if (p.id == selectedId) 10f else 1f).icon(icon)).`object` = p.id
+            mapType = if (dark) AMap.MAP_TYPE_NIGHT else AMap.MAP_TYPE_NORMAL
+            val valid = places.filter { it.lat.isFinite() && it.lng.isFinite() && it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
+            val ids = valid.map { it.id }.toSet()
+            (markers.keys - ids).forEach { markers.remove(it)?.remove(); rendered.remove(it) }
+            valid.forEach { p ->
+                val signature = listOf(p.name, p.displayEmoji, p.lng, p.lat, p.visited, p.id == selectedId)
+                if (rendered[p.id] == signature) return@forEach
+                val key = Triple(p.displayEmoji, p.visited, p.id == selectedId)
+                val icon = icons.getOrPut(key) { BitmapDescriptorFactory.fromBitmap(placeMarkerBitmap(p.category, p.visited, p.id == selectedId, density, p.emoji)) }
+                val marker = markers.getOrPut(p.id) { addMarker(MarkerOptions().position(LatLng(p.lat, p.lng)).anchor(.5f, .9f)) }
+                marker.position = LatLng(p.lat, p.lng); marker.title = p.name; marker.setIcon(icon)
+                marker.zIndex = if (p.id == selectedId) 10f else 1f; marker.`object` = p.id
+                rendered[p.id] = signature
             }
         }
     }
@@ -133,26 +141,25 @@ fun initializeMaps(context: android.content.Context) {
     AndroidView(factory = { view }, modifier = modifier.onSizeChanged { size = it })
 }
 
-fun placeMarkerBitmap(categoryName: String, visited: Boolean, selected: Boolean, density: Float): Bitmap {
+fun placeMarkerBitmap(categoryName: String, visited: Boolean, selected: Boolean, density: Float, emoji: String = ""): Bitmap {
     val scale = density.coerceAtLeast(1f)
-    val bitmap = Bitmap.createBitmap((48 * scale).toInt(), (58 * scale).toInt(), Bitmap.Config.ARGB_8888)
+    val bitmap = Bitmap.createBitmap((56 * scale).toInt(), (60 * scale).toInt(), Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap).apply { scale(scale, scale) }
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    val path = Path().apply {
-        moveTo(24f, 53f); cubicTo(19f, 45f, 5f, 34f, 5f, 24f)
-        cubicTo(5f, -1f, 43f, -1f, 43f, 24f); cubicTo(43f, 34f, 29f, 45f, 24f, 53f); close()
-    }
-    paint.color = Color.rgb(30, 45, 42); paint.style = Paint.Style.STROKE; paint.strokeWidth = if (selected) 5f else 2f
-    canvas.drawPath(path, paint)
-    paint.style = Paint.Style.FILL; paint.color = Color.WHITE; canvas.drawPath(path, paint)
-    paint.color = if (categoryName == "美食") Color.rgb(187, 63, 13) else category(categoryName).color.toInt()
-    canvas.drawCircle(24f, 24f, 15f, paint)
-    paint.color = Color.WHITE; canvas.drawCircle(24f, 24f, 5f, paint)
+    paint.color = Color.argb(32, 0, 0, 0); canvas.drawCircle(28f, 31f, 22f, paint)
+    paint.color = Color.WHITE; canvas.drawCircle(28f, 28f, 22f, paint)
+    paint.style = Paint.Style.STROKE; paint.strokeWidth = if (selected) 3f else 1f
+    paint.color = if (selected) Color.rgb(15, 118, 110) else Color.rgb(218, 225, 223)
+    canvas.drawCircle(28f, 28f, 22f, paint)
+    paint.style = Paint.Style.FILL; paint.color = Color.BLACK; paint.textSize = 28f; paint.textAlign = Paint.Align.CENTER
+    val metrics = paint.fontMetrics
+    canvas.drawText(emoji.ifBlank { defaultEmoji(categoryName) }, 28f, 28f - (metrics.ascent + metrics.descent) / 2, paint)
+    paint.color = Color.WHITE; canvas.drawCircle(28f, 53f, 3f, paint)
+    paint.color = Color.rgb(15, 118, 110); canvas.drawCircle(28f, 53f, 2f, paint)
     if (visited) {
-        paint.color = Color.WHITE; canvas.drawCircle(39f, 9f, 8f, paint)
-        paint.color = Color.rgb(30, 45, 42); paint.style = Paint.Style.STROKE; paint.strokeWidth = 2f
-        canvas.drawCircle(39f, 9f, 8f, paint)
-        canvas.drawPath(Path().apply { moveTo(35f, 9f); lineTo(38f, 12f); lineTo(43f, 6f) }, paint)
+        paint.color = Color.WHITE; canvas.drawCircle(45f, 10f, 8f, paint)
+        paint.color = Color.rgb(15, 118, 110); canvas.drawCircle(45f, 10f, 6f, paint)
+        paint.color = Color.WHITE; paint.textSize = 10f; canvas.drawText("✓", 45f, 14f, paint)
     }
     return bitmap
 }

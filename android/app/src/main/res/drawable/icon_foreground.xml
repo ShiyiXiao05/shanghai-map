@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="12dp">
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="0dp">
     <bitmap android:src="@drawable/hu_niang" android:gravity="fill" android:filter="true" />
 </inset>

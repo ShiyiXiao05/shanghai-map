@@ -66,6 +66,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     await pool.query(
       "ALTER TABLE public.places ADD COLUMN IF NOT EXISTS tags TEXT NOT NULL DEFAULT ''"
     );
+    await pool.query("ALTER TABLE public.places ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT ''");
     await pool.query('ALTER TABLE public.places ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -378,7 +379,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     const [placeRows, photoRows, commentRows, wishRows] = await Promise.all([
       pool.query(
         `SELECT id, name, description, category, lng, lat, address, added_by,
-                visited, is_public, price_hint, hours, tags, created_at, visited_at
+                visited, is_public, price_hint, hours, tags, emoji, created_at, visited_at
          FROM public.places WHERE map_code = $1 AND deleted_at IS NULL ORDER BY id ASC`,
         [code]
       ),
@@ -474,8 +475,8 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     const { rows } = await pool.query(
       `INSERT INTO public.places
          (name, description, category, lng, lat, address, added_by, visited,
-          map_code, price_hint, hours, tags)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          map_code, price_hint, hours, tags, emoji)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         data.name,
@@ -490,6 +491,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
         data.price_hint ?? '',
         data.hours ?? '',
         data.tags ?? '',
+        data.emoji ?? '',
       ]
     );
     return rows[0];
@@ -514,6 +516,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
          price_hint = COALESCE($9, price_hint),
          hours = COALESCE($10, hours),
          tags = COALESCE($11, tags),
+         emoji = COALESCE($14, emoji),
          updated_at = now()
        WHERE id = $12 AND map_code = $13 AND deleted_at IS NULL
        RETURNING *`,
@@ -531,6 +534,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
         provided('tags'),
         id,
         mapCode,
+        provided('emoji'),
       ]
     );
     return rows[0] ?? null;
@@ -873,7 +877,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
   async function listPublicPlaces() {
     const { rows } = await pool.query(
       `SELECT id, name, description, category, lng, lat, address, added_by,
-              visited, created_at, updated_at, visited_at, is_public
+              visited, created_at, updated_at, visited_at, is_public, emoji
        FROM public.places
        WHERE is_public = TRUE AND deleted_at IS NULL
        ORDER BY created_at DESC, id DESC`
@@ -1034,7 +1038,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
   async function getPublicPlace(id) {
     const { rows } = await pool.query(
       `SELECT id, name, description, category, lng, lat, address, added_by,
-              visited, created_at, updated_at, visited_at, is_public
+              visited, created_at, updated_at, visited_at, is_public, emoji
        FROM public.places
        WHERE id = $1 AND is_public = TRUE AND deleted_at IS NULL`,
       [id]

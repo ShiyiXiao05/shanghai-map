@@ -37,7 +37,7 @@ import kotlinx.coroutines.withContext
                     if (state.stops.size > 1) Text("直线距离 ${distanceText(total)} · ${walkText(total)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { shareText(context, "《${state.map?.name}》行程单\n" + state.stops.mapIndexed { i, p -> "${i + 1}. ${p.name}" }.joinToString("\n")) }, enabled = ids.isNotEmpty()) { Icon(Icons.Outlined.Share, null); Text("分享", Modifier.padding(start = 8.dp)) }
-                        Button(onClick = { openUrl(context, itineraryNavUrl(state.stops)) }, enabled = ids.size > 1) { Icon(Icons.Outlined.Navigation, null); Text("步行导航", Modifier.padding(start = 8.dp)) }
+                        Button(onClick = { openAmap(context, state.stops, vm::notice) }, enabled = ids.size > 1) { Icon(Icons.Outlined.Navigation, null); Text("步行导航", Modifier.padding(start = 8.dp)) }
                     }
                 }
                 if (ids.isEmpty()) EmptyState("行程还是空的")

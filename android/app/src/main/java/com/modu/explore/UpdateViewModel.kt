@@ -8,8 +8,7 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.modu.explore.data.UpdateInfo
-import com.modu.explore.data.wireJson
+import com.modu.explore.data.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,48 +23,88 @@ import java.util.concurrent.TimeUnit
 
 data class UpdateState(
     val open: Boolean = false, val checking: Boolean = false, val downloading: Boolean = false,
-    val progress: Int? = null, val info: UpdateInfo? = null, val apk: File? = null, val error: String? = null
+    val progress: Int? = null, val info: UpdateInfo? = null, val apk: File? = null, val error: String? = null,
+    val previewEnabled: Boolean = false, val history: List<UpdateInfo> = emptyList(),
+    val historyLoading: Boolean = false, val historyError: String? = null
 )
 
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
-    private val mutable = MutableStateFlow(UpdateState())
+    private val sessions = SessionStore(application)
+    private var catalog: UpdateCatalog? = sessions.updates()
+    private val mutable = MutableStateFlow(UpdateState(previewEnabled = sessions.previewUpdates,
+        history = catalog?.history(BuildConfig.APPLICATION_ID, sessions.previewUpdates).orEmpty()))
     val state = mutable.asStateFlow()
     private val client = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS)
         .retryOnConnectionFailure(false).build()
     private var job: Job? = null
     @Volatile private var downloadCall: okhttp3.Call? = null
-    private var checked = false
+    private var lastCheck = 0L
     private var dismissedDuringCheck = false
 
     fun check(quiet: Boolean = false) {
         if (mutable.value.checking || mutable.value.downloading) { if (!quiet) { dismissedDuringCheck = false; mutable.update { it.copy(open = true) } }; return }
-        if (quiet && checked) return
-        checked = true
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (quiet && lastCheck != 0L && now - lastCheck < 30 * 60_000) return
+        lastCheck = now
         dismissedDuringCheck = false
-        mutable.value = UpdateState(open = !quiet, checking = true)
+        mutable.update { it.copy(open = !quiet, checking = true, error = null, apk = null, info = null) }
         job = viewModelScope.launch {
             try {
-                val info = withContext(Dispatchers.IO) {
-                    val url = BuildConfig.UPDATE_MANIFEST_URL
-                    require(url.startsWith("https://")) { "更新地址必须使用 HTTPS" }
-                    client.newCall(Request.Builder().url(url).header("Cache-Control", "no-cache").build()).execute().use { response ->
-                        if (!response.isSuccessful) throw IOException(if (response.code == 404) "更新服务尚未发布，请稍后再试" else "检查更新失败（${response.code}）")
-                        require(response.request.url.isHttps) { "更新服务跳转到了非 HTTPS 地址" }
-                        val body = response.body ?: throw IOException("更新信息为空")
-                        val source = body.source()
-                        source.request(64 * 1024 + 1L)
-                        val bytes = source.buffer.readByteArray()
-                        require(bytes.size <= 64 * 1024) { "更新信息过大" }
-                        wireJson.decodeFromString<UpdateInfo>(bytes.toString(Charsets.UTF_8)).also {
-                            require(it.isValid() && it.packageName == BuildConfig.APPLICATION_ID) { "更新信息无效" }
-                        }
-                    }
-                }
-                val newer = info.takeIf { it.isNewerThan(BuildConfig.APPLICATION_ID, BuildConfig.VERSION_CODE) }
-                mutable.update { UpdateState(open = it.open || (quiet && newer != null && !dismissedDuringCheck), info = newer) }
+                val next = fetchCatalog()
+                catalog = next
+                sessions.saveUpdates(next)
+                val newer = next.latest(BuildConfig.APPLICATION_ID, BuildConfig.VERSION_CODE, mutable.value.previewEnabled)
+                mutable.update { it.copy(checking = false, open = it.open || (quiet && newer != null && !dismissedDuringCheck), info = newer,
+                    history = next.history(BuildConfig.APPLICATION_ID, it.previewEnabled), historyError = null) }
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
-                mutable.update { UpdateState(open = it.open, error = error.message ?: "检查更新失败，请重试") }
+                mutable.update { it.copy(checking = false, error = error.message ?: "检查更新失败，请重试") }
+            }
+        }
+    }
+
+    private suspend fun fetchCatalog(): UpdateCatalog = withContext(Dispatchers.IO) {
+        suspend fun fetch(url: String): String {
+            require(java.net.URI(url).scheme == "https") { "更新地址必须使用 HTTPS" }
+            return client.newCall(Request.Builder().url(url).header("Cache-Control", "no-cache").build()).awaitResponse().use { response ->
+                if (!response.isSuccessful) throw ApiException(response.code, if (response.code == 404) "更新服务尚未发布，请稍后再试" else "检查更新失败（${response.code}）")
+                require(response.request.url.isHttps) { "更新服务跳转到了非 HTTPS 地址" }
+                val source = (response.body ?: throw IOException("更新信息为空")).source()
+                source.request(512 * 1024 + 1L)
+                val bytes = source.buffer.readByteArray()
+                require(bytes.size <= 512 * 1024) { "更新信息过大" }
+                bytes.toString(Charsets.UTF_8)
+            }
+        }
+        val historyUrl = java.net.URI(BuildConfig.UPDATE_MANIFEST_URL).resolve("releases.json").toString()
+        try { wireJson.decodeFromString<UpdateCatalog>(fetch(historyUrl)) }
+        catch (error: ApiException) {
+            if (error.status != 404) throw error
+            val latest = wireJson.decodeFromString<UpdateInfo>(fetch(BuildConfig.UPDATE_MANIFEST_URL))
+            UpdateCatalog((listOf(latest) + sessions.updates()?.releases.orEmpty()).distinctBy { it.versionCode })
+        }
+    }
+
+    fun previewUpdates(enabled: Boolean) {
+        if (mutable.value.downloading) return
+        job?.cancel()
+        sessions.previewUpdates = enabled
+        mutable.update { it.copy(previewEnabled = enabled, checking = false, info = null, apk = null,
+            history = catalog?.history(BuildConfig.APPLICATION_ID, enabled).orEmpty()) }
+        check()
+    }
+
+    fun loadHistory() {
+        if (mutable.value.historyLoading) return
+        mutable.update { it.copy(historyLoading = true, historyError = null) }
+        viewModelScope.launch {
+            try {
+                val next = fetchCatalog(); catalog = next
+                sessions.saveUpdates(next)
+                mutable.update { it.copy(historyLoading = false, history = next.history(BuildConfig.APPLICATION_ID, it.previewEnabled)) }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                mutable.update { it.copy(historyLoading = false, historyError = error.message ?: "更新日志加载失败") }
             }
         }
     }
@@ -84,7 +123,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                         val call = client.newCall(Request.Builder().url(info.apkUrl).build())
                         downloadCall = call
                         currentCoroutineContext().ensureActive()
-                        call.execute().use { response ->
+                        call.awaitResponse().use { response ->
                             if (!response.isSuccessful) throw IOException("下载失败（${response.code}）")
                             require(response.request.url.isHttps) { "下载跳转到了非 HTTPS 地址" }
                             val body = response.body ?: throw IOException("下载文件为空")

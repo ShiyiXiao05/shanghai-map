@@ -29,6 +29,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.modu.explore.*
 import com.modu.explore.data.*
 import kotlinx.coroutines.Dispatchers
@@ -41,14 +44,9 @@ import kotlinx.coroutines.withContext
         IconButton(onClick = onClick, enabled = enabled) { Icon(icon, contentDescription = label) }
     }
 }
-@Composable fun CategoryIcon(name: String, modifier: Modifier = Modifier) {
-    val icon = when (name) {
-        "美食" -> Icons.Outlined.Restaurant; "展馆" -> Icons.Outlined.Palette
-        "购物" -> Icons.Outlined.ShoppingBag; "娱乐" -> Icons.Outlined.Attractions
-        "其他" -> Icons.Outlined.AutoAwesome; else -> Icons.Outlined.Place
-    }
+@Composable fun CategoryIcon(name: String, modifier: Modifier = Modifier, emoji: String = defaultEmoji(name)) {
     Box(modifier.size(40.dp).background(Color(category(name).color).copy(alpha = .12f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-        Icon(icon, name, tint = Color(category(name).color), modifier = Modifier.size(23.dp))
+        Text(emoji, style = MaterialTheme.typography.titleLarge)
     }
 }
 @Composable fun EmptyState(text: String, loading: Boolean = false, retry: (() -> Unit)? = null) {
@@ -60,7 +58,7 @@ import kotlinx.coroutines.withContext
 }
 @Composable fun PlaceRow(place: Place, subtitle: String? = null, onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-        CategoryIcon(place.category)
+        CategoryIcon(place.category, emoji = place.displayEmoji)
         Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(place.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(subtitle ?: listOf(place.category, place.addedBy.takeIf { it.isNotBlank() },
@@ -82,9 +80,15 @@ import kotlinx.coroutines.withContext
     var privacy by remember { mutableStateOf(false) }
     var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val confirm: (String, () -> Unit) -> Unit = { text, action -> confirmation = text to action }
     BackHandler(state.page != Page.HOME) { vm.back() }
-    LaunchedEffect(Unit) { updates.check(quiet = true) }
+    DisposableEffect(lifecycle, updates) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) updates.check(quiet = true) }
+        lifecycle.addObserver(observer)
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) updates.check(quiet = true)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     LaunchedEffect(state.message) { state.message?.let { snackbar.showSnackbar(it); vm.dismissMessage() } }
     Scaffold(containerColor = MaterialTheme.colorScheme.background, snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
@@ -95,7 +99,7 @@ import kotlinx.coroutines.withContext
                 } else Text(when (state.page) {
                     Page.MAPS -> "我的地图"; Page.DETAIL -> "地点详情"; Page.EDIT -> if (state.selected == null) "标记地点" else "编辑地点"
                     Page.SEARCH -> "选择地点"; Page.ITINERARY -> "行程单"; Page.MEMORIES -> "回忆时间线"
-                    Page.TRASH -> "回收站"; Page.POSTER -> "分享海报"; else -> "魔都·Explore"
+                    Page.TRASH -> "回收站"; Page.POSTER -> "分享海报"; Page.CHANGELOG -> "更新日志"; else -> "魔都·Explore"
                 }, style = MaterialTheme.typography.titleMedium)
             }, navigationIcon = { if (state.page != Page.HOME) Tool(Icons.AutoMirrored.Outlined.ArrowBack, "返回", !state.busy, vm::back) },
                 actions = {
@@ -121,10 +125,11 @@ import kotlinx.coroutines.withContext
                 Page.MEMORIES -> MemoriesScreen(state, vm)
                 Page.TRASH -> TrashScreen(state, vm, confirm)
                 Page.POSTER -> PosterScreen(state, vm)
+                Page.CHANGELOG -> ChangelogScreen(updates)
             }
         }
     }
-    UpdateDialog(updates)
+    UpdateDialog(updates) { updates.dismiss(); vm.navigate(Page.CHANGELOG); updates.loadHistory() }
     if (privacy) AlertDialog(onDismissRequest = { privacy = false }, title = { Text("开启地图服务") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("地图、地点搜索与定位由高德提供。开启后，SDK 将处理设备信息和网络信息；定位仅在你主动使用并授予权限后进行。")
@@ -182,7 +187,7 @@ import kotlinx.coroutines.withContext
                 Box(Modifier.width(44.dp).height(4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .5f), RoundedCornerShape(2.dp)))
             }
         Column(Modifier.weight(1f - mapFraction).fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
-            if (preview != null) PlacePreview(preview, onClose = { closePreview() }, onDetails = { vm.openPlace(preview) })
+            if (preview != null) PlacePreview(preview, pending = preview.id in state.pendingPlaces, onClose = { closePreview() }, onDetails = { vm.openPlace(preview) })
             else {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 categories.forEach { c -> FilterChip(selected = c.name in state.selectedCategories, onClick = { vm.filter(c.name) },
@@ -204,7 +209,8 @@ import kotlinx.coroutines.withContext
             LazyColumn(Modifier.weight(1f)) {
                 item {
                     when {
-                        state.loading -> EmptyState("正在加载地点…", true)
+                        state.loading && state.places.isEmpty() -> EmptyState("正在加载地点…", true)
+                        state.loading -> LinearProgressIndicator(Modifier.fillMaxWidth())
                         state.error != null -> EmptyState(state.error, retry = vm::reload)
                         filtered.isEmpty() -> {
                             EmptyState(if (state.places.isEmpty()) "这张地图还没有地点" else "这个筛选下没有地点")
@@ -213,7 +219,7 @@ import kotlinx.coroutines.withContext
                         else -> Text("${filtered.size} 个地点", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                if (!state.loading && state.error == null) items(filtered, key = { it.id }) { PlaceRow(it, onClick = { previewPlace(it) }) }
+                items(filtered, key = { it.id }) { PlaceRow(it, onClick = { previewPlace(it) }) }
             }
             }
         }
@@ -230,11 +236,11 @@ import kotlinx.coroutines.withContext
         } }, confirmButton = { TextButton(onClick = { nearby = false }) { Text("关闭") } })
 }
 
-@Composable private fun PlacePreview(place: Place, onClose: () -> Unit, onDetails: () -> Unit) {
+@Composable private fun PlacePreview(place: Place, pending: Boolean, onClose: () -> Unit, onDetails: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            CategoryIcon(place.category)
+            CategoryIcon(place.category, emoji = place.displayEmoji)
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(place.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(place.category + if (place.visited) " · 已去过" else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -248,8 +254,8 @@ import kotlinx.coroutines.withContext
             Text("备注", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text(place.description.ifBlank { "暂无备注" })
         }
-        Button(onClick = onDetails, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text("进入详情"); Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null)
+        Button(onClick = onDetails, enabled = !pending, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(if (pending) "正在同步…" else "进入详情"); Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null)
         }
     }
 }
@@ -298,7 +304,8 @@ import kotlinx.coroutines.withContext
                 Text("高德地图授权", Modifier.weight(1f)); Switch(state.mapConsent, onCheckedChange = { if (!it) vm.revokeConsent() else vm.notice("请返回首页点击开启地图") })
             }
             SectionLabel("应用")
-            MenuRow("检查更新 · ${BuildConfig.VERSION_NAME}", Icons.Outlined.SystemUpdateAlt) { updates.check() }
+            MenuRow("检查更新 · ${BuildConfig.VERSION_NAME} ${channelLabel(BuildConfig.RELEASE_CHANNEL)}", Icons.Outlined.SystemUpdateAlt) { updates.check() }
+            MenuRow("更新日志", Icons.Outlined.History) { vm.navigate(Page.CHANGELOG); updates.loadHistory() }
         }
     }
     form?.let { mode -> AlertDialog(onDismissRequest = { form = null }, title = { Text(when (mode) { "create" -> "创建新地图"; "join" -> "加入地图"; "rename" -> "修改名称"; else -> "修改昵称" }) },

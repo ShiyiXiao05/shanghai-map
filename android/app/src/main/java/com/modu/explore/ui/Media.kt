@@ -13,6 +13,7 @@ import android.util.Base64
 import androidx.exifinterface.media.ExifInterface
 import com.modu.explore.data.ExploreMap
 import com.modu.explore.data.Place
+import com.modu.explore.data.amapRouteUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -76,6 +77,13 @@ fun openUrl(context: Context, url: String) {
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 }
 fun placeNavUrl(place: Place) = "https://uri.amap.com/marker?position=${place.lng},${place.lat}&name=${Uri.encode(place.name)}&coordinate=gaode&callnative=1"
+fun openAmap(context: Context, stops: List<Place>, onError: (String) -> Unit) {
+    if (stops.isEmpty()) return
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(amapRouteUri(stops)))
+            .setPackage("com.autonavi.minimap").addCategory(Intent.CATEGORY_DEFAULT))
+    }.onFailure { onError("无法打开高德地图，请确认已安装并更新高德 App") }
+}
 fun itineraryNavUrl(stops: List<Place>): String {
     fun point(p: Place) = "${p.lng},${p.lat},${Uri.encode(p.name)}"
     return "https://uri.amap.com/navigation?from=${point(stops.first())}&to=${point(stops.last())}" +
