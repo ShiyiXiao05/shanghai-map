@@ -11,6 +11,7 @@ import { createApiRateLimiters } from './ratelimit.js';
 import { createContentSecurity } from './content-security.js';
 import { createReportsRouter } from './routes/reports.js';
 import { createWechatRouter } from './routes/wechat.js';
+import { createAdminRouter } from './routes/admin.js';
 
 export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecurity }) {
   const app = express();
@@ -86,6 +87,8 @@ export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecu
   app.use('/api/reports', createReportsRouter({ store }));
   // 微信「消息推送」回调（mediaCheckAsync 审核结果）：签名校验在路由内完成
   app.use('/api/wechat', createWechatRouter({ store, contentSecurity: security }));
+  // 临时诊断端点（x-admin-token = WECHAT_MSG_TOKEN 才可见），用于排查隐私指引配置
+  app.use('/api/admin', createAdminRouter());
 
   // 公共广场：无需邀请码的只读聚合（不含 map_code，不泄露各地图邀请码）
   app.get('/api/public/places', async (req, res, next) => {
