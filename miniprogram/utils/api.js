@@ -6,7 +6,7 @@ import { getAuthToken } from './storage.js';
 // 留空时回落 wx.request 直连 BASE_URL（体验版/本地调试，需勾选「不校验合法域名」）。
 // 两种通道的 success 回调同为 { statusCode, data } 结构，页面代码无感知。
 // 已登录时自动携带 Bearer token：服务端据此把署名（added_by/author/who）盖章为登录昵称
-function request(method, path, { body, mapCode } = {}) {
+function sendRequest(method, path, { body, mapCode } = {}) {
   return new Promise((resolve, reject) => {
     const token = getAuthToken();
     const header = {
@@ -22,6 +22,7 @@ function request(method, path, { body, mapCode } = {}) {
       const error = new Error((res.data && res.data.error) || `请求失败（${res.statusCode}）`);
       error.status = res.statusCode;
       error.code = res.data && res.data.code;
+      error.authToken = token;
       reject(error);
     };
     const fail = (err) => reject(new Error('网络异常：' + (err.errMsg || '')));
@@ -46,6 +47,17 @@ function request(method, path, { body, mapCode } = {}) {
       });
     }
   });
+}
+
+async function request(method, path, opts) {
+  try {
+    return await sendRequest(method, path, opts);
+  } catch (err) {
+    if (err.status !== 401 || err.code !== 'AUTH_EXPIRED' || path === '/api/auth/login') throw err;
+    const { ensureLogin } = require('./auth.js');
+    await ensureLogin({ force: getAuthToken() === err.authToken });
+    return sendRequest(method, path, opts);
+  }
 }
 
 function get(path) {

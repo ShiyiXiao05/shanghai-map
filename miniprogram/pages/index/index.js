@@ -209,6 +209,15 @@ Page({
     try {
       const map = await api.getMap(code.trim().toUpperCase());
       app.enterMap(map);
+      this.setData({
+        mapName: map.name,
+        isPublicView: false,
+        places: [],
+        filtered: [],
+        markers: [],
+        loading: true,
+      });
+      await this.loadPlaces();
       wx.hideLoading();
       wx.showToast({ title: `已加入「${map.name}」`, icon: 'none' });
     } catch (err) {
@@ -218,12 +227,16 @@ Page({
   },
 
   async loadPlaces() {
-    const g = app.globalData;
+    const code = app.globalData.map?.code || '';
+    const requestId = (this._placesRequestId || 0) + 1;
+    this._placesRequestId = requestId;
     try {
-      const places = g.map ? await api.listPlaces(g.map.code) : await api.publicPlaces();
+      const places = code ? await api.listPlaces(code) : await api.publicPlaces();
+      if (requestId !== this._placesRequestId || code !== (app.globalData.map?.code || '')) return;
       this.setData({ places, loading: false });
       this.applyFilters();
     } catch (err) {
+      if (requestId !== this._placesRequestId || code !== (app.globalData.map?.code || '')) return;
       this.setData({ loading: false });
       wx.showToast({ title: err.message, icon: 'none' });
     }

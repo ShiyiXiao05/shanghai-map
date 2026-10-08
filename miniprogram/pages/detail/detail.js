@@ -153,11 +153,18 @@ Page({
     if (this.data.isPublicView) return;
     const nickname = await auth.requireIdentity(this, () => this.addPhoto());
     if (!nickname) return;
-    const choose = await wx.chooseMedia({
-      count: 1,
-      mediaType: ['image'],
-      sizeType: ['compressed'],
-    });
+    let choose;
+    try {
+      choose = await wx.chooseMedia({
+        count: 1,
+        mediaType: ['image'],
+        sizeType: ['compressed'],
+      });
+    } catch (err) {
+      const message = err?.errMsg || err?.message || '选择照片失败，请重试';
+      if (!/cancel/i.test(message)) wx.showToast({ title: message, icon: 'none' });
+      return;
+    }
     const file = choose.tempFiles[0];
     if (!file) return;
     if (file.size > 3 * 1024 * 1024) {

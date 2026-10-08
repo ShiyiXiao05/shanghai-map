@@ -21,7 +21,8 @@ function login() {
   return pendingLogin;
 }
 
-export async function ensureLogin() {
+export async function ensureLogin({ force = false } = {}) {
+  if (force) setAuthToken('');
   if (getAuthToken()) return { token: getAuthToken(), nickname: getNickname() };
   const res = await login();
   return { token: res.token, nickname: res.nickname };
