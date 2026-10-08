@@ -20,8 +20,8 @@ android {
         applicationId = "com.modu.explore"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         buildConfigField("String", "API_BASE_URL", literal(config("API_BASE_URL", "https://shanghai-wish-map.onrender.com")))
         buildConfigField("String", "AMAP_KEY", literal(config("AMAP_ANDROID_KEY")))
         buildConfigField("String", "UPDATE_MANIFEST_URL", literal(config("UPDATE_MANIFEST_URL", config("API_BASE_URL", "https://shanghai-wish-map.onrender.com").trimEnd('/') + "/android/update.json")))

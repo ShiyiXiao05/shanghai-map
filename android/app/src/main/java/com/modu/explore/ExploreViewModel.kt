@@ -8,6 +8,8 @@ import com.modu.explore.data.*
 import com.modu.explore.ui.compressPhoto
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -80,8 +82,11 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
         mutable.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             try {
-                val map = code?.let { api.getMap(it) }
-                val places = api.places(code)
+                val (map, places) = coroutineScope {
+                    val map = async { code?.let { api.getMap(it) } }
+                    val places = async { api.places(code) }
+                    map.await() to places.await()
+                }
                 if (stamp != revision) return@launch
                 if (map != null) sessions.saveMap(map)
                 mutable.update { it.copy(map = map, maps = sessions.maps(), places = places, loading = false,
@@ -92,8 +97,9 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
             }
         }
     }
-    private fun write(success: String, action: suspend () -> Unit) {
+    private fun write(success: String, refreshDetail: Boolean = false, action: suspend () -> Unit) {
         if (mutable.value.busy) return
+        val mediaPending = mutable.value.detailLoading
         detailRevision++
         mutable.update { it.copy(busy = true, detailLoading = false) }
         viewModelScope.launch {
@@ -101,7 +107,7 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
             catch (error: Exception) { if (error is CancellationException) throw error; notice(message(error)) }
             finally {
                 mutable.update { it.copy(busy = false) }
-                if (mutable.value.page == Page.DETAIL && mutable.value.selected != null) loadDetail()
+                if ((refreshDetail || mediaPending) && mutable.value.page == Page.DETAIL && mutable.value.selected != null) loadDetail()
             }
         }
     }
@@ -122,7 +128,10 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
     fun joinMap(raw: String) {
         val code = normalizeCode(raw) ?: run { notice("请输入 6 位字母或数字邀请码"); return }
         write("已加入地图") {
-            val map = api.getMap(code); val places = api.places(code)
+            val (map, places) = coroutineScope {
+                val map = async { api.getMap(code) }; val places = async { api.places(code) }
+                map.await() to places.await()
+            }
             sessions.saveMap(map); sessions.code = code; revision++
             mutable.update { it.copy(map = map, maps = sessions.maps(), places = places, selected = null, page = Page.HOME,
                 loading = false, error = null, selectedCategories = emptySet(), previewId = null) }
@@ -137,13 +146,17 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
         loadDetail()
     }
     fun loadDetail() {
+        if (mutable.value.busy) return
         val stamp = ++detailRevision
         val code = mutable.value.map?.code ?: return
         val place = mutable.value.selected ?: return
         mutable.update { it.copy(detailLoading = true, detailError = null) }
         viewModelScope.launch {
             try {
-                val photos = api.photos(code, place.id); val comments = api.comments(code, place.id)
+                val (photos, comments) = coroutineScope {
+                    val photos = async { api.photos(code, place.id) }; val comments = async { api.comments(code, place.id) }
+                    photos.await() to comments.await()
+                }
                 if (stamp == detailRevision && code == mutable.value.map?.code && place.id == mutable.value.selected?.id)
                     mutable.update { it.copy(photos = photos, comments = comments, detailLoading = false) }
             } catch (error: Exception) {
@@ -159,8 +172,13 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
         if (mutable.value.nickname.isBlank()) { notice("请先在我的地图中设置昵称"); return }
         val id = mutable.value.selected?.id
         write("地点已保存") {
-            api.savePlace(code, id, JsonObject(fields + if (id == null) mapOf("added_by" to JsonPrimitive(mutable.value.nickname)) else emptyMap()))
-            refreshPlaces(code); mutable.update { it.copy(page = if (id == null) Page.HOME else Page.DETAIL) }
+            val result = api.savePlace(code, id, JsonObject(fields + if (id == null) mapOf("added_by" to JsonPrimitive(mutable.value.nickname)) else emptyMap()))
+            val previous = mutable.value.selected?.let { wireJson.encodeToJsonElement(it).jsonObject } ?: buildJsonObject { }
+            val saved = wireJson.decodeFromJsonElement<Place>(JsonObject(previous + result))
+            if (id == null) {
+                revision++
+                mutable.update { it.copy(places = listOf(saved) + it.places, page = Page.HOME, loading = false) }
+            } else { updatePlace(id) { saved }; mutable.update { it.copy(page = Page.DETAIL) } }
         }
     }
     fun placeAction(action: String) {
@@ -169,34 +187,44 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
         if (action == "wish" && mutable.value.nickname.isBlank()) { notice("请先设置昵称"); return }
         write("已更新") {
             when (action) {
-                "visited" -> api.savePlace(code, place.id, buildJsonObject { put("visited", !place.visited) })
-                "wish" -> api.wish(code, place.id, mutable.value.nickname)
-                "public" -> api.publish(code, place.id)
+                "visited" -> {
+                    val result = api.savePlace(code, place.id, buildJsonObject { put("visited", !place.visited) })
+                    updatePlace(place.id) { it.copy(visited = result.getValue("visited").jsonPrimitive.boolean, visitedAt = result["visited_at"]?.jsonPrimitive?.contentOrNull) }
+                }
+                "wish" -> { val wishes = api.wish(code, place.id, mutable.value.nickname); updatePlace(place.id) { it.copy(wishes = wishes) } }
+                "public" -> { val published = api.publish(code, place.id); updatePlace(place.id) { it.copy(isPublic = published) } }
                 "delete" -> api.deletePlace(code, place.id)
             }
-            refreshPlaces(code)
+            if (action == "delete") { revision++; mutable.update { it.copy(loading = false, places = it.places.filter { p -> p.id != place.id }, previewId = null) } }
             if (action == "delete") mutable.update { it.copy(page = Page.HOME, selected = null) }
         }
+    }
+    private fun updatePlace(id: Long, transform: (Place) -> Place) {
+        revision++
+        mutable.update { state -> state.copy(loading = false, places = state.places.map { if (it.id == id) transform(it) else it },
+            selected = state.selected?.let { if (it.id == id) transform(it) else it }) }
     }
     fun addComment(text: String, onSuccess: () -> Unit = {}) {
         val code = mutable.value.map?.code ?: return; val id = mutable.value.selected?.id ?: return
         if (text.isBlank() || text.length > 280) { notice("留言需为 1–280 字"); return }
         if (mutable.value.nickname.isBlank()) { notice("请先设置昵称"); return }
-        write("留言已发送") { api.comment(code, id, text.trim(), mutable.value.nickname); onSuccess(); val comments = api.comments(code, id); mutable.update { it.copy(comments = comments) }; refreshPlaces(code) }
+        write("留言已发送") { val comment = api.comment(code, id, text.trim(), mutable.value.nickname); onSuccess(); mutable.update { it.copy(comments = it.comments + comment) }; updatePlace(id) { it.copy(commentCount = it.commentCount + 1) } }
     }
     fun removeComment(id: Long) { val code = mutable.value.map?.code ?: return
-        write("留言已删除") { api.deleteComment(code, id); mutable.update { it.copy(comments = it.comments.filter { c -> c.id != id }) }; refreshPlaces(code) } }
+        val placeId = mutable.value.selected?.id ?: return
+        write("留言已删除") { api.deleteComment(code, id); mutable.update { it.copy(comments = it.comments.filter { c -> c.id != id }) }; updatePlace(placeId) { it.copy(commentCount = (it.commentCount - 1).coerceAtLeast(0)) } } }
     fun upload(uri: Uri) {
         val code = mutable.value.map?.code ?: return; val id = mutable.value.selected?.id ?: return
         if (mutable.value.nickname.isBlank()) { notice("请先设置昵称"); return }
         write("照片已上传") {
             val (full, thumb) = compressPhoto(getApplication(), uri)
             api.upload(code, id, full, thumb, mutable.value.nickname)
-            val photos = api.photos(code, id); mutable.update { it.copy(photos = photos) }; refreshPlaces(code)
+            val photos = api.photos(code, id); mutable.update { it.copy(photos = photos) }; updatePlace(id) { it.copy(photoCount = photos.size) }
         }
     }
     fun removePhoto(id: Long) { val code = mutable.value.map?.code ?: return
-        write("照片已删除") { api.deletePhoto(code, id); mutable.update { it.copy(photos = it.photos.filter { p -> p.id != id }) }; refreshPlaces(code) } }
+        val placeId = mutable.value.selected?.id ?: return
+        write("照片已删除") { api.deletePhoto(code, id); mutable.update { it.copy(photos = it.photos.filter { p -> p.id != id }) }; updatePlace(placeId) { it.copy(photoCount = (it.photoCount - 1).coerceAtLeast(0)) } } }
     fun loadPage() {
         val code = mutable.value.map?.code ?: return; val page = mutable.value.page; val stamp = revision
         mutable.update { it.copy(pageLoading = true, pageError = null) }

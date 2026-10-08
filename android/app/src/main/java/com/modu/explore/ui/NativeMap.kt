@@ -105,7 +105,8 @@ fun initializeMaps(context: android.content.Context) {
         }
         onDispose { lifecycle.removeObserver(observer); view.onPause(); view.onDestroy(); icons.values.forEach { it.recycle() }; icons.clear() }
     }
-    LaunchedEffect(loaded, places, dark, selectedId) {
+    val markerState = places.map { listOf(it.id, it.name, it.category, it.lng, it.lat, it.visited) }
+    LaunchedEffect(loaded, markerState, dark, selectedId) {
         if (!loaded) return@LaunchedEffect
         view.map.apply {
             clear(); mapType = if (dark) AMap.MAP_TYPE_NIGHT else AMap.MAP_TYPE_NORMAL
@@ -137,14 +138,16 @@ fun placeMarkerBitmap(categoryName: String, visited: Boolean, selected: Boolean,
     val bitmap = Bitmap.createBitmap((48 * scale).toInt(), (58 * scale).toInt(), Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap).apply { scale(scale, scale) }
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    val path = Path().apply { moveTo(16f, 38f); lineTo(24f, 54f); lineTo(32f, 38f); close() }
-    paint.color = Color.rgb(30, 45, 42)
-    canvas.drawPath(path, paint); canvas.drawCircle(24f, 24f, if (selected) 23f else 21f, paint)
-    paint.color = Color.WHITE; canvas.drawCircle(24f, 24f, 19f, paint)
+    val path = Path().apply {
+        moveTo(24f, 53f); cubicTo(19f, 45f, 5f, 34f, 5f, 24f)
+        cubicTo(5f, -1f, 43f, -1f, 43f, 24f); cubicTo(43f, 34f, 29f, 45f, 24f, 53f); close()
+    }
+    paint.color = Color.rgb(30, 45, 42); paint.style = Paint.Style.STROKE; paint.strokeWidth = if (selected) 5f else 2f
+    canvas.drawPath(path, paint)
+    paint.style = Paint.Style.FILL; paint.color = Color.WHITE; canvas.drawPath(path, paint)
     paint.color = if (categoryName == "美食") Color.rgb(187, 63, 13) else category(categoryName).color.toInt()
     canvas.drawCircle(24f, 24f, 15f, paint)
-    paint.color = Color.WHITE; paint.textSize = 18f; paint.textAlign = Paint.Align.CENTER; paint.isFakeBoldText = true
-    canvas.drawText(when (categoryName) { "美食" -> "食"; "展馆" -> "展"; "购物" -> "购"; "娱乐" -> "娱"; "其他" -> "点"; else -> "景" }, 24f, 30f, paint)
+    paint.color = Color.WHITE; canvas.drawCircle(24f, 24f, 5f, paint)
     if (visited) {
         paint.color = Color.WHITE; canvas.drawCircle(39f, 9f, 8f, paint)
         paint.color = Color.rgb(30, 45, 42); paint.style = Paint.Style.STROKE; paint.strokeWidth = 2f

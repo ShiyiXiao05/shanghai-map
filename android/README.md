@@ -4,7 +4,7 @@
 
 ## 安装
 
-本地构建产物：`dist/modu-explore-0.2.0-debug.apk`。支持 Android 8 及以上。调试签名 APK 用于直接安装体验，正式发布需使用自己的长期签名。
+本地构建产物：`dist/modu-explore-0.3.0-debug.apk`。支持 Android 8 及以上。调试签名 APK 用于直接安装体验，正式发布需使用自己的长期签名。
 
 首次进入公共广场。点击顶部地图名称进入「我的地图」，设置昵称后创建地图，或输入已有的 6 位邀请码加入。Android 沿用网页的昵称署名与邀请码权限，不使用小程序 `wx.login`。
 
@@ -80,6 +80,8 @@ export ANDROID_KEY_PASSWORD=你的密码
 0.2.0 验证：12 项 JVM 测试、6 项 Android 15 模拟器测试通过，lint 无错误；已检查地点简介截图，APK 签名校验通过。地图实际渲染、联网更新与系统安装确认仍需真机验证。APK SHA-256：`be92c6f47a8eec0f9ba2492e630add1fab4d102e610440f2b1ebfa6c77bdca6a`。
 
 ## 应用内更新
+
+0.3.0 发布内容与验收说明见 [Android 0.3.0 发布说明](../docs/Android-0.3.0发布说明.md)。
 
 部署人员交接文档见 [Render Android 更新部署交接](../docs/Render-Android更新部署交接.md)。Render 的 Root Directory 需留空，Build/Start 使用 `npm --prefix server ci` 和 `npm --prefix server start`，以包含同级 `public/`。
 

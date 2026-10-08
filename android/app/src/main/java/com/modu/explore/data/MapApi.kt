@@ -44,14 +44,14 @@ class MapApi(val baseUrl: String, private val client: OkHttpClient = OkHttpClien
     suspend fun createMap(name: String, nickname: String): ExploreMap = wireJson.decodeFromString(raw("POST", "/api/maps", buildJsonObject { put("name", name); put("createdBy", nickname) }))
     suspend fun getMap(code: String): ExploreMap = wireJson.decodeFromString(raw("GET", "/api/maps/$code"))
     suspend fun places(code: String?, trash: Boolean = false): List<Place> = wireJson.decodeFromString<PlacesResponse>(raw("GET", if (code == null) "/api/public/places" else "/api/places?map=$code${if (trash) "&view=trash" else ""}")).places
-    suspend fun savePlace(code: String, id: Long?, fields: JsonObject) {
+    suspend fun savePlace(code: String, id: Long?, fields: JsonObject): JsonObject {
         val body = JsonObject(fields + if (id == null) mapOf("map_code" to JsonPrimitive(code)) else emptyMap())
-        raw(if (id == null) "POST" else "PUT", if (id == null) "/api/places" else "/api/places/$id", body, code)
+        return wireJson.parseToJsonElement(raw(if (id == null) "POST" else "PUT", if (id == null) "/api/places" else "/api/places/$id", body, code)).jsonObject
     }
     suspend fun deletePlace(code: String, id: Long) { raw("DELETE", "/api/places/$id", code = code) }
     suspend fun restore(code: String, id: Long) { raw("POST", "/api/places/$id/restore", buildJsonObject { put("map_code", code) }) }
-    suspend fun wish(code: String, id: Long, who: String) { raw("POST", "/api/places/$id/wish", buildJsonObject { put("map_code", code); put("who", who) }) }
-    suspend fun publish(code: String, id: Long) { raw("POST", "/api/places/$id/public", buildJsonObject { put("map_code", code) }) }
+    suspend fun wish(code: String, id: Long, who: String): List<String> = wireJson.parseToJsonElement(raw("POST", "/api/places/$id/wish", buildJsonObject { put("map_code", code); put("who", who) })).jsonObject.getValue("wishes").jsonArray.map { it.jsonPrimitive.content }
+    suspend fun publish(code: String, id: Long): Boolean = wireJson.parseToJsonElement(raw("POST", "/api/places/$id/public", buildJsonObject { put("map_code", code) })).jsonObject.getValue("is_public").jsonPrimitive.boolean
     suspend fun photos(code: String, id: Long) = wireJson.decodeFromString<PhotosResponse>(raw("GET", "/api/places/$id/photos?map=$code")).photos
     fun photoUrl(code: String, id: Long) = endpoint("/api/photos/$id?map=$code")
     suspend fun upload(code: String, id: Long, full: String, thumb: String, nickname: String) {
@@ -59,7 +59,7 @@ class MapApi(val baseUrl: String, private val client: OkHttpClient = OkHttpClien
     }
     suspend fun deletePhoto(code: String, id: Long) { raw("DELETE", "/api/photos/$id", code = code) }
     suspend fun comments(code: String, id: Long) = wireJson.decodeFromString<CommentsResponse>(raw("GET", "/api/places/$id/comments?map=$code")).comments
-    suspend fun comment(code: String, id: Long, body: String, nickname: String) { raw("POST", "/api/places/$id/comments", buildJsonObject { put("map_code", code); put("body", body); put("author", nickname) }) }
+    suspend fun comment(code: String, id: Long, body: String, nickname: String): Comment = wireJson.decodeFromString(raw("POST", "/api/places/$id/comments", buildJsonObject { put("map_code", code); put("body", body); put("author", nickname) }))
     suspend fun deleteComment(code: String, id: Long) { raw("DELETE", "/api/comments/$id", code = code) }
     suspend fun itinerary(code: String) = wireJson.decodeFromString<StopsResponse>(raw("GET", "/api/itinerary?map=$code")).stops
     suspend fun saveItinerary(code: String, ids: List<Long>) { raw("PUT", "/api/itinerary", buildJsonObject { put("map_code", code); put("place_ids", JsonArray(ids.map { JsonPrimitive(it) })) }) }

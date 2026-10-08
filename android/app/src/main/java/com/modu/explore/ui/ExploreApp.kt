@@ -5,6 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +25,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.modu.explore.*
@@ -136,10 +141,12 @@ import kotlinx.coroutines.withContext
     var sortOpen by remember { mutableStateOf(false) }
     var center by remember { mutableStateOf<PickedPoint?>(null) }
     var nearby by remember { mutableStateOf(false) }
-    var random by remember { mutableStateOf<Place?>(null) }
+    var drawCandidates by remember { mutableStateOf<List<Place>>(emptyList()) }
+    var mapFraction by rememberSaveable { mutableFloatStateOf(.43f) }
+    var contentHeight by remember { mutableIntStateOf(0) }
     var fitRequest by remember { mutableIntStateOf(0) }
     val preview = state.places.find { it.id == state.previewId }
-    LaunchedEffect(state.map?.code) { center = null; fullscreen = false; random = null; nearby = false }
+    LaunchedEffect(state.map?.code) { center = null; fullscreen = false; drawCandidates = emptyList(); nearby = false }
     LaunchedEffect(preview?.id) { preview?.let { center = PickedPoint(it.name, it.address, it.lng, it.lat) } }
     val filtered = remember(state.places, state.selectedCategories, state.hideVisited, state.sort) {
         filterPlaces(state.places, state.selectedCategories, state.hideVisited, state.sort)
@@ -148,8 +155,8 @@ import kotlinx.coroutines.withContext
     val previewPlace: (Place) -> Unit = { fullscreen = false; center = PickedPoint(it.name, it.address, it.lng, it.lat); vm.previewPlace(it) }
     fun closePreview() { vm.closePreview(); center = null }
     BackHandler(preview != null || fullscreen) { if (preview != null) closePreview() else fullscreen = false }
-    Column(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxWidth().weight(if (fullscreen) 1f else .43f).background(MaterialTheme.colorScheme.surface)) {
+    Column(Modifier.fillMaxSize().onSizeChanged { contentHeight = it.height }) {
+        Box(Modifier.fillMaxWidth().weight(if (fullscreen) 1f else mapFraction).background(MaterialTheme.colorScheme.surface)) {
             NativeMap(filtered, state.mapConsent, isSystemInDarkTheme(), Modifier.fillMaxSize(), center, onConsent,
                 onPlace = previewPlace, onPick = if (state.map == null) null else vm::startAdd,
                 selectedId = preview?.id, fitRequest = fitRequest, mapIdentity = state.map?.code,
@@ -158,12 +165,23 @@ import kotlinx.coroutines.withContext
                 Row {
                     Tool(Icons.Outlined.CenterFocusStrong, "显示全部地点") { center = null; fitRequest++ }
                     Tool(Icons.Outlined.MyLocation, "附近", !state.busy, locate)
-                    Tool(Icons.Outlined.Casino, "随机抽取", !state.busy) { if (state.places.isEmpty()) vm.notice("还没有可抽取的地点") else random = state.places.random() }
+                    Tool(Icons.Outlined.Casino, "随机抽取", !state.busy) { if (state.places.isEmpty()) vm.notice("还没有可抽取的地点") else drawCandidates = state.places.toList() }
                     Tool(if (fullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen, "切换全屏") { fullscreen = !fullscreen }
                 }
             }
         }
-        if (!fullscreen) Column(Modifier.weight(.57f).fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+        if (!fullscreen) {
+            Box(Modifier.fillMaxWidth().height(24.dp).background(MaterialTheme.colorScheme.surface)
+                .semantics {
+                    contentDescription = "调整地图与地点比例"
+                    progressBarRangeInfo = ProgressBarRangeInfo(mapFraction, .25f.. .7f)
+                    setProgress { mapFraction = it.coerceIn(.25f, .7f); true }
+                }
+                .draggable(rememberDraggableState { delta -> mapFraction = adjustedMapFraction(mapFraction, delta, contentHeight.toFloat()) }, Orientation.Vertical),
+                contentAlignment = Alignment.Center) {
+                Box(Modifier.width(44.dp).height(4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .5f), RoundedCornerShape(2.dp)))
+            }
+        Column(Modifier.weight(1f - mapFraction).fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
             if (preview != null) PlacePreview(preview, onClose = { closePreview() }, onDetails = { vm.openPlace(preview) })
             else {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -199,11 +217,9 @@ import kotlinx.coroutines.withContext
             }
             }
         }
+        }
     }
-    random?.let { p -> AlertDialog(onDismissRequest = { random = null }, title = { Text("今天去哪里？") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { CategoryIcon(p.category); Text(p.name, style = MaterialTheme.typography.titleLarge); Text(p.address.ifBlank { p.category }) } },
-        confirmButton = { TextButton(onClick = { random = null; previewPlace(p) }) { Text("查看地点") } },
-        dismissButton = { TextButton(onClick = { random = state.places.random() }) { Text("再抽一次") } }) }
+    if (drawCandidates.isNotEmpty()) DrawPlaceDialog(drawCandidates, onDismiss = { drawCandidates = emptyList() }, onPlace = { drawCandidates = emptyList(); previewPlace(it) })
     if (nearby && center != null) AlertDialog(onDismissRequest = { nearby = false }, title = { Text("离我最近") },
         text = { Column {
             val origin = center!!

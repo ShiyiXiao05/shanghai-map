@@ -40,6 +40,38 @@ class NativeRegressionTest {
         } finally { bitmap.recycle() }
     }
 
+    @Test fun wishUsesMutationResponseWithoutReloadingMapOrMedia() = runBlocking {
+        app.getSharedPreferences("explore", 0).edit().clear().commit()
+        SessionStore(app).apply { saveMap(ExploreMap("AB12CD", "测试")); code = "AB12CD"; nickname = "我" }
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) = when {
+                    request.path == "/api/maps/AB12CD" -> MockResponse().setBody("""{"code":"AB12CD","name":"测试"}""")
+                    request.path == "/api/places?map=AB12CD" -> MockResponse().setBody("""{"places":[{"id":1,"name":"外滩","category":"景点","lng":121.49,"lat":31.24}]}""")
+                    request.path?.endsWith("/wish") == true -> MockResponse().setBody("""{"wished":true,"wishes":["我"]}""")
+                    request.path?.contains("photos") == true -> MockResponse().setBody("""{"photos":[]}""")
+                    request.path?.contains("comments") == true -> MockResponse().setBody("""{"comments":[]}""")
+                    else -> MockResponse().setResponseCode(404)
+                }
+            }
+            val api = MapApi(server.url("/").toString())
+            lateinit var vm: ExploreViewModel
+            val store = ViewModelStore()
+            onMain { vm = ExploreViewModel(app, api); store.put("test", vm) }
+            try {
+                withTimeout(5000) { vm.state.first { !it.loading } }
+                onMain { vm.openPlace(vm.state.value.places.single()) }
+                withTimeout(5000) { vm.state.first { !it.detailLoading } }
+                val count = server.requestCount
+                onMain { vm.placeAction("wish") }
+                withTimeout(5000) { vm.state.first { !it.busy } }
+                delay(100)
+                assertEquals(listOf("我"), vm.state.value.selected?.wishes)
+                assertEquals(count + 1, server.requestCount)
+            } finally { onMain { store.clear() } }
+        }
+    }
+
     @Test fun previewKeepsHomeAndLoadsMediaOnlyWhenDetailsOpen() = runBlocking {
         app.getSharedPreferences("explore", 0).edit().clear().commit()
         SessionStore(app).apply { saveMap(ExploreMap("AB12CD", "测试地图")); code = "AB12CD" }
