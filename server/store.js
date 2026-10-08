@@ -829,7 +829,14 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
       'DELETE FROM place_photos WHERE id = $1 AND map_code = $2 RETURNING id, public_id',
       [id, mapCode]
     );
-    if (rows.length > 0) cacheDelete(`${id}:${mapCode}`);
+    if (rows.length > 0) {
+      cacheDelete(`${id}:${mapCode}`);
+      // 照片没了，指向它的举报也失去对象：一并清理，避免留下引用已删除内容的记录
+      await pool.query(
+        "DELETE FROM content_reports WHERE target_type = 'photo' AND target_id = $1 AND map_code = $2",
+        [id, mapCode]
+      );
+    }
     return rows[0] ?? null;
   }
 
