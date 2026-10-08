@@ -4,16 +4,12 @@ const { CATEGORIES } = require('../../utils/config.js');
 const auth = require('../../utils/auth.js');
 const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
-const { chooseLocation, locationApiEnabled } = require('../../utils/location.js');
 
-// 地图手动点选的初始中心（上海市中心）：未开通地理位置接口时的兜底方案
+// 地图手动点选的初始中心（上海市中心）：全程不调用地理位置接口，因此不需要任何权限
 const SHANGHAI_CENTER = { latitude: 31.2304, longitude: 121.4737 };
 
-// 权限类失败（位置权限被拒、隐私授权未声明等）统一引导去设置页
-const AUTH_PATTERN = /auth|deny|privacy|scope/i;
-
-// 添加地点：wx.chooseLocation 是微信原生的「搜索+地图选点」合一选择器
-// （自带腾讯 POI 搜索与逆地理吸附，无需额外位置服务 key）
+// 添加地点：在本页内嵌的地图上手动点选（不调用地理位置接口，无需申请权限）。
+// 想要更省事的路径可以用「粘贴高德分享导入」，那条路能一次带出名称/地址/坐标。
 Page({
   behaviors: [identityBehavior],
 
@@ -38,41 +34,9 @@ Page({
     this.setData({ nickname: storage.getNickname() });
   },
 
-  async chooseLocation() {
-    const result = await chooseLocation();
-    if (result.ok) {
-      const res = result.data;
-      this.setData({
-        picked: {
-          name: res.name || '',
-          address: res.address || '',
-          latitude: res.latitude,
-          longitude: res.longitude,
-        },
-        name: res.name || this.data.name,
-        mapPick: false,
-      });
-      return;
-    }
-    // 未开通地理位置接口权限（或基础库不支持）：退化为"在地图上手动点选"，不需要任何权限
-    if (result.reason === 'disabled' || result.reason === 'unsupported') {
-      if (result.reason === 'unsupported' && locationApiEnabled()) {
-        wx.showToast({ title: '当前微信版本不支持选点，请改用地图点选', icon: 'none' });
-      }
-      this.setData({ mapPick: true, pickMarkers: [], pickPoint: null });
-      return;
-    }
-    if (result.reason === 'cancel') return; // 用户主动取消不算失败
-    if (result.reason === 'denied') {
-      wx.showModal({
-        title: '需要位置权限',
-        content: '请在设置中允许使用位置信息后重试，或直接在地图上点选',
-        confirmText: '去设置',
-        success: (r) => r.confirm && wx.openSetting({}),
-      });
-      return;
-    }
-    wx.showToast({ title: '选择位置失败，请重试或改用粘贴导入', icon: 'none' });
+  // 打开地图点选（没有"原生选点"这一步，因此不涉及任何权限）
+  openMapPick() {
+    this.setData({ mapPick: true, pickMarkers: [], pickPoint: null });
   },
 
   // 地图手动点选：完全不用地理位置接口，只读取用户点击的屏幕坐标

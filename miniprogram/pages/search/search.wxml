@@ -16,16 +16,16 @@
     </view>
   </view>
 
-  <view wx:else class="picker {{picked ? 'picker-on' : ''}}" bindtap="chooseLocation">
+  <view wx:else class="picker {{picked ? 'picker-on' : ''}}" bindtap="openMapPick">
     <block wx:if="{{picked}}">
       <view class="picked-name">{{picked.name || '（未命名位置）'}}</view>
       <view class="picked-meta">{{picked.address}} · {{picked.latitude}}, {{picked.longitude}}</view>
       <view class="picked-tip">点击重新选择</view>
     </block>
     <block wx:else>
-      <view class="picker-icon">🔍</view>
-      <view class="picker-title">搜索地点，或在地图上选点</view>
-      <view class="picker-tip">{{picked ? '点击重新选择' : '点这里：搜「武康路」，或在地图上手动点选'}}</view>
+      <view class="picker-icon">📍</view>
+      <view class="picker-title">在地图上点选位置</view>
+      <view class="picker-tip">{{picked ? '点击重新选择' : '点这里打开地图，点一下就是你要的位置'}}</view>
     </block>
   </view>
 

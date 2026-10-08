@@ -2,7 +2,6 @@ const app = getApp();
 const { api } = require('../../utils/api.js');
 const { categoryMeta, CATEGORIES } = require('../../utils/config.js');
 const storage = require('../../utils/storage.js');
-const { getLocation } = require('../../utils/location.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
@@ -151,39 +150,17 @@ Page({
     clearInterval(this.randomTimer);
   },
 
-  async locateNearby() {
+  // 「附近」：不调用地理位置接口，按地图当前中心点近似排序
+  locateNearby() {
     if (this.data.places.length === 0) {
       wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
       return;
     }
-    wx.showLoading({ title: '定位中…' });
-    const result = await getLocation();
-    wx.hideLoading();
-
-    if (result.ok) {
-      this.showNearby(result.data, false);
-      return;
-    }
-    if (result.reason === 'cancel') return;
-    if (result.reason === 'denied') {
-      wx.showModal({
-        title: '需要位置权限',
-        content: '请在设置中允许使用位置信息后重试',
-        confirmText: '去设置',
-        success: (r) => r.confirm && wx.openSetting({}),
-      });
-      return;
-    }
-    // 未开通地理位置接口权限：按地图当前中心近似计算，功能不缺失
-    if (result.reason === 'disabled' || result.reason === 'unsupported') {
-      this.showNearby({ longitude: this.data.longitude, latitude: this.data.latitude }, true);
-      return;
-    }
-    wx.showToast({ title: '暂时无法获取位置', icon: 'none' });
+    this.showNearby({ longitude: this.data.longitude, latitude: this.data.latitude });
   },
 
-  // 按给定坐标算最近 5 个地点；approximate=true 表示用的是地图中心而不是真实定位
-  showNearby(location, approximate) {
+  // 按给定坐标算最近 5 个地点（当前用的是地图中心点，不是真实定位）
+  showNearby(location) {
     const nearest = this.data.places
       .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
       .map((place) => {
@@ -196,13 +173,11 @@ Page({
     this.setData({
       longitude: location.longitude,
       latitude: location.latitude,
-      showLocation: !approximate,
+      showLocation: false,
       nearbyPlaces: nearest,
       nearbyOpen: true,
     });
-    if (approximate) {
-      wx.showToast({ title: '未开通定位权限，按地图中心近似排序', icon: 'none' });
-    }
+    wx.showToast({ title: '按地图当前中心点排序', icon: 'none' });
   },
 
   closeNearby() {
