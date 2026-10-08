@@ -49,6 +49,29 @@
   color: var(--ink-soft);
 }
 
+.map-pick {
+  margin-bottom: 24rpx;
+}
+
+.map-pick-tip {
+  font-size: 24rpx;
+  color: var(--ink-soft);
+  margin-bottom: 14rpx;
+}
+
+.map-pick-canvas {
+  width: 100%;
+  height: 520rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.map-pick-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+
 .field {
   display: flex;
   flex-direction: column;

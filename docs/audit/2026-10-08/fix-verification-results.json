@@ -1,7 +1,7 @@
 {
-  "checkedAt": "2026-10-08T08:22:56.897Z",
+  "checkedAt": "2026-10-08T08:31:53.143Z",
   "static": {
-    "jsFiles": 54,
+    "jsFiles": 55,
     "syntaxFailures": [],
     "jsonFiles": 18,
     "jsonFailures": [],
@@ -12,7 +12,7 @@
       "available": true,
       "status": 0,
       "stderr": "",
-      "outputBytes": 99560
+      "outputBytes": 101114
     },
     "wxss": {
       "fileCount": 11,
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "BXFVCP",
+        "code": "XDVMYL",
         "placeId": 1
       }
     },

@@ -9,6 +9,18 @@ export const CLOUD_ENV_ID = 'shanghai-map-d4gh58zcjddcf3dc1';
 // 云托管服务名：与控制台创建的服务名一致（见 docs/微信云托管部署指引.md）
 export const CLOUD_SERVICE_NAME = 'shanghai-map';
 
+// 地理位置接口开关（wx.getLocation / wx.chooseLocation）
+//
+// 微信自 2022-04-18 起对地理位置接口实行准入开通：未在 mp 后台「开发管理 → 接口设置」
+// 申请到权限时，开发者工具会报「接口无权限」，且提交代码审核会被拦截（61040）。
+//
+// false = 不调用这两个接口：「添加地点」在地图上手动点选、「附近」按地图中心近似计算，
+//         完全不需要权限，可以立即提审；
+// true  = 申请到权限后改为微信原生选点/定位。
+// ⚠️ 改成 true 时**必须同步**：① app.json 恢复 requiredPrivateInfos 与 permission；
+//    ② mp 后台隐私指引勾选位置相关类型；③ 接口设置里两个接口状态为「已获得」。
+export const LOCATION_API_ENABLED = false;
+
 // 2. 腾讯位置服务 key（https://lbs.qq.com 控制台创建，选「WebServiceAPI」并勾选微信小程序授权）
 // 用途：地点关键词搜索 / 逆地理（吸附选点）
 export const TMAP_KEY = '';

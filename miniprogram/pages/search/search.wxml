@@ -1,5 +1,22 @@
 <view class="page">
-  <view class="picker {{picked ? 'picker-on' : ''}}" bindtap="chooseLocation">
+  <!-- 地图手动点选：未开通地理位置接口权限时的兜底，不依赖任何隐私接口 -->
+  <view wx:if="{{mapPick}}" class="map-pick">
+    <view class="map-pick-tip">点一下地图上的位置（可拖动缩放），再点「确定」</view>
+    <map
+      class="map-pick-canvas"
+      latitude="{{pickCenter.latitude}}"
+      longitude="{{pickCenter.longitude}}"
+      scale="14"
+      markers="{{pickMarkers}}"
+      bindtap="onMapTap"
+    ></map>
+    <view class="map-pick-actions">
+      <view class="btn" bindtap="cancelMapPick">取消</view>
+      <view class="btn btn-primary" bindtap="confirmMapPick">确定这个位置</view>
+    </view>
+  </view>
+
+  <view wx:else class="picker {{picked ? 'picker-on' : ''}}" bindtap="chooseLocation">
     <block wx:if="{{picked}}">
       <view class="picked-name">{{picked.name || '（未命名位置）'}}</view>
       <view class="picked-meta">{{picked.address}} · {{picked.latitude}}, {{picked.longitude}}</view>
@@ -8,8 +25,13 @@
     <block wx:else>
       <view class="picker-icon">🔍</view>
       <view class="picker-title">搜索地点，或在地图上选点</view>
-      <view class="picker-tip">微信原生选点：搜「武康路」或直接点地图</view>
+      <view class="picker-tip">{{picked ? '点击重新选择' : '点这里：搜「武康路」，或在地图上手动点选'}}</view>
     </block>
+  </view>
+
+  <view class="field">
+    <text class="label">名称</text>
+    <input class="input" value="{{name}}" maxlength="100" placeholder="比如：武康大楼" bindinput="onName" />
   </view>
 
   <view class="field">

@@ -2,6 +2,7 @@ const app = getApp();
 const { api } = require('../../utils/api.js');
 const { categoryMeta, CATEGORIES } = require('../../utils/config.js');
 const storage = require('../../utils/storage.js');
+const { getLocation } = require('../../utils/location.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
@@ -150,39 +151,58 @@ Page({
     clearInterval(this.randomTimer);
   },
 
-  locateNearby() {
+  async locateNearby() {
     if (this.data.places.length === 0) {
       wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
       return;
     }
     wx.showLoading({ title: '定位中…' });
-    wx.getLocation({
-      type: 'gcj02',
-      isHighAccuracy: true,
-      success: (location) => {
-        const nearest = this.data.places
-          .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
-          .map((place) => {
-            const distanceKm = haversineKm(location, place);
-            const meta = categoryMeta(place.category);
-            return { ...place, emoji: meta.emoji, distance: formatDistance(distanceKm), distanceKm };
-          })
-          .sort((a, b) => a.distanceKm - b.distanceKm)
-          .slice(0, 5);
-        this.setData({
-          longitude: location.longitude,
-          latitude: location.latitude,
-          showLocation: true,
-          nearbyPlaces: nearest,
-          nearbyOpen: true,
-        });
-      },
-      fail: (err) => {
-        const denied = String(err.errMsg || '').includes('auth deny');
-        wx.showToast({ title: denied ? '请在设置中允许位置权限' : '暂时无法获取位置', icon: 'none' });
-      },
-      complete: () => wx.hideLoading(),
+    const result = await getLocation();
+    wx.hideLoading();
+
+    if (result.ok) {
+      this.showNearby(result.data, false);
+      return;
+    }
+    if (result.reason === 'cancel') return;
+    if (result.reason === 'denied') {
+      wx.showModal({
+        title: '需要位置权限',
+        content: '请在设置中允许使用位置信息后重试',
+        confirmText: '去设置',
+        success: (r) => r.confirm && wx.openSetting({}),
+      });
+      return;
+    }
+    // 未开通地理位置接口权限：按地图当前中心近似计算，功能不缺失
+    if (result.reason === 'disabled' || result.reason === 'unsupported') {
+      this.showNearby({ longitude: this.data.longitude, latitude: this.data.latitude }, true);
+      return;
+    }
+    wx.showToast({ title: '暂时无法获取位置', icon: 'none' });
+  },
+
+  // 按给定坐标算最近 5 个地点；approximate=true 表示用的是地图中心而不是真实定位
+  showNearby(location, approximate) {
+    const nearest = this.data.places
+      .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
+      .map((place) => {
+        const distanceKm = haversineKm(location, place);
+        const meta = categoryMeta(place.category);
+        return { ...place, emoji: meta.emoji, distance: formatDistance(distanceKm), distanceKm };
+      })
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 5);
+    this.setData({
+      longitude: location.longitude,
+      latitude: location.latitude,
+      showLocation: !approximate,
+      nearbyPlaces: nearest,
+      nearbyOpen: true,
     });
+    if (approximate) {
+      wx.showToast({ title: '未开通定位权限，按地图中心近似排序', icon: 'none' });
+    }
   },
 
   closeNearby() {

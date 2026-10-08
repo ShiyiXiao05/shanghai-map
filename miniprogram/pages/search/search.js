@@ -4,6 +4,10 @@ const { CATEGORIES } = require('../../utils/config.js');
 const auth = require('../../utils/auth.js');
 const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
+const { chooseLocation, locationApiEnabled } = require('../../utils/location.js');
+
+// 地图手动点选的初始中心（上海市中心）：未开通地理位置接口时的兜底方案
+const SHANGHAI_CENTER = { latitude: 31.2304, longitude: 121.4737 };
 
 // 权限类失败（位置权限被拒、隐私授权未声明等）统一引导去设置页
 const AUTH_PATTERN = /auth|deny|privacy|scope/i;
@@ -16,6 +20,11 @@ Page({
   data: {
     categories: CATEGORIES,
     picked: null, // { name, address, latitude, longitude }
+    name: '', // 地点名称：原生选点会回填，地图点选时由用户填写
+    mapPick: false, // 地图手动点选模式（不依赖地理位置接口权限）
+    pickCenter: SHANGHAI_CENTER,
+    pickMarkers: [],
+    pickPoint: null,
     category: CATEGORIES[0].id,
     description: '',
     priceHint: '',
@@ -30,9 +39,9 @@ Page({
   },
 
   async chooseLocation() {
-    try {
-      const res = await wx.chooseLocation({});
-      if (!res) return;
+    const result = await chooseLocation();
+    if (result.ok) {
+      const res = result.data;
       this.setData({
         picked: {
           name: res.name || '',
@@ -40,22 +49,62 @@ Page({
           latitude: res.latitude,
           longitude: res.longitude,
         },
+        name: res.name || this.data.name,
+        mapPick: false,
       });
-    } catch (err) {
-      // 用户主动取消不算失败，静默返回
-      if (/cancel/i.test(err?.errMsg || '')) return;
-      if (AUTH_PATTERN.test(err?.errMsg || '')) {
-        wx.showModal({
-          title: '需要位置权限',
-          content: '请在设置中允许使用位置信息后重试',
-          confirmText: '去设置',
-          success: (r) => r.confirm && wx.openSetting({}),
-        });
-        return;
-      }
-      // 其余失败给可读中文提示，不把英文 errMsg 抛给用户
-      wx.showToast({ title: '选择位置失败，请重试或改用粘贴导入', icon: 'none' });
+      return;
     }
+    // 未开通地理位置接口权限（或基础库不支持）：退化为"在地图上手动点选"，不需要任何权限
+    if (result.reason === 'disabled' || result.reason === 'unsupported') {
+      if (result.reason === 'unsupported' && locationApiEnabled()) {
+        wx.showToast({ title: '当前微信版本不支持选点，请改用地图点选', icon: 'none' });
+      }
+      this.setData({ mapPick: true, pickMarkers: [], pickPoint: null });
+      return;
+    }
+    if (result.reason === 'cancel') return; // 用户主动取消不算失败
+    if (result.reason === 'denied') {
+      wx.showModal({
+        title: '需要位置权限',
+        content: '请在设置中允许使用位置信息后重试，或直接在地图上点选',
+        confirmText: '去设置',
+        success: (r) => r.confirm && wx.openSetting({}),
+      });
+      return;
+    }
+    wx.showToast({ title: '选择位置失败，请重试或改用粘贴导入', icon: 'none' });
+  },
+
+  // 地图手动点选：完全不用地理位置接口，只读取用户点击的屏幕坐标
+  onMapTap(event) {
+    const detail = event.detail || {};
+    const latitude = Number(detail.latitude);
+    const longitude = Number(detail.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    this.setData({
+      pickPoint: { latitude, longitude },
+      pickMarkers: [{ id: 1, latitude, longitude, width: 28, height: 28 }],
+    });
+  },
+
+  confirmMapPick() {
+    const point = this.data.pickPoint;
+    if (!point) {
+      wx.showToast({ title: '先在地图上点一下位置', icon: 'none' });
+      return;
+    }
+    this.setData({
+      picked: { name: '', address: '', latitude: point.latitude, longitude: point.longitude },
+      mapPick: false,
+    });
+  },
+
+  cancelMapPick() {
+    this.setData({ mapPick: false });
+  },
+
+  onName(event) {
+    this.setData({ name: event.detail.value });
   },
 
   onCategory(event) {
@@ -81,6 +130,7 @@ Page({
   async save() {
     if (this.submitting) return; // 防重复提交：弱网连点会创建多个地点
     const { picked, category, description, priceHint, hours, tags } = this.data;
+    const name = (this.data.name || '').trim() || (picked && picked.name) || '';
     if (!picked) {
       wx.showToast({ title: '先选择一个位置', icon: 'none' });
       return;
@@ -92,7 +142,7 @@ Page({
       if (!nickname) return;
       this.setData({ saving: true });
       await api.createPlace(app.globalData.map.code, {
-        name: picked.name || '未命名地点',
+        name: name || '未命名地点',
         category,
         description: description.trim(),
         price_hint: priceHint.trim(),

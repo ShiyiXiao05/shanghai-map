@@ -22,12 +22,8 @@
   "usingComponents": {
     "nickname-modal": "/components/nickname-modal/nickname-modal"
   },
-  "permission": {
-    "scope.userLocation": {
-      "desc": "用于地图选点与展示附近地点"
-    }
-  },
-  "requiredPrivateInfos": ["chooseLocation", "getLocation"],
+  "permission": {},
+  "requiredPrivateInfos": [],
   "style": "v2",
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"
