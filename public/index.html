@@ -65,7 +65,8 @@
         <button type="button" class="btn btn-small side-icon-btn" id="btn-memories" aria-label="回忆" title="回忆">📷</button>
         <button type="button" class="btn btn-small side-icon-btn" id="btn-poster" aria-label="分享海报" title="分享海报">🖼️</button>
         <button type="button" class="btn btn-small side-icon-btn" id="btn-itinerary" aria-label="行程" title="行程">🚶</button>
-        <button type="button" class="btn btn-small side-icon-btn" id="btn-push" aria-label="推送提醒" title="有新地点/照片/留言时推送提醒">🔔</button>
+        <!-- 默认隐藏：仅当服务端配置了 VAPID（/api/push/key 可用）时由 JS 显示，避免出现点了必然失败的按钮 -->
+        <button type="button" class="btn btn-small side-icon-btn" id="btn-push" aria-label="推送提醒" title="有新地点/照片/留言时推送提醒" hidden>🔔</button>
         <select id="theme-select" class="sort-select" aria-label="配色主题"></select>
       </div>
       <div class="discover-actions">

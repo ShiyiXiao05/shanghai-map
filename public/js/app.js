@@ -2224,6 +2224,23 @@ function syncPushButton() {
   btn?.classList.toggle('is-on', Boolean(localStorage.getItem(PUSH_KEY)));
 }
 
+// 推送入口只在服务端真的支持时才显示：未配置 VAPID 时 /api/push/key 返回 503，
+// 与其让用户点到一个必然失败的按钮，不如直接不展示（配置 VAPID 后刷新即自动出现）
+async function syncPushAvailability() {
+  const btn = $('#btn-push');
+  if (!btn) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    btn.hidden = true;
+    return;
+  }
+  try {
+    await api.pushKey();
+    btn.hidden = false;
+  } catch {
+    btn.hidden = true;
+  }
+}
+
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   navigator.serviceWorker.register('/sw.js').catch(() => {
@@ -2244,6 +2261,7 @@ async function boot() {
   fillCategorySelect();
   renderChips();
   syncPushButton();
+  syncPushAvailability(); // 服务端没配 VAPID 时保持隐藏
   bindStaticEvents();
   bindSearch();
   bindImport();

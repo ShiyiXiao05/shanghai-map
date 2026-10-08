@@ -11,6 +11,25 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 测试不过就不部署：94+ 个用例覆盖登录/鉴权/上传/内容安全/数据一致性
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install (server)
+        run: npm ci
+        working-directory: server
+
+      - name: Test (server)
+        run: npm test
+        working-directory: server
+
       - name: Trigger Render deploy hook
         run: |
           status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$RENDER_DEPLOY_HOOK_URL")
