@@ -4,7 +4,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { newDb } from 'pg-mem';
 import { buildApp } from '../app.js';
 import { createPlaceStore } from '../store.js';
@@ -425,8 +425,8 @@ describe('限流', () => {
 describe('进程健壮性', () => {
   it('鉴权中间件遇到数据库故障：写请求 503、读请求降级、进程不退出', () => {
     const childSource = `
-      import { buildApp } from ${JSON.stringify(path.join(root, 'server/app.js'))};
-      import { createAuth } from ${JSON.stringify(path.join(root, 'server/auth.js'))};
+      import { buildApp } from ${JSON.stringify(pathToFileURL(path.join(root, 'server/app.js')).href)};
+      import { createAuth } from ${JSON.stringify(pathToFileURL(path.join(root, 'server/auth.js')).href)};
       const store = {
         async getUser() { throw new Error('Audit injected database outage'); },
         async getMapByCode() { return null; },
