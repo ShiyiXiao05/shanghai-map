@@ -10,12 +10,12 @@ import { Router } from 'express';
 
 const STABLE_TOKEN_URL = 'https://api.weixin.qq.com/cgi-bin/stable_token';
 
-async function callWechat(url, { method = 'POST', token } = {}) {
+async function callWechat(url, { method = 'POST', token, body } = {}) {
   const target = token ? `${url}?access_token=${encodeURIComponent(token)}` : url;
   const res = await fetch(target, {
     method,
     headers: { 'content-type': 'application/json' },
-    body: method === 'POST' ? '{}' : undefined,
+    body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
   });
   const text = await res.text();
   try {
@@ -40,7 +40,10 @@ export function createAdminRouter() {
       return res.json({ configured: false, reason: '服务端未配置 MINIPROGRAM_APPID/SECRET' });
     }
     try {
-      const tokenRes = await callWechat(STABLE_TOKEN_URL, { method: 'POST' });
+      const tokenRes = await callWechat(STABLE_TOKEN_URL, {
+        method: 'POST',
+        body: { grant_type: 'client_credential', appid, secret },
+      });
       const accessToken = tokenRes.data?.access_token;
       if (!accessToken) {
         return res.json({ configured: true, tokenOk: false, tokenResponse: tokenRes.data });
