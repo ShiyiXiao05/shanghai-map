@@ -1,0 +1,177 @@
+{
+  "revision": "2f8b63b747ff08990824efbfd866b70f3dd62e39",
+  "generatedAt": "2026-10-08T07:53:52.506Z",
+  "nodeVersion": "v26.3.0",
+  "syntax": {
+    "fileCount": 55,
+    "failures": []
+  },
+  "json": {
+    "fileCount": 18,
+    "failures": []
+  },
+  "registeredPages": 9,
+  "missingPageFiles": [],
+  "wxml": {
+    "fileCount": 10,
+    "available": true,
+    "status": 0,
+    "stderr": "",
+    "outputBytes": 99521,
+    "outputSha256": "4d595b9fb98596cf3530ef6f6ad7102a7cc7418a026ece196fa8bbd7b0130f67"
+  },
+  "wxss": [
+    {
+      "file": "app.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 1379,
+      "outputSha256": "60a3830fcdb58d451e5347e3b039f3a5d5e337d310156c9501fe90a6fa28756f"
+    },
+    {
+      "file": "components/nickname-modal/nickname-modal.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 1258,
+      "outputSha256": "010b2db84ac053cb63c347ca0db0f92f4e02d8e9a9b6900eacef1c3b57652ea6"
+    },
+    {
+      "file": "pages/detail/detail.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 4900,
+      "outputSha256": "d7d0034f3d1be8df94d33505b70b9941b110eded8afe4f3e339d18d31e71d168"
+    },
+    {
+      "file": "pages/entry/entry.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 2484,
+      "outputSha256": "59bbdd11d669fa3fc00ac79b49db07911885acdc5462513c2a0e8322e4fa8c6b"
+    },
+    {
+      "file": "pages/import/import.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 1476,
+      "outputSha256": "4c8cc851731678defa8edc77a278b454ce4f7afb5824bb72e109155bd1e04039"
+    },
+    {
+      "file": "pages/index/index.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 6870,
+      "outputSha256": "dc454563eee9b525218b6b73e9cb5bc7c21514759b791b3dbcab4356d9c7908b"
+    },
+    {
+      "file": "pages/itinerary/itinerary.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 2565,
+      "outputSha256": "45fac0cee9505f5cd32a4cabdbc24af9b0d6c8e7ba8c38ab2634801116110d28"
+    },
+    {
+      "file": "pages/memories/memories.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 1135,
+      "outputSha256": "c2b8479c998bca6aa331372bf05837c9b9028b6819fc21a6fb322b08e66edcfb"
+    },
+    {
+      "file": "pages/poster/poster.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 1474,
+      "outputSha256": "a55e9da33d27d3a7fa3b6ac6c3ff75d2f1bedcd1e59bb07579cf3c23d78ffcc8"
+    },
+    {
+      "file": "pages/search/search.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 1821,
+      "outputSha256": "78c694441e58ca7a2b19ec168ed2eadaa6994cea667e3e58496ce85c2eeba344"
+    },
+    {
+      "file": "pages/trash/trash.wxss",
+      "available": true,
+      "status": 0,
+      "stderr": "",
+      "outputBytes": 1105,
+      "outputSha256": "9a4cb2bcff429173c59c2e73b37f4bcef194d63329645688907da3af778d38a5"
+    }
+  ],
+  "tests": {
+    "exitCode": 0,
+    "summary": [
+      "ℹ tests 102",
+      "ℹ suites 23",
+      "ℹ pass 102",
+      "ℹ fail 0",
+      "ℹ cancelled 0",
+      "ℹ skipped 0",
+      "ℹ duration_ms 1410.154375"
+    ]
+  },
+  "dependencies": {
+    "all": {
+      "status": 0,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      }
+    },
+    "production": {
+      "status": 0,
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      }
+    }
+  },
+  "network": [
+    {
+      "endpoint": "/api/health",
+      "status": 200,
+      "elapsedMs": 962,
+      "ok": true
+    },
+    {
+      "endpoint": "/api/upload-config",
+      "status": 200,
+      "elapsedMs": 627,
+      "cdn": true,
+      "maxFullBytes": 1572864,
+      "maxThumbBytes": 65536
+    },
+    {
+      "endpoint": "/api/public/places",
+      "status": 200,
+      "elapsedMs": 3240,
+      "publicPlaceCount": 5
+    },
+    {
+      "endpoint": "/api/admin/wechat-privacy",
+      "status": 404,
+      "elapsedMs": 411
+    }
+  ],
+  "productionScope": "four public GETs; no production writes, private map queries, or external WeChat/Cloudinary calls"
+}

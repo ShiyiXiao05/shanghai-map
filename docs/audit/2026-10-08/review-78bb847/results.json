@@ -1,0 +1,161 @@
+{
+  "revision": "2f8b63b747ff08990824efbfd866b70f3dd62e39",
+  "generatedAt": "2026-10-08T07:53:39.890Z",
+  "database": "isolated pg-mem only",
+  "externalServices": "mocked; no production mutations",
+  "results": [
+    {
+      "id": "R01-MODERATION-CACHE",
+      "status": "reproduced",
+      "evidence": {
+        "pendingVisibleCount": 1,
+        "riskyVisibleCount": 0,
+        "riskyRawStatus": 302,
+        "cacheEntries": 1
+      }
+    },
+    {
+      "id": "R02-CALLBACK-RACE",
+      "status": "reproduced",
+      "evidence": {
+        "earlyCallbackAcknowledged": true,
+        "finalModeration": "pending",
+        "visiblePhotos": 1
+      }
+    },
+    {
+      "id": "R03-REKEY-COLLISION",
+      "status": "reproduced",
+      "evidence": {
+        "fault": "first generated code collides with Map B; second is unique",
+        "rekeyStatus": 200,
+        "mapAPlaces": 2,
+        "mapBPlaces": 0
+      }
+    },
+    {
+      "id": "R04-REPORT-MIGRATION",
+      "status": "reproduced",
+      "evidence": {
+        "reportsBeforeRekey": 1,
+        "reportsAfterRekey": 0,
+        "resolveWithNewCodeStatus": 404,
+        "orphanReportsAfterMapDelete": 1
+      }
+    },
+    {
+      "id": "R05-CDN-DB-FAILURE",
+      "status": "reproduced",
+      "evidence": {
+        "uploadStatus": 500,
+        "uploadedCdnResources": 1,
+        "cleanedCdnResources": 0
+      }
+    },
+    {
+      "id": "R06-RISKY-PHOTO-QUOTA",
+      "status": "reproduced",
+      "evidence": {
+        "visiblePhotos": 0,
+        "storedPhotos": 9,
+        "uploadStatus": 400,
+        "message": "每个地点最多 9 张照片"
+      }
+    },
+    {
+      "id": "R07-DB-THUMB-AND-EXPORT",
+      "status": "reproduced",
+      "evidence": {
+        "declaredImageBytes": 819200,
+        "uploadStatus": 201,
+        "photoListResponseBytes": 1092388,
+        "exportedUrl": "",
+        "exportedThumbUrl": "",
+        "exportedImageData": false
+      }
+    },
+    {
+      "id": "R10-HEALTH-DB-FAILURE",
+      "status": "reproduced",
+      "evidence": {
+        "databaseAvailable": false,
+        "healthStatus": 200,
+        "healthOk": true,
+        "publicPlacesStatus": 500
+      }
+    },
+    {
+      "id": "R08-ANONYMOUS-SECURITY-CONTRACT",
+      "status": "reproduced-with-vendor-error-mock",
+      "evidence": {
+        "textResult": {
+          "checked": false,
+          "pass": true,
+          "reason": "errcode:40003"
+        },
+        "mediaResult": {
+          "submitted": false,
+          "reason": "errcode:40003"
+        },
+        "requests": [
+          {
+            "api": "/cgi-bin/stable_token",
+            "body": {
+              "grant_type": "client_credential",
+              "appid": "local-app",
+              "secret": "local-secret"
+            },
+            "hasAbortSignal": false
+          },
+          {
+            "api": "/wxa/msg_sec_check",
+            "body": {
+              "content": "Local anonymous text",
+              "version": 2,
+              "scene": 2
+            },
+            "hasAbortSignal": false
+          },
+          {
+            "api": "/wxa/media_check_async",
+            "body": {
+              "media_url": "https://cdn.example/photo.png",
+              "media_type": 2,
+              "version": 2,
+              "scene": 3
+            },
+            "hasAbortSignal": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "R11-VENDOR-TIMEOUT",
+      "status": "reproduced-with-delayed-vendor-mock",
+      "evidence": {
+        "observationMs": 100,
+        "stateDuringDelay": "pending",
+        "requestHasAbortSignal": false,
+        "scope": "absence of application deadline; no real WeChat outage simulated"
+      }
+    },
+    {
+      "id": "R09-PUBLIC-SHARE-PRIVATE-MAP",
+      "status": "reproduced-with-page-api-mocks",
+      "evidence": {
+        "publicReadOnlyView": true,
+        "sharePath": "/pages/index/index?map=PRIV23&place=789",
+        "timelineQuery": "map=PRIV23&place=789",
+        "reportMapCode": "PRIV23"
+      }
+    }
+  ],
+  "warnings": [
+    "[media-check] trace=local-trace-cache suggest=risky -> risky photo=1",
+    "[media-check] trace=local-trace-race suggest=risky -> risky (未匹配到照片)"
+  ],
+  "errors": [
+    "Injected local database write failure",
+    "Injected database outage"
+  ]
+}

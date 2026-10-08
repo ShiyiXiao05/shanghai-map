@@ -1,0 +1,171 @@
+▶ miniprogram auth
+  ✔ 未配置 AppID/Secret 时登录 503 (172.567792ms)
+  ✔ 登录签发 token；首次 needs_nickname；坏 code 502、缺 code 400 (85.353041ms)
+  ✔ profile：未登录 401，空昵称 400，超长 400 (24.998958ms)
+  ✔ 登录身份盖章：建图/加地点/想去/留言/照片的署名一律用服务端昵称 (72.69175ms)
+  ✔ 登录但未设昵称：需要署名的写操作 400 NEED_NICKNAME；打卡/编辑不受影响且改不了原作者 (60.793208ms)
+  ✔ 篡改 token：写操作 401，读请求视为匿名不受影响 (33.279208ms)
+✔ miniprogram auth (450.953291ms)
+▶ photos & comments API
+  ✔ 上传照片 → 列表带缩略图 → 二进制获取 → 删除 (227.875917ms)
+  ✔ 非图片 data URL 与超大照片返回 400 (46.609333ms)
+  ✔ 每个地点最多 9 张照片 (101.781708ms)
+  ✔ 照片接口错误邀请码返回 404 (46.91925ms)
+  ✔ 评论增删与字数校验 (58.435959ms)
+  ✔ 地点列表返回照片与评论计数；删除地点级联清理照片评论 (56.621709ms)
+  ✔ 「我也想去」投票：切换、按昵称去重、列表携带 wishes、级联清理 (52.918834ms)
+  ✔ 回忆时间线：打卡带 visited_at、取消清空、按时间倒序 (111.434459ms)
+  ✔ 地图管理：改名、换邀请码（权限重置）、删除级联 (40.029209ms)
+  ✔ 公共广场：公开开关、聚合视图不泄露邀请码、删除后移除 (56.982375ms)
+✔ photos & comments API (800.970041ms)
+▶ 安全响应头
+  ✔ 所有响应都带 HSTS / nosniff / frame-options / referrer-policy (177.246917ms)
+✔ 安全响应头 (178.579041ms)
+▶ 上传能力协商与照片契约
+  ✔ 未配图床时 upload-config 返回 cdn=false 与上限 (48.999667ms)
+  ✔ 配了图床时 upload-config 返回 cdn=true (22.47775ms)
+  ✔ thumb 可省略：只传 full 也能入库，列表回退用原图渲染 (51.519708ms)
+  ✔ 缩略图超过 64KB 返回 400 且给出可读原因 (43.048417ms)
+  ✔ 请求体超限返回 413（而不是 500） (38.649375ms)
+  ✔ 并发上传不再突破 9 张上限（按 id 幂等裁剪） (49.209542ms)
+✔ 上传能力协商与照片契约 (254.295042ms)
+▶ 数据一致性
+  ✔ 地点进回收站后原图立即不可读（缓存同步失效） (53.530709ms)
+  ✔ 换码会迁移行程与推送订阅，并让旧码照片失效 (65.951542ms)
+  ✔ 30 天内可恢复，超过 30 天不可恢复 (46.071167ms)
+  ✔ 坐标为 null / false 时返回 400（不再被静默转成 0） (27.740209ms)
+  ✔ 公共广场单点接口：公开可读、不含 map_code；未公开 404；非法 id 400 (28.786708ms)
+  ✔ 导出包含行程单 (24.707291ms)
+✔ 数据一致性 (247.212083ms)
+▶ 推送端点与退订鉴权
+  ✔ 退订必须提供有效邀请码 (24.547416ms)
+  ✔ 拒绝内网 / 环回 / 非 https 的订阅端点 (24.974459ms)
+✔ 推送端点与退订鉴权 (49.842708ms)
+▶ 限流
+  ✔ 超过阈值返回 429 且带 Retry-After (0.167709ms)
+  ✔ 建图接口真的挂了限流器 (75.841375ms)
+✔ 限流 (76.124166ms)
+▶ 进程健壮性
+  ✔ 鉴权中间件遇到数据库故障：写请求 503、读请求降级、进程不退出 (199.768625ms)
+✔ 进程健壮性 (199.835708ms)
+▶ 内容安全（UGC 文本检测）
+  ✔ 检测通过：写地点/留言/昵称正常，token 只取一次 (13.009417ms)
+  ✔ 检测命中违规：写地点与留言返回 400 且不入库 (6.83275ms)
+  ✔ 检测接口故障时按放行处理（可用性优先），不阻断写入 (7.453083ms)
+  ✔ 未配置 AppID/Secret 时完全停用（不产生任何外部请求） (6.054542ms)
+✔ 内容安全（UGC 文本检测） (33.523083ms)
+[report] #1 place#1 map=NTJL6K reason=不实信息 reporter=匿名
+[report] #2 place#1 map=NTJL6K reason=侵权 reporter=匿名
+▶ 内容举报（UGC 处置入口）
+  ✔ 公开内容可无邀请码举报；私有内容需邀请码；错码 404 (16.661875ms)
+[report] #1 place#1 map=T8P4LW reason=广告 reporter=匿名
+  ✔ owner 凭邀请码查看待处理举报并结单 (12.527875ms)
+[report] #1 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #2 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #3 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #4 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #5 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #6 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #7 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #8 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #9 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+[report] #10 place#1 map=KWHNGL reason=刷举报 reporter=匿名
+  ✔ 举报有独立限流（10 分钟 10 次） (16.854625ms)
+[media-check] trace=trace-abc suggest=risky -> risky photo=1
+  ✔ 图片异步审核：上传送审 + 回调标记违规后列表自动隐藏 (15.570916ms)
+  ✔ 未配置 WECHAT_MSG_TOKEN 时不送图片审核 (9.978833ms)
+✔ 内容举报（UGC 处置入口） (71.813875ms)
+▶ 照片缓存按字节计容
+  ✔ 超过上限时淘汰最旧条目，占用不会无限增长 (18.354625ms)
+✔ 照片缓存按字节计容 (18.444375ms)
+▶ 微信消息推送 URL 校验握手（否则后台保存不了）
+  ✔ GET 带正确签名时原样回显 echostr；签名不符 403 (4.744666ms)
+[media-check] trace=xml-trace-1 suggest=risky -> risky (未匹配到照片)
+  ✔ 数据格式选 XML 时也能解析审核结果 (4.267292ms)
+✔ 微信消息推送 URL 校验握手（否则后台保存不了） (9.1075ms)
+▶ itinerary API
+  ✔ 空行程返回空数组 (214.013875ms)
+  ✔ PUT 全量设置顺序，GET 按序返回带地点详情 (65.006625ms)
+  ✔ PUT 重排为全量替换（重排后旧顺序消失） (55.719583ms)
+  ✔ 不属于本地图的 id 被静默过滤，重复 id 去重 (57.389708ms)
+  ✔ 删除地点后行程自动收缩 (81.984459ms)
+  ✔ 鉴权与校验：错码 404、缺参 400、非法 place_ids 400 (40.758125ms)
+  ✔ 空数组 PUT 清空行程 (53.116625ms)
+✔ itinerary API (569.506166ms)
+▶ map export
+  ✔ 全量导出：map + places(含新字段) + photos + comments + wishes (216.118417ms)
+  ✔ 错码导出 404 (43.501542ms)
+✔ map export (260.492041ms)
+▶ CDN orphan cleanup on delete
+  ✔ 删除地点：其 CDN 照片 public_id 全部销毁 (65.70075ms)
+  ✔ 删除地图：级联销毁 CDN + 行程表清理 (59.148167ms)
+✔ CDN orphan cleanup on delete (125.192791ms)
+▶ miniprogram regressions
+  ✔ 分享加入地图后立即刷新名称、只读状态和地点 (6.054167ms)
+  ✔ 切图后的旧地点请求 success 不覆盖新地图 (3.085625ms)
+  ✔ 切图后的旧地点请求 error 不覆盖新地图 (2.694125ms)
+  ✔ 写操作遇到 AUTH_EXPIRED 后自动登录并重试一次 (2.048916ms)
+  ✔ 并发过期请求共享一次登录 (2.743875ms)
+  ✔ 重新登录后仍然过期时停止，不循环重登 (1.572209ms)
+  ✔ 迟到的过期响应复用已更新的 token，不重复登录 (1.326541ms)
+  ✔ 重登失败时保留旧 token、返回错误且不重复写请求 (1.314875ms)
+  ✔ 重登后的编辑请求保留方法、邀请码和请求体 (1.352625ms)
+  ✔ 普通 401 不触发自动登录 (1.003042ms)
+  ✔ 取消选照片静默返回 (1.543709ms)
+  ✔ 选照片失败给出提示而非未捕获异常 (1.0735ms)
+  ✔ 排序：picker 索引映射为 sort key 并写入本地存储 (1.055958ms)
+  ✔ 照片上传：CDN 模式只传 full，无 CDN 时带一张预算内的缩略图 (3.46175ms)
+  ✔ 详情页分享路径带上 place id（并支持分享朋友圈） (2.138166ms)
+  ✔ 图标未生成时地图仍渲染点位（使用系统默认标记） (1.050042ms)
+✔ miniprogram regressions (34.938125ms)
+▶ photos with CDN uploader
+  ✔ 上传走 CDN：列表返回 CDN 缩略图链接，原图端点 302 到 CDN (316.900125ms)
+  ✔ 删除照片时同步销毁 CDN 资源 (71.040291ms)
+✔ photos with CDN uploader (388.771458ms)
+▶ photos without CDN uploader
+  ✔ 存量 DB 照片：列表 full 为 null，客户端回落后端重定向端点 (45.77025ms)
+✔ photos without CDN uploader (45.908209ms)
+▶ place fields: price_hint / hours / tags
+  ✔ 创建时带三个新字段，返回完整且列表可见 (172.528708ms)
+  ✔ 不传新字段默认空字符串 (43.021708ms)
+  ✔ 部分更新只改 hours 不动其他字段 (37.997541ms)
+  ✔ 超长字段 400 (35.965084ms)
+✔ place fields: price_hint / hours / tags (290.639833ms)
+▶ maps & places API
+  ✔ GET /api/health 返回 ok (97.631208ms)
+  ✔ POST /api/maps 创建地图并返回邀请码 (35.641958ms)
+  ✔ GET /api/maps/:code 不存在返回 404 (17.726167ms)
+  ✔ GET /api/places 缺少 map 参数返回 400 (10.167542ms)
+  ✔ GET /api/places 邀请码无效返回 404 (16.720125ms)
+  ✔ POST /api/places 带有效邀请码创建地点 (28.776417ms)
+  ✔ POST /api/places 邀请码无效返回 404 (14.395083ms)
+  ✔ 两张地图的地点相互隔离 (39.219834ms)
+  ✔ PUT 缺少邀请码头返回 400，错误邀请码返回 404，正确邀请码更新成功 (24.211625ms)
+  ✔ DELETE 错误邀请码 404，正确邀请码删除后再删 404 (13.959583ms)
+  ✔ 非法输入仍返回 400（分类/名称/坐标） (10.319375ms)
+  ✔ GET /api/map-config 返回高德配置 (8.212583ms)
+  ✔ 未知 /api 路径返回 404 与 JSON 错误 (6.385167ms)
+✔ maps & places API (324.681792ms)
+▶ web push subscriptions
+  ✔ GET /api/push/key 返回公钥 (107.28425ms)
+  ✔ 订阅入库、重复订阅 upsert 不重复 (163.767125ms)
+  ✔ 留言/照片也触发通知；退订后不再收到 (233.493834ms)
+  ✔ 非法订阅 400、错码 404 (7.899333ms)
+✔ web push subscriptions (513.387917ms)
+▶ web push disabled without keys
+  ✔ GET /api/push/key 503 (4.812583ms)
+✔ web push disabled without keys (4.905208ms)
+▶ trash: soft delete & restore
+  ✔ 删除进回收站：列表消失、trash 可见、恢复完整（照片/留言还在） (174.202333ms)
+  ✔ 回收站权限：错码 404，恢复不存在的地点 404 (28.528208ms)
+  ✔ 软删地点自动移出行程，恢复后行程回来 (30.50925ms)
+  ✔ 30 天后打开回收站触发彻底清理（含 CDN 销毁） (30.865125ms)
+✔ trash: soft delete & restore (264.983041ms)
+ℹ tests 102
+ℹ suites 23
+ℹ pass 102
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1410.154375
