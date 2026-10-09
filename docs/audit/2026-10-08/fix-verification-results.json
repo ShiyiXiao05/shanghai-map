@@ -1,21 +1,21 @@
 {
-  "checkedAt": "2026-10-08T08:38:16.944Z",
+  "checkedAt": "2026-10-09T07:31:33.458Z",
   "static": {
-    "jsFiles": 54,
+    "jsFiles": 62,
     "syntaxFailures": [],
-    "jsonFiles": 18,
+    "jsonFiles": 22,
     "jsonFailures": [],
-    "registeredPages": 9,
+    "registeredPages": 10,
     "missingPageFiles": [],
     "wxml": {
-      "fileCount": 10,
+      "fileCount": 12,
       "available": true,
       "status": 0,
       "stderr": "",
-      "outputBytes": 101093
+      "outputBytes": 114302
     },
     "wxss": {
-      "fileCount": 11,
+      "fileCount": 13,
       "available": true,
       "status": 0,
       "stderr": "",
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "DAYRVS",
+        "code": "CA9XEP",
         "placeId": 1
       }
     },
@@ -277,15 +277,15 @@
     "e2eSteps": 20,
     "e2eFailed": 0,
     "serverTests": {
-      "tests": 111,
-      "pass": 111,
+      "tests": 118,
+      "pass": 118,
       "fail": 0,
       "exitCode": 0
     }
   },
   "tests": {
-    "tests": 111,
-    "pass": 111,
+    "tests": 118,
+    "pass": 118,
     "fail": 0,
     "exitCode": 0
   }

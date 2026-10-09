@@ -5,7 +5,7 @@ const storage = require('../../utils/storage.js');
 const { displayEmoji } = require('../../utils/emoji.js');
 const cache = require('../../utils/cache.js');
 const { applyTheme } = require('../../utils/theme.js');
-const { getCurrentLocation } = require('../../utils/location.js');
+const { getMyLocation, setMyLocation, clearMyLocation } = require('../../utils/location.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
@@ -46,7 +46,7 @@ Page({
     isMapFs: false, // 地图全屏态
     refreshing: false, // 列表下拉刷新中
     isDark: false, // 跟随系统深色，控制下拉刷新指示器配色
-    showLocation: false,
+    markLocation: false, // 正在让用户标记「我的位置」
     nearbyOpen: false,
     nearbyPlaces: [],
     randomOpen: false,
@@ -196,46 +196,95 @@ Page({
   },
 
   // 「附近」使用手机当前位置；定位失败时不使用地图中心点替代。
-  async locateNearby() {
+  // 「附近」：以用户标记的「我的位置」为原点。
+  // 不读设备定位：地理位置接口需要后台准入开通，未开通时包里出现接口名会被提审拦截。
+  locateNearby() {
     if (this.data.places.length === 0) {
       wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
       return;
     }
-    if (typeof wx.showLoading === 'function') wx.showLoading({ title: '正在定位…' });
-    try {
-      const result = await getCurrentLocation();
-      if (result.ok) {
-        this.showNearby({ longitude: result.data.longitude, latitude: result.data.latitude });
-        return;
-      }
-      if (result.reason === 'privacy') {
-        wx.showToast({ title: '请同意隐私保护指引后重试', icon: 'none' });
-      } else if (result.reason === 'denied') {
-        this.promptLocationPermission();
-      } else if (result.reason !== 'cancel') {
-        wx.showToast({ title: result.reason === 'unsupported' ? '当前微信版本不支持定位' : '定位失败，请重试', icon: 'none' });
-      }
-    } finally {
-      if (typeof wx.hideLoading === 'function') wx.hideLoading();
-    }
-  },
-
-  promptLocationPermission() {
-    if (typeof wx.showModal !== 'function') {
-      wx.showToast({ title: '请在微信设置中允许位置权限', icon: 'none' });
+    const saved = getMyLocation();
+    if (saved) {
+      this.showNearby(saved);
       return;
     }
-    wx.showModal({
-      title: '需要位置权限',
-      content: '开启位置权限后，才能按你当前位置查找附近地点。',
-      confirmText: '去设置',
-      success: (result) => {
-        if (result.confirm && typeof wx.openSetting === 'function') wx.openSetting({});
+    this.askMyLocation();
+  },
+
+  // 第一次用：让用户选一种方式告诉我们他在哪
+  askMyLocation() {
+    if (typeof wx.showActionSheet !== 'function') {
+      this.useMapCenterAsMyLocation();
+      return;
+    }
+    wx.showActionSheet({
+      itemList: ['把地图中心设为我的位置', '在地图上点选我的位置'],
+      success: (res) => {
+        if (res.tapIndex === 0) this.useMapCenterAsMyLocation();
+        else if (res.tapIndex === 1) this.startMarkLocation();
       },
+      fail: () => {},
     });
   },
 
-  // 按手机当前位置算最近 5 个地点。
+  startMarkLocation() {
+    this.setData({ markLocation: true, nearbyOpen: false });
+    wx.showToast({ title: '点一下地图上你的位置', icon: 'none' });
+  },
+
+  cancelMarkLocation() {
+    this.setData({ markLocation: false });
+  },
+
+  // 取地图当前中心点（MapContext.getCenterLocation 不需要任何权限）
+  resolveMapCenter() {
+    return new Promise((resolve) => {
+      const fallback = { latitude: this.data.latitude, longitude: this.data.longitude };
+      if (typeof wx.createMapContext !== 'function') return resolve(fallback);
+      try {
+        const ctx = this.mapCtx || (this.mapCtx = wx.createMapContext('mainMap', this));
+        ctx.getCenterLocation({
+          success: (center) => resolve({ latitude: center.latitude, longitude: center.longitude }),
+          fail: () => resolve(fallback),
+        });
+      } catch (err) {
+        resolve(fallback);
+      }
+    });
+  },
+
+  async useMapCenterAsMyLocation() {
+    const center = await this.resolveMapCenter();
+    const saved = setMyLocation(center);
+    if (!saved) {
+      wx.showToast({ title: '没取到地图中心，请重试', icon: 'none' });
+      return;
+    }
+    this.setData({ markLocation: false });
+    this.showNearby(saved);
+  },
+
+  // 地图点击选点：只在标记模式下生效，避免和"点标记看详情"冲突
+  onMapTapForLocation(event) {
+    if (!this.data.markLocation) return;
+    const detail = event.detail || {};
+    const saved = setMyLocation({ latitude: detail.latitude, longitude: detail.longitude });
+    if (!saved) {
+      wx.showToast({ title: '没取到坐标，请再点一次', icon: 'none' });
+      return;
+    }
+    this.setData({ markLocation: false });
+    this.showNearby(saved);
+  },
+
+  // 重新标记：忘掉本地记住的位置，重新问一次
+  remarkMyLocation() {
+    clearMyLocation();
+    this.setData({ nearbyOpen: false });
+    this.askMyLocation();
+  },
+
+  // 按「我的位置」算最近 5 个地点
   showNearby(location) {
     const nearest = this.data.places
       .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
@@ -249,11 +298,10 @@ Page({
     this.setData({
       longitude: location.longitude,
       latitude: location.latitude,
-      showLocation: true,
       nearbyPlaces: nearest,
       nearbyOpen: true,
     });
-    wx.showToast({ title: '按当前位置排序', icon: 'none' });
+    wx.showToast({ title: '按你标记的位置排序', icon: 'none' });
   },
 
   closeNearby() {

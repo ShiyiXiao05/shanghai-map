@@ -1,61 +1,46 @@
-// 微信定位适配层。调用前先完成隐私授权，再请求 GCJ-02 坐标。
+// 「我的位置」：由用户一次性标记，之后一直复用。
+//
+// 为什么不直接读设备定位：
+// 微信的「地理位置接口」（getLocation / chooseLocation）自 2022-04-18 起实行准入开通。
+// 没申请到权限时，只要包里出现这两个接口名就会——① 开发者工具弹「接口无权限」；
+// ② 提交代码审核被 61040 拦截。因此这里完全不调用定位接口。
+//
+// 改为：用户在首页把地图拖到自己所在位置（或在地图上点一下），点「设为我的位置」，
+// 记到本地存储。这个点就是"真实位置"（精度由用户自己掌握），且不涉及任何隐私接口。
+// 将来申请到地理位置接口权限后要换回设备定位，步骤与代码见
+// docs/待启用-设备定位实现.md（服务端测试里有一条守卫，会在包内出现接口名时失败）。
+const STORAGE_KEY = 'wish-my-location';
 
-function classifyFailure(error) {
-  const message = String((error && error.errMsg) || '');
-  if (/cancel/i.test(message)) return { ok: false, reason: 'cancel', message };
-  if (/privacy/i.test(message)) return { ok: false, reason: 'privacy', message };
-  if (/auth|deny|scope|permission/i.test(message)) {
-    return { ok: false, reason: 'denied', message };
+export function getMyLocation() {
+  try {
+    const saved = wx.getStorageSync(STORAGE_KEY);
+    if (!saved) return null;
+    const latitude = Number(saved.latitude);
+    const longitude = Number(saved.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+    return { latitude, longitude, at: Number(saved.at) || 0 };
+  } catch (err) {
+    return null;
   }
-  return { ok: false, reason: 'failed', message };
 }
 
-function callWithCallbacks(method, options) {
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (result) => {
-      if (settled) return;
-      settled = true;
-      resolve(result);
-    };
-    const callbacks = {
-      ...options,
-      success: (result) => finish({ ok: true, data: result || {} }),
-      fail: (error) => finish(classifyFailure(error)),
-    };
-    try {
-      const returned = method(callbacks);
-      // Some test doubles and wrappers expose a Promise in addition to callbacks.
-      if (returned && typeof returned.then === 'function') {
-        returned.then((result) => finish({ ok: true, data: result || {} })).catch((error) => finish(classifyFailure(error)));
-      }
-    } catch (error) {
-      finish(classifyFailure(error));
-    }
-  });
-}
-
-function requestPrivacyAuthorization() {
-  if (typeof wx.requirePrivacyAuthorize !== 'function') return Promise.resolve({ ok: true });
-  return callWithCallbacks(wx.requirePrivacyAuthorize.bind(wx), {});
-}
-
-export async function getCurrentLocation() {
-  if (typeof wx.getLocation !== 'function') return { ok: false, reason: 'unsupported' };
-
-  const privacy = await requestPrivacyAuthorization();
-  if (!privacy.ok) return privacy;
-
-  const result = await callWithCallbacks(wx.getLocation.bind(wx), {
-    type: 'gcj02',
-    isHighAccuracy: true,
-  });
-  if (!result.ok) return result;
-
-  const latitude = Number(result.data.latitude);
-  const longitude = Number(result.data.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return { ok: false, reason: 'failed', message: '定位返回了无效坐标' };
+export function setMyLocation(point) {
+  const latitude = Number(point && point.latitude);
+  const longitude = Number(point && point.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  const saved = { latitude, longitude, at: Date.now() };
+  try {
+    wx.setStorageSync(STORAGE_KEY, saved);
+  } catch (err) {
+    // 存储失败不影响本次排序
   }
-  return { ok: true, data: { latitude, longitude } };
+  return saved;
+}
+
+export function clearMyLocation() {
+  try {
+    wx.removeStorageSync(STORAGE_KEY);
+  } catch (err) {
+    // 忽略：清不掉时下次仍会复用旧位置，不影响功能
+  }
 }

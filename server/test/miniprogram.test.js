@@ -243,18 +243,20 @@ describe('miniprogram regressions', () => {
     assert.equal(page.data.sortIndex, 2);
   });
 
-  it('附近：使用 wx.getLocation 的手机坐标排序并显示定位点', async () => {
-    const calls = [];
+  it('附近：首次使用让用户标记我的位置（拖动中心点），并按该点排序', async () => {
     const toasts = [];
+    const sheets = [];
+    const values = new Map();
     const runtime = createRuntime({
       wx: {
-        getLocation: (options) => {
-          calls.push(options);
-          options.success({ latitude: 31.2054, longitude: 121.4375 });
-        },
-        showLoading() {},
-        hideLoading() {},
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        removeStorageSync: (key) => values.delete(key),
+        showActionSheet: (options) => sheets.push(options),
         showToast: (options) => toasts.push(options.title),
+        createMapContext: () => ({
+          getCenterLocation: (options) => options.success({ latitude: 31.2054, longitude: 121.4375 }),
+        }),
       },
     });
     const page = runtime.page('pages/index/index.js');
@@ -262,53 +264,108 @@ describe('miniprogram regressions', () => {
       { id: 1, name: '近处', category: '景点', lat: 31.2054, lng: 121.4375 },
       { id: 2, name: '远处', category: '景点', lat: 31.25, lng: 121.5 },
     ] });
-    await page.locateNearby();
-    assert.equal(calls[0].type, 'gcj02');
+
+    page.locateNearby();
+    assert.equal(sheets.length, 1, '没有标记过时应先询问');
+
+    await page.useMapCenterAsMyLocation();
     assert.equal(page.data.nearbyPlaces[0].id, 1);
     assert.equal(page.data.longitude, 121.4375);
     assert.equal(page.data.latitude, 31.2054);
-    assert.equal(page.data.showLocation, true);
     assert.equal(page.data.nearbyOpen, true);
-    assert.equal(toasts.at(-1), '按当前位置排序');
+    assert.equal(toasts.at(-1), '按你标记的位置排序');
+    assert.equal(values.get('wish-my-location').latitude, 31.2054, '应记住标记的位置');
   });
 
-  it('附近：定位被拒绝时提示授权，不退回地图中心点', async () => {
-    const modals = [];
+  it('附近：已标记过时直接排序，不再询问', () => {
+    const sheets = [];
+    const values = new Map([['wish-my-location', { latitude: 31.25, longitude: 121.5 }]]);
     const runtime = createRuntime({
       wx: {
-        getLocation: (options) => options.fail({ errMsg: 'getLocation:fail auth deny' }),
-        showLoading() {},
-        hideLoading() {},
-        showModal: (options) => modals.push(options),
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        showActionSheet: (options) => sheets.push(options),
+        showToast() {},
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [
+      { id: 1, name: '近处', category: '景点', lat: 31.2054, lng: 121.4375 },
+      { id: 2, name: '远处', category: '景点', lat: 31.25, lng: 121.5 },
+    ] });
+    page.locateNearby();
+    assert.equal(sheets.length, 0, '已标记过不应再询问');
+    assert.equal(page.data.nearbyPlaces[0].id, 2);
+  });
+
+  it('附近：在地图上点选也能标记我的位置', () => {
+    const values = new Map();
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        showToast() {},
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [
+      { id: 1, name: '近处', category: '景点', lat: 31.2054, lng: 121.4375 },
+      { id: 2, name: '远处', category: '景点', lat: 31.25, lng: 121.5 },
+    ] });
+
+    page.onMapTapForLocation({ detail: { latitude: 31.2054, longitude: 121.4375 } });
+    assert.equal(page.data.nearbyOpen, false, '非标记模式下点击地图不应触发排序');
+
+    page.startMarkLocation();
+    assert.equal(page.data.markLocation, true);
+    page.onMapTapForLocation({ detail: { latitude: 31.2054, longitude: 121.4375 } });
+    assert.equal(page.data.markLocation, false);
+    assert.equal(page.data.nearbyPlaces[0].id, 1);
+    assert.equal(values.get('wish-my-location').longitude, 121.4375);
+  });
+
+  it('附近：重新标记会忘掉旧位置并重新询问', () => {
+    const sheets = [];
+    const values = new Map([['wish-my-location', { latitude: 31.25, longitude: 121.5 }]]);
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        removeStorageSync: (key) => values.delete(key),
+        showActionSheet: (options) => sheets.push(options),
         showToast() {},
       },
     });
     const page = runtime.page('pages/index/index.js');
     page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
-    const oldCenter = { longitude: page.data.longitude, latitude: page.data.latitude };
-    await page.locateNearby();
-    assert.equal(modals.length, 1);
-    assert.equal(page.data.nearbyOpen, false);
-    assert.equal(page.data.longitude, oldCenter.longitude);
-    assert.equal(page.data.latitude, oldCenter.latitude);
+    page.remarkMyLocation();
+    assert.equal(values.has('wish-my-location'), false);
+    assert.equal(sheets.length, 1);
   });
 
-  it('附近：隐私指引未同意时提示隐私授权，不误导去系统设置', async () => {
-    const toasts = [];
-    const runtime = createRuntime({
-      wx: {
-        requirePrivacyAuthorize: (options) => options.fail({ errMsg: 'requirePrivacyAuthorize:fail privacy permission is not authorized' }),
-        getLocation() { throw new Error('不应在隐私授权失败后调用定位'); },
-        showLoading() {},
-        hideLoading() {},
-        showToast: (options) => toasts.push(options.title),
-      },
-    });
-    const page = runtime.page('pages/index/index.js');
-    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
-    await page.locateNearby();
-    assert.equal(toasts.at(-1), '请同意隐私保护指引后重试');
-    assert.equal(page.data.nearbyOpen, false);
+  it('回归守卫：小程序包里不得出现地理位置接口（会被提审 61040 拦截）', () => {
+    const root = miniRoot; // 文件顶部已用 import.meta.url 解析（ESM 无 __dirname）
+    const offenders = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!/\.(js|json|wxml|wxss)$/.test(entry.name)) continue;
+        const text = fs.readFileSync(full, 'utf8');
+        for (const token of ['wx.getLocation', 'wx.chooseLocation', 'requiredPrivateInfos', 'scope.userLocation']) {
+          if (text.includes(token)) offenders.push(path.relative(root, full) + ' → ' + token);
+        }
+      }
+    };
+    walk(root);
+    assert.deepEqual(
+      offenders,
+      [],
+      '地理位置接口需要后台准入开通，未开通时包里出现即无法提审；启用方案见 docs/待启用-设备定位实现.md'
+    );
   });
 
   it('照片上传：CDN 模式只传 full，无 CDN 时带一张预算内的缩略图', async () => {

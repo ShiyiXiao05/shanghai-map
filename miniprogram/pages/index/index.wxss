@@ -344,3 +344,48 @@
 .empty-icon {
   font-size: 60rpx;
 }
+
+/* 「我的位置」标记模式提示条（不依赖定位接口） */
+.map-mark-bar {
+  position: absolute;
+  left: 24rpx;
+  right: 24rpx;
+  top: 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8rpx 30rpx rgba(0, 0, 0, 0.16);
+  z-index: 12;
+}
+
+.map-mark-text {
+  font-size: 26rpx;
+  color: var(--ink);
+}
+
+.map-mark-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 16rpx;
+}
+
+.map-mark-btn {
+  flex: 1;
+  text-align: center;
+  padding: 14rpx 0;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #fff;
+  background: var(--brand, #2fa877);
+}
+
+.map-mark-btn-ghost {
+  color: var(--ink-soft);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.nearby-repoint {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: var(--brand, #2fa877);
+}
