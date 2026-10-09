@@ -23,6 +23,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  box-sizing: border-box;
+  min-width: 0;
   padding: 12rpx 24rpx;
 }
 
@@ -50,16 +52,20 @@
 .nav-actions {
   display: flex;
   align-items: center;
+  flex: none;
   gap: 16rpx;
+  white-space: nowrap;
 }
 
 .nav-btn {
+  flex: none;
   padding: 10rpx 22rpx;
   border-radius: 999rpx;
   border: 1rpx solid var(--line);
   background: var(--card);
   color: var(--ink);
   font-size: 26rpx;
+  white-space: nowrap;
 }
 
 .nav-btn-primary {
@@ -260,7 +266,7 @@
   color: var(--ink-soft);
 }
 
-.toggle switch {
+.toggle-switch {
   transform: scale(0.7);
 }
 
@@ -272,6 +278,8 @@
 /* 列表 */
 .place-scroll {
   flex: 1;
+  height: 0;
+  min-height: 0;
   padding: 10rpx 16rpx;
   box-sizing: border-box;
 }

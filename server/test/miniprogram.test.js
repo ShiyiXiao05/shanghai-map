@@ -311,6 +311,14 @@ describe('miniprogram regressions', () => {
     assert.equal(page.data.nearbyOpen, false);
   });
 
+  it('首页布局：列表保留可滚动高度，导航按钮不换行', () => {
+    const wxss = fs.readFileSync(path.join(miniRoot, 'pages/index/index.wxss'), 'utf8');
+    const wxml = fs.readFileSync(path.join(miniRoot, 'pages/index/index.wxml'), 'utf8');
+    assert.match(wxss, /\.place-scroll\s*\{[\s\S]*?height:\s*0;[\s\S]*?min-height:\s*0;/);
+    assert.match(wxss, /\.nav-btn\s*\{[\s\S]*?flex:\s*none;[\s\S]*?white-space:\s*nowrap;/);
+    assert.match(wxml, /<switch\s+class="toggle-switch"/);
+  });
+
   it('照片上传：CDN 模式只传 full，无 CDN 时带一张预算内的缩略图', async () => {
     const uploads = [];
     let cfg = { cdn: true, maxFullBytes: 1.5 * 1024 * 1024, maxThumbBytes: 64 * 1024 };
