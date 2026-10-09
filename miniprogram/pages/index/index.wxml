@@ -27,9 +27,17 @@
       scale="12"
       markers="{{markers}}"
       enable-poi="{{true}}"
-      show-location="{{showLocation}}"
       bindmarkertap="onMarkerTap"
+      bindtap="onMapTapForLocation"
     ></map>
+    <!-- 标记「我的位置」：不调用定位接口，由用户拖动地图或直接点选 -->
+    <view wx:if="{{markLocation}}" class="map-mark-bar">
+      <text class="map-mark-text">拖动地图把中心对准你，或直接点一下你的位置</text>
+      <view class="map-mark-actions">
+        <view class="map-mark-btn" bindtap="useMapCenterAsMyLocation">用中心点</view>
+        <view class="map-mark-btn map-mark-btn-ghost" bindtap="cancelMarkLocation">取消</view>
+      </view>
+    </view>
     <view class="map-tools">
       <view class="map-tool-btn" bindtap="locateNearby">◎ 附近</view>
       <view class="map-tool-btn map-tool-random" bindtap="drawRandom">🎲 抽一个</view>
@@ -129,7 +137,8 @@
       <view class="sheet-head">
         <view>
           <view class="sheet-title">◎ 离我最近</view>
-          <view class="sheet-sub">按当前位置的直线距离排序</view>
+          <view class="sheet-sub">按你标记的位置的直线距离排序</view>
+          <view class="nearby-repoint" bindtap="remarkMyLocation">重新标记我的位置</view>
         </view>
         <view class="sheet-close" bindtap="closeNearby">✕</view>
       </view>
