@@ -20,6 +20,14 @@
   },
   "darkmode": true,
   "themeLocation": "theme.json",
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于按当前位置排序附近地点和在地图上显示定位点"
+    }
+  },
+  "requiredPrivateInfos": [
+    "getLocation"
+  ],
   "usingComponents": {
     "nickname-modal": "/components/nickname-modal/nickname-modal",
     "emoji-picker": "/components/emoji-picker/emoji-picker"
