@@ -6,6 +6,9 @@ import kotlinx.serialization.decodeFromString
 
 class SessionStore(context: Context) {
     private val prefs = context.getSharedPreferences("explore", Context.MODE_PRIVATE)
+    var themeMode: ThemeMode
+        get() = ThemeMode.entries.find { it.name == prefs.getString("themeMode", null) } ?: ThemeMode.SYSTEM
+        set(value) { prefs.edit().putString("themeMode", value.name).apply() }
     var nickname: String
         get() = prefs.getString("nickname", "").orEmpty()
         set(value) { prefs.edit().putString("nickname", value.trim().take(30)).apply() }
@@ -16,7 +19,7 @@ class SessionStore(context: Context) {
         get() = prefs.getBoolean("mapConsent", false)
         set(value) { prefs.edit().putBoolean("mapConsent", value).apply() }
     var previewUpdates: Boolean
-        get() = prefs.getBoolean("previewUpdates", false)
+        get() = prefs.getBoolean("previewUpdates", com.modu.explore.BuildConfig.RELEASE_CHANNEL == "preview")
         set(value) { prefs.edit().putBoolean("previewUpdates", value).apply() }
     fun updates(): UpdateCatalog? = runCatching {
         prefs.getString("updateCatalog", null)?.let { wireJson.decodeFromString<UpdateCatalog>(it) }

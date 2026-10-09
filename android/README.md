@@ -77,7 +77,7 @@ node android/scripts/prepare-update.mjs APK路径 https://你的服务地址 "�
 node android/scripts/prepare-update.mjs APK路径 https://你的服务地址 "逐行体验内容" preview
 ```
 
-脚本保留历史，体验版不会覆盖旧客户端使用的 `update.json`；仅正式版更新该兼容清单。优先发布 APK，再发布目录清单。新客户端在 `releases.json` 尚未部署时回退到原来的正式版清单。已有 0.3.0 安装包需在下一次发布后才能使用这些新功能。
+脚本保留历史。在首次正式版上线前，体验版也更新旧客户端使用的 `update.json`；正式版上线后，仅正式版更新该兼容清单。优先发布 APK，再发布目录清单。新客户端在 `releases.json` 尚未部署时回退到兼容清单。目前所有发布均为体验版，最新为 `0.4.1-preview`（versionCode 5），详见 `docs/Android-0.4.1-preview发布说明.md`。
 
 ## 正式签名
 

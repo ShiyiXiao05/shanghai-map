@@ -32,6 +32,9 @@ const release = {
 };
 await mkdir(directory, { recursive: true });
 await copyFile(apk, path.join(directory, filename));
-if (channel === 'stable') await writeFile(path.join(directory, 'update.json'), JSON.stringify(release, null, 2) + '\n');
+// Until the first stable launch, legacy clients must also receive preview updates.
+if (channel === 'stable' || !catalog.releases.some((item) => item.channel === 'stable')) {
+    await writeFile(path.join(directory, 'update.json'), JSON.stringify(release, null, 2) + '\n');
+}
 await writeFile(catalogPath, JSON.stringify({ releases: [release, ...catalog.releases] }, null, 2) + '\n');
 console.log(`Ready for deployment: ${directory}`);

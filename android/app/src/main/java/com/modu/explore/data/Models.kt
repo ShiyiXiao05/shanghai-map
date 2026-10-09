@@ -47,8 +47,16 @@ fun defaultEmoji(name: String) = when (name) {
     "景点" -> "🏞️"; "美食" -> "🍜"; "展馆" -> "🏛️"
     "购物" -> "🛍️"; "娱乐" -> "🎡"; else -> "📍"
 }
-val emojiChoices = listOf("🏞️", "🍜", "🏛️", "🛍️", "🎡", "📍", "🌳", "🌸", "🌆", "🌉", "🏖️", "🏰",
-    "☕", "🍰", "🍣", "🍕", "🍔", "🥟", "🍲", "🍻", "🎨", "📚", "🎭", "🎬", "🎵", "🎮", "⚽", "💎", "❤️", "⭐")
+data class EmojiGroup(val name: String, val emojis: List<String>)
+val emojiGroups = listOf(
+    EmojiGroup("美食饮品", listOf("🍜", "☕", "🍰", "🍣", "🍕", "🍔", "🥟", "🍲", "🍻", "🍵", "🧋", "🥤", "🍷", "🍸", "🍦", "🍩", "🍪", "🥐", "🥯", "🥖", "🥪", "🌮", "🍝", "🍱", "🍛", "🍢", "🍤", "🥩", "🥗", "🍓", "🍒", "🍉")),
+    EmojiGroup("自然风景", listOf("🏞️", "🌳", "🌸", "🏖️", "🌲", "🌴", "🌿", "🌻", "🌷", "🌹", "🪷", "🍁", "🍂", "🍀", "⛰️", "🏔️", "🌋", "🏝️", "🌊", "🌅", "🌇", "🌈", "☀️", "🌙", "🦋", "🐈", "🐕", "🐼")),
+    EmojiGroup("城市建筑", listOf("🏛️", "🌆", "🌉", "🏰", "🏙️", "🗼", "🏯", "⛩️", "⛪", "🕌", "🏠", "🏡", "🏨", "🏢", "🏫", "🏟️", "⛲", "🎠", "🎪", "🚉")),
+    EmojiGroup("文艺娱乐", listOf("🎡", "🎨", "📚", "🎭", "🎬", "🎵", "🎮", "⚽", "🎢", "🎤", "🎸", "🎹", "🎻", "🎧", "📷", "🎳", "🏀", "🏸", "🎾", "🏊", "🧗", "⛸️", "🛼", "🪁")),
+    EmojiGroup("购物出行", listOf("🛍️", "💎", "👗", "👟", "💄", "🧸", "🎁", "💐", "🚲", "🛵", "🚗", "🚕", "🚌", "🚇", "🚄", "✈️", "⛵", "🚢", "⛺", "🧳")),
+    EmojiGroup("心情标记", listOf("📍", "❤️", "⭐", "✨", "💛", "💚", "💙", "💜", "🧡", "🤍", "🔥", "💯", "👍", "😊", "🥰", "😎", "🥳", "🤩", "💌", "🏆"))
+)
+val emojiChoices = emojiGroups.flatMap { it.emojis }
 val Place.displayEmoji: String get() = emoji.ifBlank { defaultEmoji(category) }
 fun validEmoji(value: String): Boolean {
     if (value.isBlank()) return true
@@ -58,7 +66,7 @@ fun validEmoji(value: String): Boolean {
     iterator.first()
     if (iterator.next() != value.length) return false
     val first = value.codePointAt(0)
-    return first in 0x1F000..0x1FAFF || first in 0x2300..0x27FF || first in listOf(0x00A9, 0x00AE, 0x3030, 0x303D, 0x3297, 0x3299) ||
+    return first in 0x1F000..0x1FAFF || first in 0x2300..0x27FF || first in listOf(0x00A9, 0x00AE, 0x2B50, 0x2B55, 0x3030, 0x303D, 0x3297, 0x3299) ||
         (first in 48..57 || first == 35 || first == 42) && value.contains('\u20E3')
 }
 enum class PlaceSort(val label: String) { NEWEST("最新添加"), NAME("按名称"), WISHES("最想去") }
@@ -78,7 +86,7 @@ fun distanceKm(lngA: Double, latA: Double, lngB: Double, latB: Double): Double {
 }
 fun distanceText(km: Double) = if (km < 1) "${(km * 1000).roundToInt()} m" else "%.1f km".format(km)
 fun walkText(km: Double) = "步行约 ${max(1, (km / 4.5 * 60).roundToInt())} 分钟"
-data class PickedPoint(val name: String, val address: String, val lng: Double, val lat: Double)
+data class PickedPoint(val name: String, val address: String, val lng: Double, val lat: Double, val accuracy: Float = 0f)
 fun parseSharedPoint(text: String): PickedPoint? {
     val match = Regex("(?:position=|位置[：:]\\s*)(-?\\d+(?:\\.\\d+)?)\\s*,\\s*(-?\\d+(?:\\.\\d+)?)").find(text) ?: return null
     val lng = match.groupValues[1].toDoubleOrNull() ?: return null

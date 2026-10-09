@@ -32,11 +32,11 @@ class NativeRegressionTest {
     @Test fun emojiMarkersKeepStableSizeWhiteBackgroundAndVisitedBadge() {
         val bitmap = placeMarkerBitmap("美食", true, false, 1f)
         try {
-            assertEquals(56, bitmap.width)
-            assertEquals(60, bitmap.height)
-            assertEquals(android.graphics.Color.WHITE, bitmap.getPixel(28, 8))
+            assertEquals(42, bitmap.width)
+            assertEquals(45, bitmap.height)
+            assertEquals(android.graphics.Color.WHITE, bitmap.getPixel(21, 6))
             assertEquals(0, android.graphics.Color.alpha(bitmap.getPixel(0, 0)))
-            assertEquals(255, android.graphics.Color.alpha(bitmap.getPixel(49, 10)))
+            assertEquals(255, android.graphics.Color.alpha(bitmap.getPixel(36, 7)))
         } finally { bitmap.recycle() }
     }
 

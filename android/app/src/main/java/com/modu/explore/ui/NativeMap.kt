@@ -52,7 +52,8 @@ fun initializeMaps(context: android.content.Context) {
     places: List<Place>, consent: Boolean, dark: Boolean, modifier: Modifier = Modifier,
     center: PickedPoint? = null, onConsent: () -> Unit,
     onPlace: (Place) -> Unit, onPick: ((PickedPoint) -> Unit)? = null,
-    selectedId: Long? = null, fitRequest: Int = 0, mapIdentity: String? = null, onMapClick: () -> Unit = {}
+    selectedId: Long? = null, fitRequest: Int = 0, mapIdentity: String? = null, onMapClick: () -> Unit = {},
+    currentLocation: PickedPoint? = null
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -83,6 +84,17 @@ fun initializeMaps(context: android.content.Context) {
     var loaded by remember(view) { mutableStateOf(false) }
     var size by remember(view) { mutableStateOf(IntSize.Zero) }
     val density = context.resources.displayMetrics.density
+    // Separate overlays from place markers: selection/filter/theme changes must not erase our location.
+    val locationIcon = remember(view) { BitmapDescriptorFactory.fromBitmap(currentLocationBitmap(density)) }
+    DisposableEffect(view, loaded, currentLocation) {
+        val point = currentLocation?.takeIf { it.lat.isFinite() && it.lng.isFinite() && it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
+        val marker = if (loaded && point != null) view.map.addMarker(MarkerOptions()
+            .position(LatLng(point.lat, point.lng)).anchor(.5f, .5f).icon(locationIcon).zIndex(20f)) else null
+        val circle = if (loaded && point != null && point.accuracy.isFinite() && point.accuracy > 0) view.map.addCircle(CircleOptions()
+            .center(LatLng(point.lat, point.lng)).radius(point.accuracy.toDouble())
+            .fillColor(Color.argb(28, 42, 132, 255)).strokeColor(Color.argb(60, 42, 132, 255)).strokeWidth(density).zIndex(0f)) else null
+        onDispose { marker?.remove(); circle?.remove() }
+    }
     val icons = remember(view) { mutableMapOf<Triple<String, Boolean, Boolean>, BitmapDescriptor>() }
     val markers = remember(view) { mutableMapOf<Long, Marker>() }
     val rendered = remember(view) { mutableMapOf<Long, List<Any>>() }
@@ -104,7 +116,7 @@ fun initializeMaps(context: android.content.Context) {
             setOnMapClickListener { onMapClickCurrent() }
             setOnMapLoadedListener { loaded = true }
         }
-        onDispose { lifecycle.removeObserver(observer); view.onPause(); view.onDestroy(); icons.values.forEach { it.recycle() }; icons.clear() }
+        onDispose { lifecycle.removeObserver(observer); view.onPause(); view.onDestroy(); icons.values.forEach { it.recycle() }; icons.clear(); locationIcon.recycle() }
     }
     val markerState = places.map { listOf(it.id, it.name, it.displayEmoji, it.lng, it.lat, it.visited) }
     LaunchedEffect(loaded, markerState, dark, selectedId) {
@@ -142,7 +154,7 @@ fun initializeMaps(context: android.content.Context) {
 }
 
 fun placeMarkerBitmap(categoryName: String, visited: Boolean, selected: Boolean, density: Float, emoji: String = ""): Bitmap {
-    val scale = density.coerceAtLeast(1f)
+    val scale = density.coerceAtLeast(1f) * .75f
     val bitmap = Bitmap.createBitmap((56 * scale).toInt(), (60 * scale).toInt(), Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap).apply { scale(scale, scale) }
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -161,6 +173,17 @@ fun placeMarkerBitmap(categoryName: String, visited: Boolean, selected: Boolean,
         paint.color = Color.rgb(15, 118, 110); canvas.drawCircle(45f, 10f, 6f, paint)
         paint.color = Color.WHITE; paint.textSize = 10f; canvas.drawText("✓", 45f, 14f, paint)
     }
+    return bitmap
+}
+
+fun currentLocationBitmap(density: Float): Bitmap {
+    val scale = density.coerceAtLeast(1f)
+    val bitmap = Bitmap.createBitmap((28 * scale).toInt(), (28 * scale).toInt(), Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap).apply { scale(scale, scale) }
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.color = Color.argb(35, 25, 85, 145); canvas.drawCircle(14f, 15f, 10f, paint)
+    paint.color = Color.WHITE; canvas.drawCircle(14f, 14f, 9f, paint)
+    paint.color = Color.rgb(42, 132, 255); canvas.drawCircle(14f, 14f, 6.5f, paint)
     return bitmap
 }
 
@@ -191,7 +214,7 @@ suspend fun searchPlaces(context: android.content.Context, text: String): List<P
             client = AMapLocationClient(context).apply {
                 setLocationOption(AMapLocationClientOption().apply { isOnceLocation = true; httpTimeOut = 15000 })
                 setLocationListener { location ->
-                    if (location.errorCode == 0) resultCurrent(PickedPoint("当前位置", location.address.orEmpty(), location.longitude, location.latitude))
+                    if (location.errorCode == 0) resultCurrent(PickedPoint("当前位置", location.address.orEmpty(), location.longitude, location.latitude, location.accuracy))
                     else errorCurrent("定位失败（${location.errorCode}），请检查位置服务")
                     stopLocation()
                 }

@@ -1,6 +1,9 @@
 package com.modu.explore.ui
 
 import android.graphics.Bitmap
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -12,6 +15,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.*
 import androidx.compose.material.icons.outlined.*
@@ -45,7 +50,7 @@ import kotlinx.coroutines.withContext
     }
 }
 @Composable fun CategoryIcon(name: String, modifier: Modifier = Modifier, emoji: String = defaultEmoji(name)) {
-    Box(modifier.size(40.dp).background(Color(category(name).color).copy(alpha = .12f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+    Box(modifier.size(44.dp).background(Color(category(name).color).copy(alpha = .10f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
         Text(emoji, style = MaterialTheme.typography.titleLarge)
     }
 }
@@ -57,7 +62,9 @@ import kotlinx.coroutines.withContext
     }
 }
 @Composable fun PlaceRow(place: Place, subtitle: String? = null, onClick: () -> Unit, trailing: (@Composable () -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 5.dp), shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .65f))) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
         CategoryIcon(place.category, emoji = place.displayEmoji)
         Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(place.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -69,7 +76,7 @@ import kotlinx.coroutines.withContext
         if (place.visited) Icon(Icons.Outlined.CheckCircle, "已去过", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         if (trailing != null) trailing() else if (place.wishes.isNotEmpty()) Text("♡ ${place.wishes.size}", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 8.dp))
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = .5f))
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,8 +101,8 @@ import kotlinx.coroutines.withContext
         topBar = {
             TopAppBar(title = {
                 if (state.page == Page.HOME) Column(Modifier.clickable(enabled = !state.busy) { vm.navigate(Page.MAPS) }) {
-                    Text(state.map?.name ?: "公共广场", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                    Text("切换 ▾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(state.map?.name ?: "公共广场", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleLarge)
+                    Text("魔都探索 · 切换地图 ▾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else Text(when (state.page) {
                     Page.MAPS -> "我的地图"; Page.DETAIL -> "地点详情"; Page.EDIT -> if (state.selected == null) "标记地点" else "编辑地点"
                     Page.SEARCH -> "选择地点"; Page.ITINERARY -> "行程单"; Page.MEMORIES -> "回忆时间线"
@@ -132,7 +139,7 @@ import kotlinx.coroutines.withContext
     UpdateDialog(updates) { updates.dismiss(); vm.navigate(Page.CHANGELOG); updates.loadHistory() }
     if (privacy) AlertDialog(onDismissRequest = { privacy = false }, title = { Text("开启地图服务") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("地图、地点搜索与定位由高德提供。开启后，SDK 将处理设备信息和网络信息；定位仅在你主动使用并授予权限后进行。")
+            Text("地图、地点搜索与定位由高德提供。开启后，SDK 将处理设备信息和网络信息；授予位置权限后，首页会获取当前位置并显示定位标志。")
             TextButton(onClick = { openUrl(context, "https://lbs.amap.com/pages/privacy/") }) { Text("高德隐私政策") }
         } }, confirmButton = { TextButton(onClick = { vm.consent(); privacy = false }) { Text("同意并开启") } },
         dismissButton = { TextButton(onClick = { privacy = false }) { Text("暂不开启") } })
@@ -145,7 +152,10 @@ import kotlinx.coroutines.withContext
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     var center by remember { mutableStateOf<PickedPoint?>(null) }
+    var currentLocation by remember { mutableStateOf<PickedPoint?>(null) }
     var nearby by remember { mutableStateOf(false) }
+    var showNearbyOnFix by remember { mutableStateOf(false) }
+    val context = LocalContext.current
     var drawCandidates by remember { mutableStateOf<List<Place>>(emptyList()) }
     var mapFraction by rememberSaveable { mutableFloatStateOf(.43f) }
     var contentHeight by remember { mutableIntStateOf(0) }
@@ -156,23 +166,40 @@ import kotlinx.coroutines.withContext
     val filtered = remember(state.places, state.selectedCategories, state.hideVisited, state.sort) {
         filterPlaces(state.places, state.selectedCategories, state.hideVisited, state.sort)
     }
-    val locate = rememberLocate(state.mapConsent, onConsent, { center = it; nearby = true }, vm::notice)
+    val locate = rememberLocate(state.mapConsent, onConsent, {
+        currentLocation = it
+        if (showNearbyOnFix) { center = it; nearby = true }
+        showNearbyOnFix = false
+    }, { showNearbyOnFix = false; vm.notice(it) })
+    LaunchedEffect(state.mapConsent) {
+        if (!state.mapConsent) currentLocation = null
+        else if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) locate()
+    }
     val previewPlace: (Place) -> Unit = { fullscreen = false; center = PickedPoint(it.name, it.address, it.lng, it.lat); vm.previewPlace(it) }
     fun closePreview() { vm.closePreview(); center = null }
     BackHandler(preview != null || fullscreen) { if (preview != null) closePreview() else fullscreen = false }
     Column(Modifier.fillMaxSize().onSizeChanged { contentHeight = it.height }) {
-        Box(Modifier.fillMaxWidth().weight(if (fullscreen) 1f else mapFraction).background(MaterialTheme.colorScheme.surface)) {
-            NativeMap(filtered, state.mapConsent, isSystemInDarkTheme(), Modifier.fillMaxSize(), center, onConsent,
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(if (fullscreen) 1f else mapFraction).background(MaterialTheme.colorScheme.surface)) {
+            NativeMap(filtered, state.mapConsent, LocalExploreDark.current, Modifier.fillMaxSize(), center, onConsent,
                 onPlace = previewPlace, onPick = if (state.map == null) null else vm::startAdd,
                 selectedId = preview?.id, fitRequest = fitRequest, mapIdentity = state.map?.code,
-                onMapClick = { closePreview() })
-            Surface(Modifier.align(Alignment.BottomEnd).padding(12.dp), shape = RoundedCornerShape(8.dp), shadowElevation = 2.dp) {
-                Row {
+                onMapClick = { closePreview() }, currentLocation = currentLocation)
+            if (state.mapConsent && maxHeight > 180.dp) Surface(Modifier.align(Alignment.TopStart).padding(12.dp), shape = RoundedCornerShape(50),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = .95f), shadowElevation = 2.dp) {
+                Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Outlined.Explore, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text("${filtered.size} 个探索地点", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+            if (state.mapConsent) Surface(Modifier.align(Alignment.BottomEnd).padding(12.dp), shape = RoundedCornerShape(20.dp), shadowElevation = 4.dp,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = .97f)) {
+                val tools: @Composable () -> Unit = {
                     Tool(Icons.Outlined.CenterFocusStrong, "显示全部地点") { center = null; fitRequest++ }
-                    Tool(Icons.Outlined.MyLocation, "附近", !state.busy, locate)
+                    Tool(Icons.Outlined.MyLocation, "附近", !state.busy) { showNearbyOnFix = true; locate() }
                     Tool(Icons.Outlined.Casino, "随机抽取", !state.busy) { if (state.places.isEmpty()) vm.notice("还没有可抽取的地点") else drawCandidates = state.places.toList() }
                     Tool(if (fullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen, "切换全屏") { fullscreen = !fullscreen }
                 }
+                if (maxHeight < 240.dp) Row { tools() } else Column { tools() }
             }
         }
         if (!fullscreen) {
@@ -184,12 +211,16 @@ import kotlinx.coroutines.withContext
                 }
                 .draggable(rememberDraggableState { delta -> mapFraction = adjustedMapFraction(mapFraction, delta, contentHeight.toFloat()) }, Orientation.Vertical),
                 contentAlignment = Alignment.Center) {
-                Box(Modifier.width(44.dp).height(4.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .5f), RoundedCornerShape(2.dp)))
+                Box(Modifier.width(36.dp).height(4.dp).background(MaterialTheme.colorScheme.outline, RoundedCornerShape(2.dp)))
             }
-        Column(Modifier.weight(1f - mapFraction).fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.weight(1f - mapFraction).fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
             if (preview != null) PlacePreview(preview, pending = preview.id in state.pendingPlaces, onClose = { closePreview() }, onDetails = { vm.openPlace(preview) })
             else {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("探索清单", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                Text("${filtered.size} 个地点", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 categories.forEach { c -> FilterChip(selected = c.name in state.selectedCategories, onClick = { vm.filter(c.name) },
                     label = { Text(c.name) }, leadingIcon = { Box(Modifier.size(8.dp).background(Color(c.color), RoundedCornerShape(4.dp))) }) }
             }
@@ -205,7 +236,6 @@ import kotlinx.coroutines.withContext
                 }
                 Tool(Icons.Outlined.Refresh, "刷新", !state.loading && !state.busy, vm::reload)
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             LazyColumn(Modifier.weight(1f)) {
                 item {
                     when {
@@ -216,7 +246,7 @@ import kotlinx.coroutines.withContext
                             EmptyState(if (state.places.isEmpty()) "这张地图还没有地点" else "这个筛选下没有地点")
                             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { TextButton(onClick = { vm.navigate(if (state.map == null) Page.MAPS else Page.SEARCH) }) { Text(if (state.map == null) "创建／加入地图" else "搜索添加地点") } }
                         }
-                        else -> Text("${filtered.size} 个地点", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        else -> Spacer(Modifier.height(2.dp))
                     }
                 }
                 items(filtered, key = { it.id }) { PlaceRow(it, onClick = { previewPlace(it) }) }
@@ -228,7 +258,7 @@ import kotlinx.coroutines.withContext
     if (drawCandidates.isNotEmpty()) DrawPlaceDialog(drawCandidates, onDismiss = { drawCandidates = emptyList() }, onPlace = { drawCandidates = emptyList(); previewPlace(it) })
     if (nearby && center != null) AlertDialog(onDismissRequest = { nearby = false }, title = { Text("离我最近") },
         text = { Column {
-            val origin = center!!
+            val origin = currentLocation ?: center!!
             state.places.sortedBy { distanceKm(origin.lng, origin.lat, it.lng, it.lat) }.take(5).forEach { p ->
                 PlaceRow(p, subtitle = distanceText(distanceKm(origin.lng, origin.lat, p.lng, p.lat)), onClick = { nearby = false; previewPlace(p) })
             }
@@ -247,12 +277,16 @@ import kotlinx.coroutines.withContext
             }
             Tool(Icons.Outlined.Close, "关闭简介", onClick = onClose)
         }
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("位置", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text(place.address.ifBlank { "未填写地址" })
             Text("%.6f, %.6f".format(java.util.Locale.ROOT, place.lng, place.lat), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("备注", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             Text(place.description.ifBlank { "暂无备注" })
+            }
+            }
         }
         Button(onClick = onDetails, enabled = !pending, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(if (pending) "正在同步…" else "进入详情"); Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null)
@@ -266,6 +300,7 @@ import kotlinx.coroutines.withContext
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var exportCode by rememberSaveable { mutableStateOf<String?>(null) }
+    var appearance by remember { mutableStateOf(false) }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         val code = exportCode
         if (uri != null && code != null) scope.launch {
@@ -304,10 +339,22 @@ import kotlinx.coroutines.withContext
                 Text("高德地图授权", Modifier.weight(1f)); Switch(state.mapConsent, onCheckedChange = { if (!it) vm.revokeConsent() else vm.notice("请返回首页点击开启地图") })
             }
             SectionLabel("应用")
+            MenuRow("外观 · ${state.themeMode.label}", Icons.Outlined.Palette) { appearance = true }
             MenuRow("检查更新 · ${BuildConfig.VERSION_NAME} ${channelLabel(BuildConfig.RELEASE_CHANNEL)}", Icons.Outlined.SystemUpdateAlt) { updates.check() }
             MenuRow("更新日志", Icons.Outlined.History) { vm.navigate(Page.CHANGELOG); updates.loadHistory() }
         }
     }
+    if (appearance) AlertDialog(onDismissRequest = { appearance = false }, title = { Text("应用外观") }, text = {
+        Column(Modifier.selectableGroup()) {
+            ThemeMode.entries.forEach { mode ->
+                Row(Modifier.fillMaxWidth().selectable(selected = state.themeMode == mode, role = Role.RadioButton,
+                    onClick = { vm.themeMode(mode) }).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = state.themeMode == mode, onClick = null)
+                    Text(mode.label, Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+    }, confirmButton = { TextButton(onClick = { appearance = false }) { Text("完成") } })
     form?.let { mode -> AlertDialog(onDismissRequest = { form = null }, title = { Text(when (mode) { "create" -> "创建新地图"; "join" -> "加入地图"; "rename" -> "修改名称"; else -> "修改昵称" }) },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(input, { input = it.take(if (mode == "join") 6 else if (mode == "nickname") 30 else 40) }, label = { Text(when (mode) { "join" -> "6 位邀请码"; "nickname" -> "昵称"; else -> "地图名称" }) }, singleLine = true)
@@ -320,6 +367,9 @@ import kotlinx.coroutines.withContext
     Text(text, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
 }
 @Composable fun MenuRow(text: String, icon: ImageVector, enabled: Boolean = true, action: () -> Unit) {
+    Surface(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f))) {
     ListItem(headlineContent = { Text(text, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant) },
-        leadingContent = { Icon(icon, null) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) }, modifier = Modifier.clickable(enabled = enabled, onClick = action))
+        leadingContent = { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }, trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }, modifier = Modifier.clickable(enabled = enabled, onClick = action))
+    }
 }

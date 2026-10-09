@@ -46,7 +46,7 @@ import com.modu.explore.data.channelLabel
                 }
                 state.apk != null -> Text("更新已下载，安装后保留现有地图和设置。")
                 state.info != null -> Text(state.info!!.notes.ifBlank { "新版本已发布" })
-                state.error == null -> Text("当前已是最新版本")
+                state.error == null -> Text(if (!state.previewEnabled && !state.stablePublished) "正式版尚未上线，可开启体验版更新" else "当前已是最新版本")
             }
             (state.error ?: launchError)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             TextButton(onClick = onHistory) { Text("查看更新日志") }

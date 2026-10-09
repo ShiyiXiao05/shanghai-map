@@ -4,6 +4,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpdateInfoTest {
+    @Test fun previewOnlyCatalogHasNoStableAndUpgradesOlderPreview() {
+        val release = info.copy(versionCode = 5, versionName = "0.4.1-preview", channel = "preview")
+        val catalog = UpdateCatalog(listOf(release, info.copy(channel = "preview")))
+        assertNull(catalog.latest("com.modu.explore", 4, false))
+        assertTrue(catalog.history("com.modu.explore", false).isEmpty())
+        assertEquals(release, catalog.latest("com.modu.explore", 4, true))
+    }
     private val info = UpdateInfo("com.modu.explore", 3, "0.3.0", "https://example.com/explore.apk", "a".repeat(64), "改进地图")
     @Test fun onlyNewerMatchingPackagesAreUpdates() {
         assertTrue(info.isNewerThan("com.modu.explore", 2))

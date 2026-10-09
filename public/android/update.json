@@ -1,8 +1,10 @@
 {
   "packageName": "com.modu.explore",
-  "versionCode": 3,
-  "versionName": "0.3.0",
-  "apkUrl": "https://shanghai-wish-map.onrender.com/android/modu-explore-0.3.0.apk",
-  "sha256": "aef005d421f49631bf979692f647b05698075c4277591b1da192db53a8a590d8",
-  "notes": "沪娘图标；可拖动地图与地点比例；简洁定位标记；滚轮抽签动画；减少点赞、留言等操作的等待。"
+  "versionCode": 5,
+  "versionName": "0.4.1-preview",
+  "channel": "preview",
+  "publishedAt": "2026-10-09",
+  "apkUrl": "https://shanghai-wish-map.onrender.com/android/modu-explore-0.4.1-preview.apk",
+  "sha256": "dbb21bdcce2ecfefc8bc8b93ed5df59549ac441513125397723791e912293250",
+  "notes": "当前位置蓝色定位点与精度圈；地图标点缩小；144 个分类 emoji；新版首页、地点简介与详情样式；浅色、深色、跟随系统外观设置；更正所有历史发布为体验版，正式版尚未上线。"
 }

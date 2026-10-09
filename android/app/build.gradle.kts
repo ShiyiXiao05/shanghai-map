@@ -20,8 +20,8 @@ android {
         applicationId = "com.modu.explore"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.4.1"
         val releaseChannel = config("RELEASE_CHANNEL", "preview")
         require(releaseChannel in listOf("stable", "preview")) { "RELEASE_CHANNEL must be stable or preview" }
         if (releaseChannel == "preview") versionNameSuffix = "-preview"

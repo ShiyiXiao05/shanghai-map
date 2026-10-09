@@ -21,6 +21,7 @@ import java.io.IOException
 
 enum class Page { HOME, MAPS, DETAIL, EDIT, SEARCH, ITINERARY, MEMORIES, TRASH, POSTER, CHANGELOG }
 data class ExploreState(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val page: Page = Page.HOME, val map: ExploreMap? = null,
     val maps: List<ExploreMap> = emptyList(), val nickname: String = "",
     val places: List<Place> = emptyList(), val selected: Place? = null, val previewId: Long? = null,
@@ -41,6 +42,7 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
     private val sessions = SessionStore(application)
     private val initialMap = sessions.maps().find { it.code == sessions.code }
     private val mutable = MutableStateFlow(ExploreState(
+        themeMode = sessions.themeMode,
         map = initialMap, maps = sessions.maps(),
         nickname = sessions.nickname, mapConsent = sessions.mapConsent,
         places = sessions.places(initialMap?.code)
@@ -68,6 +70,7 @@ class ExploreViewModel @JvmOverloads constructor(application: Application, val a
     fun dismissMessage() { mutable.update { it.copy(message = null) } }
     fun nickname(value: String) { sessions.nickname = value; mutable.update { it.copy(nickname = sessions.nickname) } }
     fun consent() { sessions.mapConsent = true; mutable.update { it.copy(mapConsent = true) } }
+    fun themeMode(value: ThemeMode) { sessions.themeMode = value; mutable.update { it.copy(themeMode = value) } }
     fun revokeConsent() { sessions.mapConsent = false; mutable.update { it.copy(mapConsent = false) } }
     fun filter(name: String) { mutable.update { it.copy(selectedCategories = if (name in it.selectedCategories) it.selectedCategories - name else it.selectedCategories + name) } }
     fun hideVisited(value: Boolean) { mutable.update { it.copy(hideVisited = value) } }

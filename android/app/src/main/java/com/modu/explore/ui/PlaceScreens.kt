@@ -36,7 +36,8 @@ import kotlinx.serialization.json.*
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let(vm::upload) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
         item {
-            Box(Modifier.fillMaxWidth().height(4.dp).background(Color(category(place.category).color)))
+            Surface(Modifier.fillMaxWidth().padding(16.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(place.name, style = MaterialTheme.typography.headlineSmall)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -51,6 +52,7 @@ import kotlinx.serialization.json.*
                 if (place.description.isNotBlank()) Text(place.description)
                 listOf(place.priceHint, place.hours, place.tags).filter { it.isNotBlank() }.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                 if (place.wishes.isNotEmpty()) Text("${place.wishes.size} 人想去 · ${place.wishes.joinToString("、")}", style = MaterialTheme.typography.bodySmall)
+            }
             }
             if (state.map != null) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp)) {
                 Tool(if (place.visited) Icons.AutoMirrored.Outlined.Undo else Icons.Outlined.CheckCircle, if (place.visited) "取消打卡" else "打卡", !state.busy) { vm.placeAction("visited") }
@@ -164,9 +166,14 @@ import kotlinx.serialization.json.*
 }
 @Composable private fun EmojiPicker(selected: String, categoryName: String, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
     var custom by rememberSaveable { mutableStateOf(selected) }
+    var activeGroup by rememberSaveable { mutableIntStateOf(0) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("地点 emoji") }, text = {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            emojiChoices.chunked(4).forEach { group ->
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                emojiGroups.forEachIndexed { index, group -> FilterChip(selected = activeGroup == index,
+                    onClick = { activeGroup = index }, label = { Text(group.name) }) }
+            }
+            emojiGroups[activeGroup].emojis.chunked(4).forEach { group ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     group.forEach { emoji ->
                         Surface(color = if (emoji == selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,

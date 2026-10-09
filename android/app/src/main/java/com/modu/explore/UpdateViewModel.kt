@@ -25,7 +25,7 @@ data class UpdateState(
     val open: Boolean = false, val checking: Boolean = false, val downloading: Boolean = false,
     val progress: Int? = null, val info: UpdateInfo? = null, val apk: File? = null, val error: String? = null,
     val previewEnabled: Boolean = false, val history: List<UpdateInfo> = emptyList(),
-    val historyLoading: Boolean = false, val historyError: String? = null
+    val historyLoading: Boolean = false, val historyError: String? = null, val stablePublished: Boolean = false
 )
 
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
@@ -55,7 +55,8 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 sessions.saveUpdates(next)
                 val newer = next.latest(BuildConfig.APPLICATION_ID, BuildConfig.VERSION_CODE, mutable.value.previewEnabled)
                 mutable.update { it.copy(checking = false, open = it.open || (quiet && newer != null && !dismissedDuringCheck), info = newer,
-                    history = next.history(BuildConfig.APPLICATION_ID, it.previewEnabled), historyError = null) }
+                    history = next.history(BuildConfig.APPLICATION_ID, it.previewEnabled), historyError = null,
+                    stablePublished = next.releases.any { release -> release.packageName == BuildConfig.APPLICATION_ID && release.channel == "stable" && release.isValid() }) }
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 mutable.update { it.copy(checking = false, error = error.message ?: "检查更新失败，请重试") }
