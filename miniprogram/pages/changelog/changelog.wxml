@@ -1,0 +1,8 @@
+<page-meta page-style="{{themeStyle}}"/><view class="page">
+  <view class="head"><view class="title">更新日志</view><view class="sub">当前版本 {{version}} · 体验版</view></view>
+  <view wx:for="{{entries}}" wx:key="version" class="entry">
+    <view class="entry-head"><text class="version">{{item.version}}</text><text class="date">{{item.date}}</text></view>
+    <view class="channel">{{item.channel}}</view>
+    <view wx:for="{{item.notes}}" wx:key="*this" class="note">{{item}}</view>
+  </view>
+</view>

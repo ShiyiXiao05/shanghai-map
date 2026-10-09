@@ -21,12 +21,12 @@ export const CLOUD_SERVICE_NAME = 'shanghai-map';
 export const TMAP_KEY = '';
 
 export const CATEGORIES = [
-  { id: '景点', emoji: '📍', color: '#2fa877' },
+  { id: '景点', emoji: '🏞️', color: '#2fa877' },
   { id: '美食', emoji: '🍜', color: '#e8862e' },
-  { id: '展馆', emoji: '🖼️', color: '#4d82d4' },
+  { id: '展馆', emoji: '🏛️', color: '#4d82d4' },
   { id: '购物', emoji: '🛍️', color: '#e0568f' },
   { id: '娱乐', emoji: '🎡', color: '#8e63d8' },
-  { id: '其他', emoji: '✨', color: '#7e8f9c' },
+  { id: '其他', emoji: '📍', color: '#7e8f9c' },
 ];
 
 export function categoryMeta(id) {

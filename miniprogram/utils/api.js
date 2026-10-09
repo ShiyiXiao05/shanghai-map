@@ -1,5 +1,7 @@
 import { BASE_URL, CLOUD_ENV_ID, CLOUD_SERVICE_NAME } from './config.js';
 import { getAuthToken } from './storage.js';
+import { loadMedia, readPlaces, fresh, savePlaces, upsertPlace, findPlace, removePlace, clearMedia } from './cache.js';
+const cache = { loadMedia, readPlaces, fresh, savePlaces, upsertPlace, findPlace, removePlace, clearMedia };
 
 // 与网页版 api.js 对齐的完整 API 封装。
 // 配置了 CLOUD_ENV_ID 时走微信云托管 callContainer 通道（免域名备案，正式版可用）；
@@ -115,20 +117,44 @@ export const api = {
   // 地图
   createMap: (data) => request('POST', '/api/maps', { body: data }),
   getMap: (code) => get(`/api/maps/${encodeURIComponent(code)}`),
+  renameMap: (code, name) => request('PUT', `/api/maps/${encodeURIComponent(code)}`, { body: { name } }),
+  exportMap: (code) => get(`/api/maps/${encodeURIComponent(code)}/export`),
+  deleteMap: (code) => request('DELETE', `/api/maps/${encodeURIComponent(code)}`),
   memories: (code) => get(`/api/maps/${encodeURIComponent(code)}/memories`).then((d) => d.memories),
 
   // 地点
-  listPlaces: (code) =>
-    get(`/api/places?map=${encodeURIComponent(code)}`).then((d) => d.places),
+  listPlaces: (code, { force = false } = {}) =>
+    Promise.resolve().then(() => {
+      const entry = cache.readPlaces(code);
+      if (!force && cache.fresh(entry)) return entry.places;
+      return get(`/api/places?map=${encodeURIComponent(code)}`).then((d) => {
+        cache.savePlaces(code, d.places);
+        return d.places;
+      });
+    }),
   createPlace: (code, data) =>
-    request('POST', '/api/places', { body: { ...data, map_code: code } }),
+    request('POST', '/api/places', { body: { ...data, map_code: code } }).then((place) => {
+      if (place && place.id !== undefined) cache.upsertPlace(code, place);
+      return place;
+    }),
   updatePlace: (code, id, patch) =>
-    request('PUT', `/api/places/${id}`, { body: patch, mapCode: code }),
-  deletePlace: (code, id) => request('DELETE', `/api/places/${id}`, { mapCode: code }),
+    request('PUT', `/api/places/${id}`, { body: patch, mapCode: code }).then((place) => {
+      if (place && place.id !== undefined) cache.upsertPlace(code, place);
+      return place;
+    }),
+  deletePlace: (code, id) => request('DELETE', `/api/places/${id}`, { mapCode: code }).then(() => { cache.removePlace(code, id); }),
   toggleWish: (code, id) =>
-    request('POST', `/api/places/${id}/wish`, { body: { map_code: code } }),
+    request('POST', `/api/places/${id}/wish`, { body: { map_code: code } }).then((result) => {
+      const place = cache.findPlace(code, id);
+      if (place) cache.upsertPlace(code, { ...place, wishes: result.wishes || [] });
+      return result;
+    }),
   togglePublic: (code, id) =>
-    request('POST', `/api/places/${id}/public`, { body: { map_code: code } }),
+    request('POST', `/api/places/${id}/public`, { body: { map_code: code } }).then((result) => {
+      const place = cache.findPlace(code, id);
+      if (place) cache.upsertPlace(code, { ...place, is_public: result.is_public });
+      return result;
+    }),
 
   // 行程单
   itinerary: (code) =>
@@ -139,27 +165,26 @@ export const api = {
     ),
 
   // 照片
-  listPhotos: (code, placeId) =>
-    get(`/api/places/${placeId}/photos?map=${encodeURIComponent(code)}`).then((d) => d.photos),
+  listPhotos: (code, placeId, { force = false } = {}) =>
+    cache.loadMedia(code, placeId, 'photos', () => get(`/api/places/${placeId}/photos?map=${encodeURIComponent(code)}`).then((d) => d.photos), force),
   // CDN 模式（cfg.cdn=true）只传 full，服务端自行派生缩略图；无 CDN 时 thumb 必传
   uploadPhoto: (code, placeId, { full, thumb }) =>
     request('POST', `/api/places/${placeId}/photos`, {
       body: { map_code: code, full, ...(thumb ? { thumb } : {}) },
-    }),
+    }).then((result) => { cache.clearMedia(code, placeId); return result; }),
   // 注意：这里硬编码了 Render 域名 BASE_URL。云托管通道（CLOUD_ENV_ID）下仍依赖 Render：
   // 存量 DB 照片只能通过该端点取出；后续若迁移到服务端下发 URL，再统一替换
   photoUrl: (code, photoId) =>
     `${BASE_URL}/api/photos/${photoId}?map=${encodeURIComponent(code)}`,
-  deletePhoto: (code, photoId) =>
-    request('DELETE', `/api/photos/${photoId}`, { mapCode: code }),
+  deletePhoto: (code, photoId) => request('DELETE', `/api/photos/${photoId}`, { mapCode: code }),
 
   // 留言
-  listComments: (code, placeId) =>
-    get(`/api/places/${placeId}/comments?map=${encodeURIComponent(code)}`).then((d) => d.comments),
+  listComments: (code, placeId, { force = false } = {}) =>
+    cache.loadMedia(code, placeId, 'comments', () => get(`/api/places/${placeId}/comments?map=${encodeURIComponent(code)}`).then((d) => d.comments), force),
   createComment: (code, placeId, body) =>
     request('POST', `/api/places/${placeId}/comments`, {
       body: { map_code: code, body },
-    }),
+    }).then((result) => { cache.clearMedia(code, placeId); return result; }),
   deleteComment: (code, commentId) =>
     request('DELETE', `/api/comments/${commentId}`, { mapCode: code }),
 

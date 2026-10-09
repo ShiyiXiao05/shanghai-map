@@ -2,6 +2,9 @@ const app = getApp();
 const { api } = require('../../utils/api.js');
 const { categoryMeta, CATEGORIES } = require('../../utils/config.js');
 const storage = require('../../utils/storage.js');
+const { displayEmoji } = require('../../utils/emoji.js');
+const cache = require('../../utils/cache.js');
+const { applyTheme } = require('../../utils/theme.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
@@ -48,6 +51,8 @@ Page({
     randomOpen: false,
     randomDrawing: false,
     randomPlace: null,
+    selectedPlace: null,
+    mapFraction: 0.43,
   },
 
   mapCtx: null,
@@ -57,7 +62,10 @@ Page({
   noop() {},
 
   onLoad(query) {
-    const sys = wx.getSystemInfoSync();
+    applyTheme(this);
+    const sys = typeof wx.getWindowInfo === 'function'
+      ? { ...wx.getWindowInfo(), ...(typeof wx.getAppBaseInfo === 'function' ? wx.getAppBaseInfo() : {}) }
+      : wx.getSystemInfoSync();
     this.setData({ statusBarHeight: sys.statusBarHeight || 20, isDark: sys.theme === 'dark' });
     // 避让右上角微信胶囊：按钮区右边界缩到胶囊左侧，导航栏高度包住胶囊
     const menu = wx.getMenuButtonBoundingClientRect();
@@ -71,6 +79,8 @@ Page({
     }
     this.mapCtx = wx.createMapContext('mainMap', this);
     this.restoreSort();
+    const savedFraction = Number(wx.getStorageSync('wish-map-fraction'));
+    if (savedFraction >= 0.25 && savedFraction <= 0.7) this.setData({ mapFraction: savedFraction });
 
     // 分享链接直达：?map=CODE（加入地图）与 ?place=ID（打开详情，列表就绪后仅消费一次）
     if (query && query.place) this.pendingPlaceId = Number(query.place) || null;
@@ -85,6 +95,7 @@ Page({
   },
 
   onShow() {
+    applyTheme(this);
     const g = app.globalData;
     if (!g.map && !g.isPublicView) {
       this.enterEntry();
@@ -138,7 +149,7 @@ Page({
   onRefresherRefresh() {
     if (this.data.refreshing) return;
     this.setData({ refreshing: true });
-    this.loadPlaces().finally(() => this.setData({ refreshing: false }));
+    this.loadPlaces(true).finally(() => this.setData({ refreshing: false }));
   },
 
   toggleMapFs() {
@@ -148,6 +159,39 @@ Page({
   onUnload() {
     this._unloaded = true; // 图标兜底超时回调可能晚于卸载，用它拦住 setData
     clearInterval(this.randomTimer);
+  },
+
+  onHide() {
+    clearInterval(this.randomTimer);
+    this.randomTimer = null;
+  },
+
+  onMapResize(event) {
+    const height = Number(event.detail && event.detail.height);
+    if (!height) return;
+    const fraction = Math.max(0.25, Math.min(0.7, Number(this.data.mapFraction) + (Number(event.detail.deltaY) || 0) / height));
+    this.setData({ mapFraction: fraction });
+    wx.setStorageSync('wish-map-fraction', fraction);
+  },
+
+  onDividerStart(event) {
+    this._dividerStartY = Number(event.touches && event.touches[0] && event.touches[0].clientY);
+    this._dividerStartFraction = this.data.mapFraction;
+  },
+
+  onDividerMove(event) {
+    const y = Number(event.touches && event.touches[0] && event.touches[0].clientY);
+    const start = Number(this._dividerStartY);
+    if (!Number.isFinite(y) || !Number.isFinite(start)) return;
+    const sys = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const height = Math.max(1, Number(sys.windowHeight) - (Number(this.data.statusBarHeight) || 20) - 56);
+    const fraction = Math.max(0.25, Math.min(0.7, this._dividerStartFraction + (y - start) / height));
+    this.setData({ mapFraction: fraction });
+  },
+
+  onDividerEnd() {
+    wx.setStorageSync('wish-map-fraction', this.data.mapFraction);
+    this._dividerStartY = null;
   },
 
   // 「附近」：不调用地理位置接口，按地图当前中心点近似排序
@@ -202,14 +246,13 @@ Page({
     let ticks = 0;
     this.randomTimer = setInterval(() => {
       const place = places[Math.floor(Math.random() * places.length)];
-      const meta = categoryMeta(place.category);
-      this.setData({ randomPlace: { ...place, emoji: meta.emoji } });
+      this.setData({ randomPlace: { ...place, emoji: displayEmoji(place) } });
       ticks += 1;
       if (ticks < 12) return;
       clearInterval(this.randomTimer);
       this.randomTimer = null;
       this.setData({ randomDrawing: false });
-    }, 70);
+    }, 200);
   },
 
   closeRandom() {
@@ -258,15 +301,16 @@ Page({
     }
   },
 
-  async loadPlaces() {
+  async loadPlaces(force = false) {
     const code = app.globalData.map?.code || '';
     const requestId = (this._placesRequestId || 0) + 1;
     this._placesRequestId = requestId;
     // 先清空：避免「新地图名 + 旧地图数据」，也避免旧数据在失败时被当成有效结果
     this.setData({ places: [], filtered: [], markers: [], loading: true, loadError: '' });
     try {
-      const places = code ? await api.listPlaces(code) : await api.publicPlaces();
+      const places = code ? await api.listPlaces(code, { force }) : await api.publicPlaces();
       if (requestId !== this._placesRequestId || code !== (app.globalData.map?.code || '')) return;
+      cache.savePlaces(code, places);
       this.setData({ places, loading: false, loadError: '' });
       this.applyFilters();
     } catch (err) {
@@ -277,7 +321,7 @@ Page({
   },
 
   retryLoad() {
-    this.loadPlaces();
+    this.loadPlaces(true);
   },
 
   applyFilters() {
@@ -298,7 +342,7 @@ Page({
       const meta = categoryMeta(p.category);
       return {
         ...p,
-        emoji: meta.emoji,
+        emoji: displayEmoji(p),
         emojiColor: meta.color,
         wishCount: p.wishes?.length ?? 0,
       };
@@ -345,7 +389,7 @@ Page({
     await Promise.race([run, timeout]);
   },
 
-  drawDotIcon(color) {
+  drawDotIcon(color, emoji = '', visited = false) {
     return new Promise((resolve) => {
       // 任何一步异常都 resolve('')，保证 Promise 一定 settle（页面用系统默认标记兜底）
       try {
@@ -374,6 +418,22 @@ Page({
               ctx.lineWidth = 4;
               ctx.strokeStyle = '#ffffff';
               ctx.stroke();
+              if (emoji) {
+                ctx.font = '22px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(emoji, 22, 22);
+              }
+              if (visited) {
+                ctx.beginPath();
+                ctx.arc(35, 35, 7, 0, Math.PI * 2);
+                ctx.fillStyle = '#8a94a3';
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillText('✓', 35, 35);
+              }
               wx.canvasToTempFilePath({
                 canvas,
                 width: 44,
@@ -401,23 +461,22 @@ Page({
   renderMarkers(places) {
     const markerIcons = this.data.markerIcons || {};
     const hasIcon = !!markerIcons.visited || CATEGORIES.some((c) => markerIcons[c.id]);
-    if (!hasIcon && (places || []).length > 0 && !this._warnedNoIcon) {
-      // 图标没生成成功也要把点位画出来：不带 iconPath 时地图用系统默认标记
-      this._warnedNoIcon = true;
-      console.warn('[index] marker 图标缺失，改用系统默认标记');
-    }
+    // 图标仍在生成时先使用系统默认标记，生成完成后会增量替换。
     const markers = (places || []).map((p) => {
       const meta = categoryMeta(p.category);
+      const emoji = displayEmoji(p);
+      const selected = this.data.selectedPlace && Number(this.data.selectedPlace.id) === Number(p.id);
       const iconKey = p.visited ? 'visited' : p.category;
-      const iconPath = markerIcons[iconKey] || markerIcons.visited || '';
+      const emojiKey = `emoji:${displayEmoji(p)}:${p.visited ? 1 : 0}`;
+      const iconPath = markerIcons[emojiKey] || markerIcons[iconKey] || markerIcons.visited || '';
       const marker = {
         id: p.id,
         latitude: p.lat,
         longitude: p.lng,
-        width: p.visited ? 22 : 26,
-        height: p.visited ? 22 : 26,
+        width: selected ? 30 : p.visited ? 22 : 26,
+        height: selected ? 30 : p.visited ? 22 : 26,
         callout: {
-          content: `${meta.emoji} ${p.name}`,
+          content: `${emoji} ${p.name}${p.visited ? ' · ✓' : ''}`,
           display: 'BYCLICK',
           borderRadius: 8,
           padding: 6,
@@ -425,16 +484,45 @@ Page({
           bgColor: '#ffffff',
           color: '#1f2d2a',
         },
+        label: {
+          content: emoji,
+          color: '#ffffff',
+          fontSize: 12,
+          anchorX: 0,
+          anchorY: 0,
+          borderRadius: 10,
+          bgColor: meta.color,
+          padding: 3,
+        },
       };
       if (iconPath) marker.iconPath = iconPath; // 缺图标时不传该字段，交给系统默认标记
       return marker;
     });
     this.setData({ markers });
+    this.preparePlaceIcons(places);
+  },
+
+  async preparePlaceIcons(places) {
+    if (this._placeIconsRunning || this._unloaded) return;
+    const wanted = [];
+    const seen = new Set();
+    for (const place of places || []) {
+      const key = `emoji:${displayEmoji(place)}:${place.visited ? 1 : 0}`;
+      if (!seen.has(key) && !this.data.markerIcons[key]) { seen.add(key); wanted.push({ key, place }); }
+      if (wanted.length >= 128) break;
+    }
+    if (!wanted.length) return;
+    this._placeIconsRunning = true;
+    const icons = { ...(this.data.markerIcons || {}) };
+    try {
+      for (const { key, place } of wanted) icons[key] = await this.drawDotIcon(categoryMeta(place.category).color, displayEmoji(place), place.visited);
+      if (!this._unloaded) { this.setData({ markerIcons: icons }); this.renderMarkers(this.data.filtered); }
+    } finally { this._placeIconsRunning = false; }
   },
 
   onMarkerTap(event) {
     const place = this.data.places.find((p) => p.id === event.detail.markerId);
-    if (place) this.openDetail(place);
+    if (place) this.selectPlace(place);
   },
 
   openDetail(place) {
@@ -446,8 +534,20 @@ Page({
     const id = event.currentTarget.dataset.id;
     const place = this.data.places.find((p) => p.id === Number(id));
     if (!place) return;
-    this.mapCtx.moveToLocation({ longitude: place.lng, latitude: place.lat });
-    this.openDetail(place);
+    this.selectPlace(place);
+  },
+
+  selectPlace(place) {
+    if (!place) return;
+    this.setData({ selectedPlace: { ...place, emoji: displayEmoji(place) }, longitude: place.lng, latitude: place.lat });
+    this.renderMarkers(this.data.filtered);
+    this.mapCtx && this.mapCtx.moveToLocation({ longitude: place.lng, latitude: place.lat });
+  },
+
+  closePreview() { this.setData({ selectedPlace: null }); this.renderMarkers(this.data.filtered); },
+
+  openSelectedDetail() {
+    if (this.data.selectedPlace) this.openDetail(this.data.selectedPlace);
   },
 
   toggleCategory(event) {

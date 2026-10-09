@@ -1,5 +1,6 @@
 const app = getApp();
 const { api } = require('../../utils/api.js');
+const { applyTheme } = require('../../utils/theme.js');
 
 // 权限类失败（相册写入被拒、隐私授权未声明等）统一引导去设置页
 const AUTH_PATTERN = /auth|deny|privacy|scope/i;
@@ -16,6 +17,7 @@ Page({
   },
 
   onShow() {
+    applyTheme(this);
     const g = app.globalData;
     if (!g.map) {
       // 没有地图就不该画海报：给出返回/去加入的入口，而不是停在空白页

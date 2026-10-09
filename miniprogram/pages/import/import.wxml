@@ -1,4 +1,4 @@
-<view class="page">
+<page-meta page-style="{{themeStyle}}"/><view class="page">
   <view class="hint">把高德 App 里分享出来的文本（含链接）粘贴到下面，自动解析地点与坐标。</view>
   <view class="btn" bindtap="readClipboard">📋 读取剪贴板</view>
 
@@ -23,6 +23,7 @@
         <view class="input">{{category}} ▾</view>
       </picker>
     </view>
+    <emoji-picker value="{{emoji}}" category="{{category}}" bind:change="onEmojiChange" />
     <view class="identity">📮 将以「{{nickname || '登录昵称'}}」的身份导入</view>
     <view class="btn btn-primary {{saving ? 'btn-busy' : ''}}" bindtap="save">{{saving ? '导入中…' : '导入到地图'}}</view>
   </block>

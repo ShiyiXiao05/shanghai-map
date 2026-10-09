@@ -1,4 +1,4 @@
-<view class="page">
+<page-meta page-style="{{themeStyle}}"/><view class="page">
   <!-- 图标生成用隐藏 canvas -->
   <canvas type="2d" id="icon-factory" class="icon-factory"></canvas>
 
@@ -18,7 +18,7 @@
   </view>
 
   <!-- 地图（可全屏铺满整屏） -->
-  <view class="map-wrap {{isMapFs ? 'map-fs' : ''}}">
+  <view class="map-wrap {{isMapFs ? 'map-fs' : ''}}" style="flex: {{mapFraction}};">
     <map
       id="mainMap"
       class="map"
@@ -37,8 +37,20 @@
     </view>
   </view>
 
+  <view class="map-divider" catchtouchstart="onDividerStart" catchtouchmove="onDividerMove" catchtouchend="onDividerEnd">⋮⋮</view>
+
   <!-- 底部列表面板 -->
-  <view class="panel">
+  <view class="panel" style="flex: {{1 - mapFraction}}; height: auto;">
+    <view wx:if="{{selectedPlace}}" class="place-preview">
+      <view class="preview-emoji">{{selectedPlace.emoji}}</view>
+      <view class="preview-main">
+        <view class="preview-name">{{selectedPlace.name}}</view>
+        <view class="preview-meta">{{selectedPlace.category}}{{selectedPlace.address ? ' · ' + selectedPlace.address : ''}}</view>
+        <view wx:if="{{selectedPlace.description}}" class="preview-desc">{{selectedPlace.description}}</view>
+      </view>
+      <view class="preview-close" catchtap="closePreview">✕</view>
+      <view class="btn btn-primary btn-mini" catchtap="openSelectedDetail">查看详情</view>
+    </view>
     <view class="filters">
       <scroll-view scroll-x class="chips-scroll">
         <view class="chips">

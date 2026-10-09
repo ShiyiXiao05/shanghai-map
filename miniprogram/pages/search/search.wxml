@@ -1,4 +1,4 @@
-<view class="page">
+<page-meta page-style="{{themeStyle}}"/><view class="page">
   <!-- 地图手动点选：未开通地理位置接口权限时的兜底，不依赖任何隐私接口 -->
   <view wx:if="{{mapPick}}" class="map-pick">
     <view class="map-pick-tip">点一下地图上的位置（可拖动缩放），再点「确定」</view>
@@ -61,6 +61,8 @@
     <text class="label">标签</text>
     <input class="input" value="{{tags}}" maxlength="100" placeholder="选填，逗号分隔，比如：椒麻鸡,面馆" bindinput="onTags" />
   </view>
+
+  <emoji-picker value="{{emoji}}" category="{{category}}" bind:change="onEmojiChange" />
 
   <view class="identity" wx:if="{{nickname}}">📮 将以「{{nickname}}」的身份添加</view>
   <view class="identity" wx:else>📮 保存时需登录并确认昵称</view>

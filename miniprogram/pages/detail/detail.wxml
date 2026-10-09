@@ -1,4 +1,4 @@
-<view class="page" wx:if="{{place}}">
+<page-meta page-style="{{themeStyle}}"/><view class="page" wx:if="{{place}}">
   <!-- 查看态 -->
   <block wx:if="{{!editing}}">
     <view class="head" style="border-top: 8rpx solid {{meta.color}};">
@@ -7,7 +7,7 @@
         <text wx:if="{{place.visited}}" class="visited">✓ 已去过</text>
       </view>
       <view class="meta-row">
-        <text class="cat-tag" style="color: {{meta.color}}; background: {{meta.color}}18;">{{meta.emoji}} {{place.category}}</text>
+        <text class="cat-tag" style="color: {{meta.color}}; background: {{meta.color}}18;">{{place.emoji || meta.emoji}} {{place.category}}</text>
         <text wx:if="{{place.added_by}}" class="meta">{{place.added_by}} 标记</text>
       </view>
       <view class="address" wx:if="{{place.address}}">📍 {{place.address}}</view>
@@ -37,7 +37,7 @@
       </view>
       <view class="photo-grid">
         <view wx:for="{{photos}}" wx:key="id" class="photo-cell">
-          <image class="photo" src="{{item.thumb}}" mode="aspectFill" data-index="{{index}}" bindtap="previewPhoto" />
+          <image class="photo" src="{{item.thumb || item.fullUrl}}" mode="aspectFill" data-index="{{index}}" bindtap="previewPhoto" />
           <view class="photo-del" wx:if="{{!isPublicView}}" data-id="{{item.id}}" catchtap="removePhoto">✕</view>
         </view>
       </view>
@@ -76,6 +76,7 @@
         <view class="input picker-value">{{form.category}} ▾</view>
       </picker>
     </view>
+    <emoji-picker value="{{form.emoji}}" category="{{form.category}}" bind:change="onFormEmoji" />
     <view class="field">
       <text class="label">描述</text>
       <textarea class="input textarea" value="{{form.description}}" maxlength="500" data-key="description" bindinput="onFormInput" />

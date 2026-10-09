@@ -8,7 +8,8 @@
     "pages/poster/poster",
     "pages/import/import",
     "pages/itinerary/itinerary",
-    "pages/trash/trash"
+    "pages/trash/trash",
+    "pages/changelog/changelog"
   ],
   "window": {
     "backgroundColor": "@bgColor",
@@ -20,7 +21,8 @@
   "darkmode": true,
   "themeLocation": "theme.json",
   "usingComponents": {
-    "nickname-modal": "/components/nickname-modal/nickname-modal"
+    "nickname-modal": "/components/nickname-modal/nickname-modal",
+    "emoji-picker": "/components/emoji-picker/emoji-picker"
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json",

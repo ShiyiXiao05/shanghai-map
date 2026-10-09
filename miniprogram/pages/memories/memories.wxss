@@ -45,6 +45,7 @@
   font-size: 30rpx;
   font-weight: 600;
 }
+.m-emoji { margin-top: 6rpx; font-size: 28rpx; }
 
 .m-meta {
   margin-top: 6rpx;

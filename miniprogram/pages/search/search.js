@@ -4,6 +4,8 @@ const { CATEGORIES } = require('../../utils/config.js');
 const auth = require('../../utils/auth.js');
 const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
+const { displayEmoji, validEmoji } = require('../../utils/emoji.js');
+const { applyTheme } = require('../../utils/theme.js');
 
 // 地图手动点选的初始中心（上海市中心）：全程不调用地理位置接口，因此不需要任何权限
 const SHANGHAI_CENTER = { latitude: 31.2304, longitude: 121.4737 };
@@ -28,9 +30,11 @@ Page({
     tags: '',
     nickname: '', // 登录身份展示用；署名由服务端按登录昵称盖章
     saving: false,
+    emoji: '',
   },
 
   onShow() {
+    applyTheme(this);
     this.setData({ nickname: storage.getNickname() });
   },
 
@@ -91,12 +95,18 @@ Page({
     this.setData({ tags: event.detail.value });
   },
 
+  onEmojiChange(event) { this.setData({ emoji: event.detail.value }); },
+
   async save() {
     if (this.submitting) return; // 防重复提交：弱网连点会创建多个地点
     const { picked, category, description, priceHint, hours, tags } = this.data;
     const name = (this.data.name || '').trim() || (picked && picked.name) || '';
     if (!picked) {
       wx.showToast({ title: '先选择一个位置', icon: 'none' });
+      return;
+    }
+    if (!name) {
+      wx.showToast({ title: '请填写地点名称', icon: 'none' });
       return;
     }
     this.submitting = true;
@@ -106,7 +116,7 @@ Page({
       if (!nickname) return;
       this.setData({ saving: true });
       await api.createPlace(app.globalData.map.code, {
-        name: name || '未命名地点',
+        name,
         category,
         description: description.trim(),
         price_hint: priceHint.trim(),
@@ -115,6 +125,7 @@ Page({
         address: picked.address,
         lng: picked.longitude,
         lat: picked.latitude,
+        emoji: validEmoji(this.data.emoji) ? this.data.emoji : '',
       });
       wx.showToast({ title: '已添加到地图' });
       setTimeout(() => wx.navigateBack(), 700);

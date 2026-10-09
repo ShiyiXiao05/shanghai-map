@@ -7,6 +7,8 @@ const {
   isPublicView,
 } = require('./utils/storage.js');
 const { CLOUD_ENV_ID } = require('./utils/config.js');
+const { watchTheme } = require('./utils/theme.js');
+const { initUpdates } = require('./utils/updates.js');
 
 App({
   globalData: {
@@ -24,6 +26,8 @@ App({
       wx.cloud.init({ env: CLOUD_ENV_ID, traceUser: false });
     }
     this.restoreSession();
+    watchTheme();
+    initUpdates();
   },
 
   restoreSession() {
@@ -42,6 +46,8 @@ App({
 
   // 加入/切换地图会话
   enterMap(map) {
+    this.globalData.detailPlace = null;
+    this.globalData.detailMapCode = '';
     this.globalData.map = map;
     this.globalData.isPublicView = false;
     setPublicView(false);
@@ -51,6 +57,8 @@ App({
 
   // 退出到公共广场
   exitToPublic() {
+    this.globalData.detailPlace = null;
+    this.globalData.detailMapCode = '';
     this.globalData.map = null;
     this.globalData.isPublicView = true;
     setPublicView(true);

@@ -4,6 +4,8 @@ const { categoryMeta, CATEGORIES } = require('../../utils/config.js');
 const auth = require('../../utils/auth.js');
 const identityBehavior = require('../../utils/identity-behavior.js');
 const { compressToLimit, fileToDataUrl } = require('../../utils/image.js');
+const { displayEmoji, validEmoji } = require('../../utils/emoji.js');
+const { applyTheme } = require('../../utils/theme.js');
 
 // 照片上传预算：微信云托管 callContainer 请求体上限 100K（官方明确「请求中不建议包含图片」），
 // 因此整包按 92K 预留给 base64 字符串；无 CDN 时服务端还要求 thumb ≤ maxThumbBytes
@@ -33,6 +35,7 @@ Page({
   },
 
   onLoad(query) {
+    applyTheme(this);
     this.placeId = Number(query.placeId);
     // 只读标记：进页面先按全局会话判定，refresh() 拿到接口结果后再以 found.publicOnly 为准
     this.publicOnly = Boolean(app.globalData && app.globalData.isPublicView);
@@ -40,6 +43,7 @@ Page({
   },
 
   onShow() {
+    applyTheme(this);
     this.refresh();
   },
 
@@ -165,8 +169,8 @@ Page({
     });
     wx.setNavigationBarTitle({ title: place.name });
     if (code && !found.publicOnly) {
-      this.loadPhotos();
-      this.loadComments();
+      this.loadPhotos(false);
+      this.loadComments(false);
     } else {
       // 公开只读：照片/留言需要邀请码，不加载
       this.setData({ photos: [], comments: [] });
@@ -181,9 +185,9 @@ Page({
     wx.navigateBack();
   },
 
-  async loadPhotos() {
+  async loadPhotos(force = false) {
     try {
-      const photos = await api.listPhotos(this.mapCode(), this.placeId);
+      const photos = await api.listPhotos(this.mapCode(), this.placeId, { force });
       this.setData({
         photos: photos.map((p) => ({
           ...p,
@@ -196,9 +200,9 @@ Page({
     }
   },
 
-  async loadComments() {
+  async loadComments(force = false) {
     try {
-      const comments = await api.listComments(this.mapCode(), this.placeId);
+      const comments = await api.listComments(this.mapCode(), this.placeId, { force });
       this.setData({ comments });
     } catch {
       /* 留言加载失败不阻塞 */
@@ -312,7 +316,7 @@ Page({
         await api.uploadPhoto(this.mapCode(), this.placeId, needThumb ? { full, thumb } : { full });
         wx.hideLoading();
         wx.showToast({ title: '照片已添加' });
-        this.loadPhotos();
+        this.loadPhotos(true);
       } catch (err) {
         abort(this.photoErrorMessage(err));
       }
@@ -372,7 +376,7 @@ Page({
       if (!confirm) return;
       try {
         await api.deletePhoto(this.mapCode(), id);
-        await this.loadPhotos();
+        await this.loadPhotos(true);
       } catch (err) {
         wx.showToast({ title: err.message, icon: 'none' });
       }
@@ -393,7 +397,7 @@ Page({
       try {
         await api.createComment(this.mapCode(), this.placeId, body);
         this.setData({ commentText: '' });
-        await this.loadComments();
+        await this.loadComments(true);
       } catch (err) {
         wx.showToast({ title: err.message, icon: 'none' });
       }
@@ -409,7 +413,7 @@ Page({
       if (!confirm) return;
       try {
         await api.deleteComment(this.mapCode(), id);
-        await this.loadComments();
+        await this.loadComments(true);
       } catch (err) {
         wx.showToast({ title: err.message, icon: 'none' });
       }
@@ -424,11 +428,12 @@ Page({
       form: {
         name: place.name,
         category: place.category,
+        emoji: place.emoji ?? '',
         description: place.description ?? '',
         address: place.address ?? '',
         price_hint: place.price_hint ?? '',
         hours: place.hours ?? '',
-        tags: place.tags ?? '',
+          tags: place.tags ?? '',
       },
     });
   },
@@ -442,6 +447,8 @@ Page({
     this.setData({ 'form.category': this.data.categories[event.detail.value].id });
   },
 
+  onFormEmoji(event) { this.setData({ 'form.emoji': event.detail.value }); },
+
   cancelEdit() {
     this.setData({ editing: false });
   },
@@ -454,7 +461,7 @@ Page({
         return;
       }
       try {
-        await api.updatePlace(this.mapCode(), this.placeId, {
+        const updated = await api.updatePlace(this.mapCode(), this.placeId, {
           name: f.name.trim(),
           category: f.category,
           description: f.description.trim(),
@@ -462,8 +469,9 @@ Page({
           price_hint: (f.price_hint ?? '').trim(),
           hours: (f.hours ?? '').trim(),
           tags: (f.tags ?? '').trim(),
+          emoji: validEmoji(f.emoji ?? '') ? f.emoji.trim() : '',
         });
-        this.setData({ editing: false });
+        this.setData({ editing: false, place: updated || { ...this.data.place, ...f, emoji: f.emoji || '' } });
         await this.refresh();
       } catch (err) {
         wx.showToast({ title: err.message, icon: 'none' });

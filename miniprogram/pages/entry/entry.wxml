@@ -1,4 +1,4 @@
-<view class="page">
+<page-meta page-style="{{themeStyle}}"/><view class="page">
   <view wx:if="{{mode === 'list'}}" class="body">
     <view class="title">我的地图</view>
     <view class="hint">当前：{{currentCode || '未加入'}}</view>
@@ -24,6 +24,22 @@
     <view class="actions" wx:if="{{joinedMaps.length > 0}}">
       <view class="btn" bindtap="goMemories">📷 回忆时间线</view>
       <view class="btn" bindtap="goPoster">🖼 分享海报</view>
+    </view>
+    <view class="section" wx:if="{{currentCode}}">
+      <view class="section-title">当前地图设置</view>
+      <view class="actions">
+        <view class="btn" bindtap="startRename">✏️ 改名</view>
+        <view class="btn" bindtap="exportMap">⇩ 导出 JSON</view>
+        <view class="btn btn-danger" bindtap="deleteMap">🗑️ 删除整张地图</view>
+      </view>
+    </view>
+    <view class="section">
+      <view class="section-title">外观与版本</view>
+      <picker range="{{themeModes}}" value="{{themeIndex}}" bindchange="onThemeChange"><view class="input">{{themeModes[themeIndex]}} ▾</view></picker>
+      <view class="actions">
+        <view class="btn" bindtap="goChangelog">更新日志</view>
+        <view class="btn" bindtap="checkUpdates">检查更新 · {{version}}</view>
+      </view>
     </view>
     <view class="actions">
       <view class="btn" bindtap="enterPublic">🌐 进入公共广场</view>
@@ -73,6 +89,12 @@
       <view class="btn" data-mode="list" bindtap="switchMode">返回</view>
       <view class="btn btn-primary" bindtap="joinMap">加入这张地图</view>
     </view>
+  </view>
+
+  <view wx:elif="{{mode === 'rename'}}" class="body">
+    <view class="title">修改地图名称</view>
+    <view class="field"><text class="label">地图名称</text><input class="input" value="{{name}}" maxlength="40" bindinput="onNameInput" /></view>
+    <view class="actions"><view class="btn" data-mode="list" bindtap="switchMode">取消</view><view class="btn btn-primary" bindtap="renameMap">保存</view></view>
   </view>
 
   <view wx:elif="{{mode === 'created'}}" class="body created">

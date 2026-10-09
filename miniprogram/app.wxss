@@ -20,17 +20,17 @@ page {
 
 @media (prefers-color-scheme: dark) {
   page {
-    --paper: #0a0f1e;
-    --card: #10182b;
-    --ink: #e8ecf8;
-    --ink-soft: #9aa7c7;
-    --ink-faint: #5f6c8f;
-    --line: #263352;
-    --metro: #22d3ee;
-    --metro-soft: rgba(34, 211, 238, 0.12);
-    --brick: #ff5d7a;
-    --neon-a: #ff3d81;
-    --neon-b: #22d3ee;
+    --paper: #171a1b;
+    --card: #222627;
+    --ink: #edf1ef;
+    --ink-soft: #b1bdb8;
+    --ink-faint: #8b9b93;
+    --line: #3a4240;
+    --metro: #78d6b0;
+    --metro-soft: rgba(120, 214, 176, 0.1);
+    --brick: #f58d83;
+    --neon-a: #287a60;
+    --neon-b: #397b8d;
     --grad: linear-gradient(135deg, var(--neon-a), var(--neon-b));
   }
 }

@@ -4,6 +4,8 @@ const { CATEGORIES } = require('../../utils/config.js');
 const auth = require('../../utils/auth.js');
 const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
+const { validEmoji } = require('../../utils/emoji.js');
+const { applyTheme } = require('../../utils/theme.js');
 
 // 畸形百分号编码（如 %E0%A4%A）会让 decodeURIComponent 抛 URIError，统一兜底文案
 const BAD_LINK_TIP = '链接格式不正确，请在高德 App 里重新分享';
@@ -67,9 +69,11 @@ Page({
     category: CATEGORIES[0].id,
     nickname: '', // 登录身份展示用；署名由服务端按登录昵称盖章
     saving: false,
+    emoji: '',
   },
 
   onShow() {
+    applyTheme(this);
     this.setData({ nickname: storage.getNickname() });
   },
 
@@ -110,6 +114,8 @@ Page({
     this.setData({ category: this.data.categories[event.detail.value].id });
   },
 
+  onEmojiChange(event) { this.setData({ emoji: event.detail.value }); },
+
   async save() {
     if (this.submitting) return; // 防重复提交：弱网连点会导入多个相同地点
     const r = this.data.result;
@@ -126,6 +132,7 @@ Page({
         address: r.address ?? '',
         lng: r.lng,
         lat: r.lat,
+        emoji: validEmoji(this.data.emoji) ? this.data.emoji : '',
       });
       wx.showToast({ title: '已导入' });
       setTimeout(() => wx.navigateBack({ delta: 2 }), 700);

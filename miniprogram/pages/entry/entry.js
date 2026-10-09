@@ -3,6 +3,8 @@ const { api } = require('../../utils/api.js');
 const auth = require('../../utils/auth.js');
 const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
+const { applyTheme, getThemeMode, setThemeMode, THEME_MODES, THEME_LABELS } = require('../../utils/theme.js');
+const { checkUpdates, CLIENT_VERSION } = require('../../utils/updates.js');
 
 Page({
   behaviors: [identityBehavior],
@@ -10,18 +12,94 @@ Page({
   data: {
     joinedMaps: [],
     currentCode: '',
-    mode: 'list', // list | create | join | created
+    mode: 'list', // list | create | join | rename | created
     name: '',
     nickname: '', // 登录身份展示用；创建者署名由服务端按登录昵称盖章
     code: '',
     createdCode: '',
+    themeModes: THEME_LABELS,
+    themeIndex: THEME_MODES.indexOf(getThemeMode()),
+    version: CLIENT_VERSION,
   },
 
   onShow() {
+    applyTheme(this);
     this.setData({
       joinedMaps: storage.getJoinedMaps(),
       currentCode: storage.getCurrentMapCode(),
       nickname: storage.getNickname(),
+    });
+  },
+
+  onThemeChange(event) {
+    const mode = THEME_MODES[Number(event.detail.value)] || 'system';
+    setThemeMode(mode);
+    this.setData({ themeIndex: THEME_MODES.indexOf(mode) });
+  },
+
+  goChangelog() { wx.navigateTo({ url: '/pages/changelog/changelog' }); },
+  checkUpdates() { checkUpdates(); },
+
+  startRename() {
+    if (!app.globalData.map) return;
+    this.setData({ mode: 'rename', name: app.globalData.map.name });
+  },
+
+  async renameMap() {
+    const name = this.data.name.trim();
+    if (!name || !app.globalData.map) return wx.showToast({ title: '地图名称不能为空', icon: 'none' });
+    if (this.renaming) return;
+    this.renaming = true;
+    try {
+      const map = await api.renameMap(app.globalData.map.code, name);
+      app.enterMap(map);
+      this.setData({ mode: 'list', name: '', joinedMaps: storage.getJoinedMaps() });
+      wx.showToast({ title: '地图名称已更新', icon: 'none' });
+    } catch (err) { wx.showToast({ title: err?.message || '改名失败，请重试', icon: 'none' }); }
+    finally { this.renaming = false; }
+  },
+
+  async exportMap() {
+    const code = app.globalData.map?.code;
+    if (!code) return;
+    try {
+      wx.showLoading({ title: '导出中…' });
+      const payload = await api.exportMap(code);
+      const fs = wx.getFileSystemManager && wx.getFileSystemManager();
+      if (!fs) throw new Error('当前微信版本不支持文件导出');
+      const path = `${wx.env.USER_DATA_PATH}/map-${code}-${Date.now()}.json`;
+      fs.writeFileSync(path, JSON.stringify(payload, null, 2), 'utf8');
+      wx.hideLoading();
+      if (typeof wx.shareFileMessage === 'function') wx.shareFileMessage({ filePath: path, fileName: `地图-${code}.json` });
+      else wx.showModal({ title: '导出完成', content: `文件已生成：${path}`, showCancel: false });
+    } catch (err) { wx.hideLoading(); wx.showToast({ title: err?.message || '导出失败，请重试', icon: 'none' }); }
+  },
+
+  deleteMap() {
+    const map = app.globalData.map;
+    if (!map?.code) return;
+    wx.showModal({
+      title: `删除「${map.name}」？`,
+      content: '地图、地点、照片、留言和行程都会永久删除，无法恢复。请先导出 JSON 备份。',
+      confirmText: '永久删除',
+      confirmColor: '#be4a43',
+      success: async (result) => {
+        if (!result.confirm || this.deleting) return;
+        this.deleting = true;
+        wx.showLoading({ title: '删除中…' });
+        try {
+          await api.deleteMap(map.code);
+          storage.removeJoinedMap(map.code);
+          storage.setCurrentMapCode('');
+          app.exitToPublic();
+          wx.hideLoading();
+          wx.showToast({ title: '地图已删除', icon: 'none' });
+          setTimeout(() => wx.reLaunch({ url: '/pages/index/index' }), 500);
+        } catch (err) {
+          wx.hideLoading();
+          wx.showToast({ title: err?.message || '删除失败，请重试', icon: 'none' });
+        } finally { this.deleting = false; }
+      },
     });
   },
 

@@ -1,4 +1,4 @@
-<view class="page">
+<page-meta page-style="{{themeStyle}}"/><view class="page">
   <block wx:if="{{noMap}}">
     <view class="empty">
       <view class="empty-title">还没有加入地图</view>

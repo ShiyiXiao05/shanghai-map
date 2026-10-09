@@ -1,0 +1,13 @@
+<view class="picker-row" bindtap="openPicker">
+  <text class="label">地点图标</text><text class="chosen">{{shown}}</text><text class="edit">修改 ›</text>
+</view>
+<view wx:if="{{open}}" class="mask" bindtap="closePicker">
+  <view class="sheet" catchtap="noop">
+    <view class="head"><text>地点 emoji</text><view class="close" bindtap="closePicker" aria-label="关闭">✕</view></view>
+    <scroll-view scroll-x class="groups"><view class="group-row"><view wx:for="{{groups}}" wx:key="name" data-index="{{index}}" bindtap="changeGroup" class="group {{group === index ? 'active' : ''}}">{{item.name}}</view></view></scroll-view>
+    <scroll-view scroll-y class="choice-scroll"><view class="grid"><view wx:for="{{choices}}" wx:key="*this" class="choice {{value === item ? 'selected' : ''}}" data-emoji="{{item}}" bindtap="select">{{item}}</view></view></scroll-view>
+    <view class="custom"><input class="custom-input" value="{{custom}}" maxlength="32" placeholder="自定义 emoji" bindinput="onCustom" /><view bindtap="useCustom" class="use">使用</view></view>
+    <text wx:if="{{customError}}" class="error">{{customError}}</text>
+    <view class="reset" bindtap="reset">恢复分类默认</view>
+  </view>
+</view>

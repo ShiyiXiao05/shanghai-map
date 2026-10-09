@@ -1,4 +1,4 @@
-<view class="page">
+<page-meta page-style="{{themeStyle}}"/><view class="page">
   <view wx:if="{{loading}}" class="tip">加载中…</view>
 
   <block wx:elif="{{noMap}}">
@@ -27,6 +27,7 @@
       bindtap="openDetail"
     >
       <view class="m-name">{{item.name}}</view>
+      <text class="m-emoji">{{item.emoji}}</text>
       <view class="m-meta">{{item.date}}{{item.added_by ? ' · ' + item.added_by : ''}}{{item.address ? ' · ' + item.address : ''}}</view>
       <view class="m-photos" wx:if="{{item.photos.length > 0}}">
         <image

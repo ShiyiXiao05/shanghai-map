@@ -6,9 +6,9 @@
     "navTxtStyle": "black"
   },
   "dark": {
-    "bgColor": "#0a0f1e",
+    "bgColor": "#171a1b",
     "bgTxtStyle": "light",
-    "navBgColor": "#0a0f1e",
+    "navBgColor": "#222627",
     "navTxtStyle": "white"
   }
 }

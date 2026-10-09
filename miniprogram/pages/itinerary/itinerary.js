@@ -1,6 +1,8 @@
 const app = getApp();
 const { api } = require('../../utils/api.js');
 const { categoryMeta } = require('../../utils/config.js');
+const { displayEmoji } = require('../../utils/emoji.js');
+const { applyTheme } = require('../../utils/theme.js');
 
 const WALK_KMH = 4.5; // 步行速度，估算站间耗时
 
@@ -37,6 +39,7 @@ Page({
   places: [], // 本地图全部地点
 
   onShow() {
+    applyTheme(this);
     const g = app.globalData;
     if (!g.map || g.isPublicView) {
       wx.showToast({ title: '公共广场是只读的，先加入一张地图', icon: 'none' });
@@ -82,7 +85,7 @@ Page({
       return {
         id: p.id,
         name: p.name,
-        emoji: meta.emoji,
+        emoji: displayEmoji(p),
         emojiColor: meta.color,
         visited: p.visited,
         legText,

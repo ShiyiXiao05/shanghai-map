@@ -1,0 +1,10 @@
+.page { min-height: 100vh; box-sizing: border-box; padding: 24rpx 28rpx calc(40rpx + env(safe-area-inset-bottom)); background: var(--paper); color: var(--ink); }
+.head { padding: 16rpx 0 24rpx; }
+.title { font-size: 38rpx; font-weight: 700; }
+.sub, .date, .channel { color: var(--ink-soft); font-size: 24rpx; }
+.entry { background: var(--card); border: 1rpx solid var(--line); border-radius: 16rpx; padding: 24rpx; margin-bottom: 18rpx; }
+.entry-head { display: flex; justify-content: space-between; align-items: baseline; }
+.version { font-size: 32rpx; font-weight: 700; }
+.channel { margin-top: 8rpx; color: var(--metro); }
+.note { margin-top: 14rpx; color: var(--ink-soft); font-size: 26rpx; line-height: 1.5; }
+.note::before { content: '• '; color: var(--metro); }

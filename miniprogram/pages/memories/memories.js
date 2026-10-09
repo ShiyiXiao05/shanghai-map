@@ -1,5 +1,7 @@
 const app = getApp();
 const { api } = require('../../utils/api.js');
+const { applyTheme } = require('../../utils/theme.js');
+const { displayEmoji } = require('../../utils/emoji.js');
 
 Page({
   data: {
@@ -10,6 +12,7 @@ Page({
   },
 
   onShow() {
+    applyTheme(this);
     this.load();
   },
 
@@ -36,6 +39,7 @@ Page({
           }
           index[month].items.push({
             ...m,
+            emoji: displayEmoji(m),
             date: `${date.getMonth() + 1}/${date.getDate()}`,
             photos: (m.photos ?? []).slice(0, 4),
           });

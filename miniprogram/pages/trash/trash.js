@@ -1,5 +1,6 @@
 const app = getApp();
 const { api } = require('../../utils/api.js');
+const { applyTheme } = require('../../utils/theme.js');
 
 const KEEP_DAYS = 30;
 
@@ -26,6 +27,7 @@ Page({
   },
 
   onShow() {
+    applyTheme(this);
     this.load();
   },
 

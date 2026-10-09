@@ -71,7 +71,7 @@
 /* 地图 */
 .map-wrap {
   position: relative;
-  flex: 1;
+  flex: 0.43;
   min-height: 0;
 }
 
@@ -110,6 +110,16 @@
   right: 0;
   bottom: 0;
   z-index: 100;
+}
+
+.map-divider {
+  flex: none;
+  height: 22rpx;
+  line-height: 22rpx;
+  text-align: center;
+  color: var(--ink-faint);
+  background: var(--paper);
+  font-size: 20rpx;
 }
 
 .map-fs .map-tools {
@@ -179,7 +189,7 @@
 
 /* 底部面板：border-box 让 safe-area 内边距算进 46vh，不把页面撑出屏幕 */
 .panel {
-  height: 46vh;
+  height: auto;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -188,6 +198,22 @@
   padding-bottom: env(safe-area-inset-bottom);
   overflow: hidden;
 }
+
+.place-preview {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 14rpx 24rpx;
+  border-bottom: 1rpx solid var(--line);
+  background: var(--paper);
+}
+.preview-emoji { flex: none; font-size: 40rpx; width: 56rpx; text-align: center; }
+.preview-main { flex: 1; min-width: 0; }
+.preview-name { color: var(--ink); font-size: 28rpx; font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.preview-meta, .preview-desc { color: var(--ink-soft); font-size: 21rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.preview-desc { margin-top: 4rpx; }
+.preview-close { flex: none; color: var(--ink-faint); padding: 8rpx; }
 
 .filters {
   padding: 16rpx 24rpx 8rpx;
