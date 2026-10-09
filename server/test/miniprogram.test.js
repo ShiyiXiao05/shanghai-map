@@ -243,6 +243,74 @@ describe('miniprogram regressions', () => {
     assert.equal(page.data.sortIndex, 2);
   });
 
+  it('附近：使用 wx.getLocation 的手机坐标排序并显示定位点', async () => {
+    const calls = [];
+    const toasts = [];
+    const runtime = createRuntime({
+      wx: {
+        getLocation: (options) => {
+          calls.push(options);
+          options.success({ latitude: 31.2054, longitude: 121.4375 });
+        },
+        showLoading() {},
+        hideLoading() {},
+        showToast: (options) => toasts.push(options.title),
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [
+      { id: 1, name: '近处', category: '景点', lat: 31.2054, lng: 121.4375 },
+      { id: 2, name: '远处', category: '景点', lat: 31.25, lng: 121.5 },
+    ] });
+    await page.locateNearby();
+    assert.equal(calls[0].type, 'gcj02');
+    assert.equal(page.data.nearbyPlaces[0].id, 1);
+    assert.equal(page.data.longitude, 121.4375);
+    assert.equal(page.data.latitude, 31.2054);
+    assert.equal(page.data.showLocation, true);
+    assert.equal(page.data.nearbyOpen, true);
+    assert.equal(toasts.at(-1), '按当前位置排序');
+  });
+
+  it('附近：定位被拒绝时提示授权，不退回地图中心点', async () => {
+    const modals = [];
+    const runtime = createRuntime({
+      wx: {
+        getLocation: (options) => options.fail({ errMsg: 'getLocation:fail auth deny' }),
+        showLoading() {},
+        hideLoading() {},
+        showModal: (options) => modals.push(options),
+        showToast() {},
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
+    const oldCenter = { longitude: page.data.longitude, latitude: page.data.latitude };
+    await page.locateNearby();
+    assert.equal(modals.length, 1);
+    assert.equal(page.data.nearbyOpen, false);
+    assert.equal(page.data.longitude, oldCenter.longitude);
+    assert.equal(page.data.latitude, oldCenter.latitude);
+  });
+
+  it('附近：隐私指引未同意时提示隐私授权，不误导去系统设置', async () => {
+    const toasts = [];
+    const runtime = createRuntime({
+      wx: {
+        requirePrivacyAuthorize: (options) => options.fail({ errMsg: 'requirePrivacyAuthorize:fail privacy permission is not authorized' }),
+        getLocation() { throw new Error('不应在隐私授权失败后调用定位'); },
+        showLoading() {},
+        hideLoading() {},
+        showToast: (options) => toasts.push(options.title),
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
+    await page.locateNearby();
+    assert.equal(toasts.at(-1), '请同意隐私保护指引后重试');
+    assert.equal(page.data.nearbyOpen, false);
+  });
+
   it('照片上传：CDN 模式只传 full，无 CDN 时带一张预算内的缩略图', async () => {
     const uploads = [];
     let cfg = { cdn: true, maxFullBytes: 1.5 * 1024 * 1024, maxThumbBytes: 64 * 1024 };

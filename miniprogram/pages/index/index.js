@@ -5,6 +5,7 @@ const storage = require('../../utils/storage.js');
 const { displayEmoji } = require('../../utils/emoji.js');
 const cache = require('../../utils/cache.js');
 const { applyTheme } = require('../../utils/theme.js');
+const { getCurrentLocation } = require('../../utils/location.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
@@ -194,16 +195,47 @@ Page({
     this._dividerStartY = null;
   },
 
-  // 「附近」：不调用地理位置接口，按地图当前中心点近似排序
-  locateNearby() {
+  // 「附近」使用手机当前位置；定位失败时不使用地图中心点替代。
+  async locateNearby() {
     if (this.data.places.length === 0) {
       wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
       return;
     }
-    this.showNearby({ longitude: this.data.longitude, latitude: this.data.latitude });
+    if (typeof wx.showLoading === 'function') wx.showLoading({ title: '正在定位…' });
+    try {
+      const result = await getCurrentLocation();
+      if (result.ok) {
+        this.showNearby({ longitude: result.data.longitude, latitude: result.data.latitude });
+        return;
+      }
+      if (result.reason === 'privacy') {
+        wx.showToast({ title: '请同意隐私保护指引后重试', icon: 'none' });
+      } else if (result.reason === 'denied') {
+        this.promptLocationPermission();
+      } else if (result.reason !== 'cancel') {
+        wx.showToast({ title: result.reason === 'unsupported' ? '当前微信版本不支持定位' : '定位失败，请重试', icon: 'none' });
+      }
+    } finally {
+      if (typeof wx.hideLoading === 'function') wx.hideLoading();
+    }
   },
 
-  // 按给定坐标算最近 5 个地点（当前用的是地图中心点，不是真实定位）
+  promptLocationPermission() {
+    if (typeof wx.showModal !== 'function') {
+      wx.showToast({ title: '请在微信设置中允许位置权限', icon: 'none' });
+      return;
+    }
+    wx.showModal({
+      title: '需要位置权限',
+      content: '开启位置权限后，才能按你当前位置查找附近地点。',
+      confirmText: '去设置',
+      success: (result) => {
+        if (result.confirm && typeof wx.openSetting === 'function') wx.openSetting({});
+      },
+    });
+  },
+
+  // 按手机当前位置算最近 5 个地点。
   showNearby(location) {
     const nearest = this.data.places
       .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
@@ -217,11 +249,11 @@ Page({
     this.setData({
       longitude: location.longitude,
       latitude: location.latitude,
-      showLocation: false,
+      showLocation: true,
       nearbyPlaces: nearest,
       nearbyOpen: true,
     });
-    wx.showToast({ title: '按地图当前中心点排序', icon: 'none' });
+    wx.showToast({ title: '按当前位置排序', icon: 'none' });
   },
 
   closeNearby() {
