@@ -23,6 +23,10 @@ function formatDistance(km) {
   return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
 }
 
+function markerIconKey(place) {
+  return `emoji:${place.category}:${displayEmoji(place)}:${place.visited ? 1 : 0}`;
+}
+
 Page({
   data: {
     statusBarHeight: 20,
@@ -42,7 +46,7 @@ Page({
     latitude: SHANGHAI_CENTER.latitude,
     loading: true,
     loadError: '', // 加载失败时展示错误态 + 重试，而不是空态
-    markerIcons: {}, // categoryId -> 临时图标路径
+    markerIcons: {}, // emoji/category/visited 组合 -> 临时图标路径
     isMapFs: false, // 地图全屏态
     refreshing: false, // 列表下拉刷新中
     isDark: false, // 跟随系统深色，控制下拉刷新指示器配色
@@ -92,6 +96,7 @@ Page({
 
   onReady() {
     // canvas 节点要等首次渲染完成才存在，放 onLoad 会取到空节点 → marker 永远没图标
+    this._markerCanvasReady = true;
     this.prepareMarkerIcons();
   },
 
@@ -176,23 +181,48 @@ Page({
   },
 
   onDividerStart(event) {
-    this._dividerStartY = Number(event.touches && event.touches[0] && event.touches[0].clientY);
+    const touch = event && event.touches && event.touches[0];
+    const y = touch && Number(touch.clientY);
+    if (!Number.isFinite(y)) return;
+    this._dividerDragging = true;
+    this._dividerStartY = y;
     this._dividerStartFraction = this.data.mapFraction;
+    const sys = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    this._dividerDragHeight = Math.max(1, Number(sys.windowHeight) - (Number(this.data.statusBarHeight) || 20) - 56 - 44);
+    // 用实际的地图和列表高度作为分母；节点查询失败时保留窗口高度兜底值。
+    if (this.createSelectorQuery) {
+      const query = this.createSelectorQuery();
+      query.select('.map-wrap').boundingClientRect();
+      query.select('.panel').boundingClientRect();
+      query.exec((rects) => {
+        if (!this._dividerDragging) return;
+        const mapHeight = Number(rects && rects[0] && rects[0].height) || 0;
+        const panelHeight = Number(rects && rects[1] && rects[1].height) || 0;
+        if (mapHeight + panelHeight > 0) this._dividerDragHeight = mapHeight + panelHeight;
+      });
+    }
   },
 
   onDividerMove(event) {
-    const y = Number(event.touches && event.touches[0] && event.touches[0].clientY);
+    if (!this._dividerDragging) return;
+    const touch = event && event.touches && event.touches[0];
+    const y = touch && Number(touch.clientY);
     const start = Number(this._dividerStartY);
     if (!Number.isFinite(y) || !Number.isFinite(start)) return;
-    const sys = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
-    const height = Math.max(1, Number(sys.windowHeight) - (Number(this.data.statusBarHeight) || 20) - 56);
+    const height = Math.max(1, Number(this._dividerDragHeight) || 1);
     const fraction = Math.max(0.25, Math.min(0.7, this._dividerStartFraction + (y - start) / height));
     this.setData({ mapFraction: fraction });
   },
 
   onDividerEnd() {
+    if (!this._dividerDragging) return;
     wx.setStorageSync('wish-map-fraction', this.data.mapFraction);
+    this._dividerDragging = false;
     this._dividerStartY = null;
+  },
+
+  onDividerCancel() {
+    this.onDividerEnd();
   },
 
   // 「附近」使用手机当前位置；定位失败时不使用地图中心点替代。
@@ -276,15 +306,21 @@ Page({
     clearInterval(this.randomTimer);
     this.setData({ randomOpen: true, randomDrawing: true, randomPlace: null });
     let ticks = 0;
+    let previousIndex = -1;
+    const drawInterval = 80;
+    const drawTicks = Math.ceil(2400 / drawInterval);
     this.randomTimer = setInterval(() => {
-      const place = places[Math.floor(Math.random() * places.length)];
+      let index = Math.floor(Math.random() * places.length);
+      if (places.length > 1 && index === previousIndex) index = (index + 1) % places.length;
+      previousIndex = index;
+      const place = places[index];
       this.setData({ randomPlace: { ...place, emoji: displayEmoji(place) } });
       ticks += 1;
-      if (ticks < 12) return;
+      if (ticks < drawTicks) return;
       clearInterval(this.randomTimer);
       this.randomTimer = null;
       this.setData({ randomDrawing: false });
-    }, 200);
+    }, drawInterval);
   },
 
   closeRandom() {
@@ -383,42 +419,10 @@ Page({
     this.renderMarkers(decorated);
   },
 
-  // 用 canvas 生成分类色圆点作为 marker 图标（免打包图片资源）。
-  // 7 个图标串行绘制：共用同一 canvas 时并发会互相串色；
-  // 整体加 4s 超时兜底，无论如何都会 setData 一次，避免 marker 永久缺失
-  async prepareMarkerIcons() {
-    if (this._markerIconsRunning) return;
-    this._markerIconsRunning = true;
-    const categories = [...CATEGORIES.map((c) => c.id + '|' + c.color), 'visited|#8a94a3'];
-    const icons = {};
-    let finished = false;
-    const apply = () => {
-      if (this._unloaded) return;
-      this.setData({ markerIcons: { ...icons } });
-      this.renderMarkers(this.data.filtered); // 图标就绪后重新渲染一次 markers
-    };
-    const run = (async () => {
-      try {
-        for (const item of categories) {
-          const [id, color] = item.split('|');
-          icons[id] = await this.drawDotIcon(color); // 串行绘制：共用 canvas 并发会串色
-        }
-      } catch (err) {
-        console.warn('[index] 生成 marker 图标失败，改用系统默认标记', err);
-      } finally {
-        finished = true;
-        this._markerIconsRunning = false;
-        apply();
-      }
-    })();
-    // 兜底超时：4s 还没画完也先渲染一次，保证地图一定有点位（缺图标用系统默认标记）
-    const timeout = new Promise((resolve) =>
-      setTimeout(() => {
-        if (!finished) apply();
-        resolve();
-      }, 4000)
-    );
-    await Promise.race([run, timeout]);
+  // canvas 节点要等 onReady 后才能使用；所有地点图标都由同一条队列生成，避免多个 canvas 绘制任务互相覆盖。
+  prepareMarkerIcons() {
+    this._markerCanvasReady = true;
+    this.preparePlaceIcons(this.data.filtered);
   },
 
   drawDotIcon(color, emoji = '', visited = false) {
@@ -492,21 +496,19 @@ Page({
 
   renderMarkers(places) {
     const markerIcons = this.data.markerIcons || {};
-    const hasIcon = !!markerIcons.visited || CATEGORIES.some((c) => markerIcons[c.id]);
     // 图标仍在生成时先使用系统默认标记，生成完成后会增量替换。
     const markers = (places || []).map((p) => {
-      const meta = categoryMeta(p.category);
       const emoji = displayEmoji(p);
       const selected = this.data.selectedPlace && Number(this.data.selectedPlace.id) === Number(p.id);
-      const iconKey = p.visited ? 'visited' : p.category;
-      const emojiKey = `emoji:${displayEmoji(p)}:${p.visited ? 1 : 0}`;
-      const iconPath = markerIcons[emojiKey] || markerIcons[iconKey] || markerIcons.visited || '';
+      const iconPath = markerIcons[markerIconKey(p)] || '';
       const marker = {
         id: p.id,
         latitude: p.lat,
         longitude: p.lng,
         width: selected ? 30 : p.visited ? 22 : 26,
         height: selected ? 30 : p.visited ? 22 : 26,
+        // 圆形图标的中心就是地点坐标，避免默认底边锚点造成视觉偏移。
+        anchor: { x: 0.5, y: 0.5 },
         callout: {
           content: `${emoji} ${p.name}${p.visited ? ' · ✓' : ''}`,
           display: 'BYCLICK',
@@ -515,16 +517,6 @@ Page({
           fontSize: 12,
           bgColor: '#ffffff',
           color: '#1f2d2a',
-        },
-        label: {
-          content: emoji,
-          color: '#ffffff',
-          fontSize: 12,
-          anchorX: 0,
-          anchorY: 0,
-          borderRadius: 10,
-          bgColor: meta.color,
-          padding: 3,
         },
       };
       if (iconPath) marker.iconPath = iconPath; // 缺图标时不传该字段，交给系统默认标记
@@ -535,20 +527,31 @@ Page({
   },
 
   async preparePlaceIcons(places) {
-    if (this._placeIconsRunning || this._unloaded) return;
+    if (!this._markerCanvasReady || this._placeIconsRunning || this._unloaded) return;
     const wanted = [];
     const seen = new Set();
     for (const place of places || []) {
-      const key = `emoji:${displayEmoji(place)}:${place.visited ? 1 : 0}`;
-      if (!seen.has(key) && !this.data.markerIcons[key]) { seen.add(key); wanted.push({ key, place }); }
+      const key = markerIconKey(place);
+      const cached = Object.prototype.hasOwnProperty.call(this.data.markerIcons || {}, key);
+      if (!seen.has(key) && !cached) { seen.add(key); wanted.push({ key, place }); }
       if (wanted.length >= 128) break;
     }
     if (!wanted.length) return;
     this._placeIconsRunning = true;
     const icons = { ...(this.data.markerIcons || {}) };
     try {
-      for (const { key, place } of wanted) icons[key] = await this.drawDotIcon(categoryMeta(place.category).color, displayEmoji(place), place.visited);
-      if (!this._unloaded) { this.setData({ markerIcons: icons }); this.renderMarkers(this.data.filtered); }
+      for (const { key, place } of wanted) {
+        try {
+          icons[key] = await this.drawDotIcon(categoryMeta(place.category).color, displayEmoji(place), place.visited);
+        } catch (err) {
+          icons[key] = '';
+          console.warn('[index] marker 图标绘制失败，改用系统默认标记', err);
+        }
+      }
+      if (!this._unloaded) {
+        this.setData({ markerIcons: icons });
+        this.renderMarkers(this.data.filtered);
+      }
     } finally { this._placeIconsRunning = false; }
   },
 

@@ -12,7 +12,7 @@
       <view class="nav-actions">
         <view class="nav-btn" bindtap="goMemories">📷</view>
         <view class="nav-btn" bindtap="goItinerary">🚶</view>
-        <view class="nav-btn nav-btn-primary" bindtap="goSearch">＋ 标记</view>
+        <view class="nav-btn nav-btn-primary" aria-label="添加地点" bindtap="goSearch">＋</view>
       </view>
     </view>
   </view>
@@ -37,7 +37,9 @@
     </view>
   </view>
 
-  <view class="map-divider" catchtouchstart="onDividerStart" catchtouchmove="onDividerMove" catchtouchend="onDividerEnd">⋮⋮</view>
+  <view class="map-divider" catchtouchstart="onDividerStart" catchtouchmove="onDividerMove" catchtouchend="onDividerEnd" catchtouchcancel="onDividerCancel">
+    <view class="map-divider-grip">⋮⋮</view>
+  </view>
 
   <!-- 底部列表面板 -->
   <view class="panel" style="flex: {{1 - mapFraction}}; height: auto;">
@@ -49,7 +51,7 @@
         <view wx:if="{{selectedPlace.description}}" class="preview-desc">{{selectedPlace.description}}</view>
       </view>
       <view class="preview-close" catchtap="closePreview">✕</view>
-      <view class="btn btn-primary btn-mini" catchtap="openSelectedDetail">查看详情</view>
+      <view class="btn btn-primary preview-detail" catchtap="openSelectedDetail">查看详情</view>
     </view>
     <view class="filters">
       <scroll-view scroll-x class="chips-scroll">
@@ -110,7 +112,7 @@
         <view class="place-emoji" style="background: {{item.emojiColor}}22; border-color: {{item.emojiColor}}55;">{{item.emoji}}</view>
         <view class="place-main">
           <view class="place-name">
-            {{item.name}}
+            <text class="place-name-text">{{item.name}}</text>
             <text wx:if="{{item.visited}}" class="visited-dot">●</text>
           </view>
           <view class="place-meta ellipsis">

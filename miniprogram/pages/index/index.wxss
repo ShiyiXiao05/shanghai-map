@@ -31,22 +31,26 @@
 .nav-title {
   display: flex;
   align-items: baseline;
+  flex: 1;
   gap: 12rpx;
   min-width: 0;
 }
 
 .nav-name {
+  flex: 1;
+  min-width: 0;
   font-size: 32rpx;
   font-weight: 700;
-  max-width: 320rpx;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
 .nav-switch {
+  flex: none;
   font-size: 22rpx;
   color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .nav-actions {
@@ -59,7 +63,7 @@
 
 .nav-btn {
   flex: none;
-  padding: 10rpx 22rpx;
+  padding: 10rpx 16rpx;
   border-radius: 999rpx;
   border: 1rpx solid var(--line);
   background: var(--card);
@@ -94,9 +98,11 @@
   z-index: 5;
   display: flex;
   gap: 12rpx;
+  max-width: calc(100% - 48rpx);
 }
 
 .map-tool-btn {
+  flex: none;
   padding: 12rpx 24rpx;
   border-radius: 999rpx;
   border: 1rpx solid var(--line);
@@ -104,6 +110,7 @@
   color: var(--ink);
   font-size: 24rpx;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
 }
 
 .map-tool-random { border-color: var(--brick); }
@@ -120,12 +127,21 @@
 
 .map-divider {
   flex: none;
-  height: 22rpx;
-  line-height: 22rpx;
+  height: 44px;
   text-align: center;
   color: var(--ink-faint);
   background: var(--paper);
   font-size: 20rpx;
+}
+
+.map-divider-grip {
+  width: 100%;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .map-fs .map-tools {
@@ -166,7 +182,7 @@
 }
 .nearby-emoji { width: 54rpx; text-align: center; font-size: 34rpx; }
 .nearby-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5rpx; }
-.nearby-name { color: var(--ink); font-size: 28rpx; font-weight: 600; }
+.nearby-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink); font-size: 28rpx; font-weight: 600; }
 .nearby-meta { color: var(--ink-faint); font-size: 21rpx; }
 .nearby-distance { flex: none; color: var(--metro); font-size: 23rpx; font-weight: 600; }
 
@@ -188,8 +204,8 @@
 }
 .random-card-drawing { opacity: 0.82; transform: scale(0.99); }
 .random-emoji { font-size: 76rpx; }
-.random-name { max-width: 100%; color: var(--ink); font-size: 40rpx; font-weight: 700; word-break: break-all; }
-.random-meta { max-width: 100%; color: var(--ink-soft); font-size: 23rpx; }
+.random-name { display: block; max-width: 100%; overflow: hidden; color: var(--ink); font-size: 36rpx; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.random-meta { display: block; max-width: 100%; overflow: hidden; color: var(--ink-soft); font-size: 23rpx; white-space: nowrap; text-overflow: ellipsis; }
 .random-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; margin-top: 22rpx; }
 .btn-disabled { opacity: 0.5; }
 
@@ -220,6 +236,7 @@
 .preview-meta, .preview-desc { color: var(--ink-soft); font-size: 21rpx; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .preview-desc { margin-top: 4rpx; }
 .preview-close { flex: none; color: var(--ink-faint); padding: 8rpx; }
+.preview-detail { flex: none; padding: 12rpx 18rpx; font-size: 24rpx; white-space: nowrap; }
 
 .filters {
   padding: 16rpx 24rpx 8rpx;
@@ -319,6 +336,14 @@
   display: flex;
   align-items: center;
   gap: 8rpx;
+}
+
+.place-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .visited-dot {
