@@ -343,6 +343,66 @@ describe('miniprogram regressions', () => {
     assert.equal(sheets.length, 1);
   });
 
+  it('高德分享解析：marker 链接与裸坐标都能取到经纬度', async () => {
+    const { parseAmapShare } = await import(new URL('../../miniprogram/utils/amap.js', import.meta.url));
+    const marker = parseAmapShare(
+      '我在高德地图发现了一个好地方：https://uri.amap.com/marker?position=121.4375,31.2054&name=%E6%AD%A6%E5%BA%B7%E5%A4%A7%E6%A5%BC&src=mypage'
+    );
+    assert.equal(marker.lng, 121.4375);
+    assert.equal(marker.lat, 31.2054);
+    assert.equal(marker.name, '武康大楼');
+
+    const bare = parseAmapShare('我的位置：121.4737,31.2304 【人民广场】');
+    assert.equal(bare.lng, 121.4737);
+    assert.equal(bare.lat, 31.2304);
+    assert.equal(bare.name, '人民广场');
+
+    assert.ok(parseAmapShare('随便一段文字').error, '认不出来时应给出错误而不是空坐标');
+  });
+
+  it('附近：粘贴高德位置链接可当作我的位置（不调用定位接口）', () => {
+    const values = new Map();
+    const toasts = [];
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        getClipboardData: (options) =>
+          options.success({ data: 'https://uri.amap.com/marker?position=121.4375,31.2054&name=%E6%88%91%E7%9A%84%E4%BD%8D%E7%BD%AE' }),
+        showToast: (options) => toasts.push(options.title),
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [
+      { id: 1, name: '近处', category: '景点', lat: 31.2054, lng: 121.4375 },
+      { id: 2, name: '远处', category: '景点', lat: 31.25, lng: 121.5 },
+    ] });
+    page.markByAmapLink();
+    assert.equal(values.get('wish-my-location').latitude, 31.2054);
+    assert.equal(page.data.nearbyPlaces[0].id, 1);
+    assert.equal(toasts.at(-1), '按你标记的位置排序');
+  });
+
+  it('附近：粘贴的内容认不出来时给出引导，不写入位置', () => {
+    const values = new Map();
+    const modals = [];
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        getClipboardData: (options) => options.success({ data: '一段无关的文字' }),
+        showModal: (options) => modals.push(options),
+        showToast() {},
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
+    page.markByAmapLink();
+    assert.equal(values.has('wish-my-location'), false);
+    assert.equal(modals.length, 1);
+    assert.match(modals[0].content, /高德地图/);
+  });
+
   it('回归守卫：小程序包里不得出现地理位置接口（会被提审 61040 拦截）', () => {
     const root = miniRoot; // 文件顶部已用 import.meta.url 解析（ESM 无 __dirname）
     const offenders = [];

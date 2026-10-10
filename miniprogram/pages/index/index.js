@@ -6,6 +6,7 @@ const { displayEmoji } = require('../../utils/emoji.js');
 const cache = require('../../utils/cache.js');
 const { applyTheme } = require('../../utils/theme.js');
 const { getMyLocation, setMyLocation, clearMyLocation } = require('../../utils/location.js');
+const { parseAmapShare } = require('../../utils/amap.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
@@ -248,12 +249,54 @@ Page({
       return;
     }
     wx.showActionSheet({
-      itemList: ['把地图中心设为我的位置', '在地图上点选我的位置'],
+      itemList: ['粘贴高德位置链接（最准）', '把地图中心设为我的位置', '在地图上点选我的位置'],
       success: (res) => {
-        if (res.tapIndex === 0) this.useMapCenterAsMyLocation();
-        else if (res.tapIndex === 1) this.startMarkLocation();
+        if (res.tapIndex === 0) this.markByAmapLink();
+        else if (res.tapIndex === 1) this.useMapCenterAsMyLocation();
+        else if (res.tapIndex === 2) this.startMarkLocation();
       },
       fail: () => {},
+    });
+  },
+
+  // 用一条高德位置分享当「我的位置」：高德 App 可分享自己的当前位置，
+  // 解析出来的就是精确经纬度——不依赖微信的地理位置接口权限，精度却和定位一致。
+  markByAmapLink() {
+    const guide = () => {
+      wx.showModal({
+        title: '怎么拿到链接',
+        content: '打开高德地图 → 长按你所在的位置 → 分享 → 复制链接，然后回到这里再点一次。',
+        showCancel: false,
+      });
+    };
+    if (typeof wx.getClipboardData !== 'function') {
+      guide();
+      return;
+    }
+    wx.getClipboardData({
+      success: (res) => {
+        let parsed;
+        try {
+          parsed = parseAmapShare(res.data || '');
+        } catch (err) {
+          parsed = { error: '链接格式不正确' };
+        }
+        if (parsed.error || !Number.isFinite(Number(parsed.lng)) || !Number.isFinite(Number(parsed.lat))) {
+          guide();
+          return;
+        }
+        const saved = setMyLocation({ latitude: parsed.lat, longitude: parsed.lng });
+        if (!saved) {
+          wx.showToast({ title: '坐标不可用，请重试', icon: 'none' });
+          return;
+        }
+        this.setData({ markLocation: false });
+        this.showNearby(saved);
+      },
+      fail: () => {
+        wx.showToast({ title: '读不到剪贴板，请手动标记', icon: 'none' });
+        guide();
+      },
     });
   },
 
