@@ -159,3 +159,27 @@
   color: var(--ink-faint);
   margin-bottom: 16rpx;
 }
+
+/* 我的身份：昵称展示与两个小按钮 */
+.identity-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex-wrap: wrap;
+}
+
+.identity-name {
+  flex: 1;
+  min-width: 200rpx;
+  font-size: 28rpx;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-mini {
+  padding: 12rpx 24rpx;
+  font-size: 26rpx;
+  border-radius: 999rpx;
+}

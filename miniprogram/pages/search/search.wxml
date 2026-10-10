@@ -71,5 +71,5 @@
 
   <view class="import-link" bindtap="goImport">📋 粘贴高德分享导入 →</view>
 
-  <nickname-modal show="{{nickModalShow}}" bind:confirm="onNickConfirm" bind:cancel="onNickCancel" />
+  <nickname-modal show="{{nickModalShow}}" initial="{{nickname}}" bind:confirm="onNickConfirm" bind:cancel="onNickCancel" />
 </view>

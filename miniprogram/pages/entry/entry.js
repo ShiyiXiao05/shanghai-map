@@ -37,6 +37,30 @@ Page({
     this.setData({ themeIndex: THEME_MODES.indexOf(mode) });
   },
 
+  // 改昵称：先静默登录（没有 token 时 /api/auth/profile 会 401「请先登录」），再弹层
+  async editNickname() {
+    try {
+      await auth.ensureLogin();
+    } catch (err) {
+      wx.showToast({ title: (err && err.message) || '登录失败，请重试', icon: 'none' });
+      return;
+    }
+    this.setData({ nickModalShow: true });
+  },
+
+  logout() {
+    wx.showModal({
+      title: '退出登录',
+      content: '退出后重新做写操作会再次静默登录，地图数据不受影响。',
+      success: (res) => {
+        if (!res.confirm) return;
+        auth.logout();
+        this.setData({ nickname: '' });
+        wx.showToast({ title: '已退出登录', icon: 'none' });
+      },
+    });
+  },
+
   goChangelog() { wx.navigateTo({ url: '/pages/changelog/changelog' }); },
   checkUpdates() { checkUpdates(); },
 

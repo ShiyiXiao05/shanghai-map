@@ -100,6 +100,48 @@ describe('miniprogram auth', () => {
     assert.equal(again.needs_nickname, false);
   });
 
+  it('改昵称后无需重新登录：同一个 token 的后续署立即用新昵称', async () => {
+    const token = await loginAs(request, 'u1', '旧名字');
+    const map = await (
+      await request('POST', '/api/maps', { body: { name: '改名图' }, token })
+    ).json();
+    const place = await (
+      await request('POST', '/api/places', {
+        body: { map_code: map.code, name: '某地', category: '美食', lng: 121.4, lat: 31.2 },
+        token,
+      })
+    ).json();
+
+    const before = await (
+      await request('POST', `/api/places/${place.id}/comments`, {
+        body: { map_code: map.code, body: '改名前' },
+        token,
+      })
+    ).json();
+    assert.equal(before.author, '旧名字');
+
+    // 改昵称：token 不变（服务端每次请求按 openid 取最新昵称）
+    const updated = await (
+      await request('POST', '/api/auth/profile', { body: { nickname: '新名字' }, token })
+    ).json();
+    assert.equal(updated.nickname, '新名字');
+
+    const after = await (
+      await request('POST', `/api/places/${place.id}/comments`, {
+        body: { map_code: map.code, body: '改名后' },
+        token,
+      })
+    ).json();
+    assert.equal(after.author, '新名字', '改昵称后新的留言必须用新昵称');
+
+    // 再看列表：两条留言分别保留当时的署名（历史内容不会被追溯改写）
+    const list = await (
+      await request('GET', `/api/places/${place.id}/comments?map=${map.code}`, { token })
+    ).json();
+    const authors = list.comments.map((item) => item.author).sort();
+    assert.deepEqual(authors, ['新名字', '旧名字']);
+  });
+
   it('profile：未登录 401，空昵称 400，超长 400', async () => {
     assert.equal(
       (await request('POST', '/api/auth/profile', { body: { nickname: '小明' } })).status,

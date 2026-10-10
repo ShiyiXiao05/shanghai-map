@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-10T07:01:56.963Z",
+  "checkedAt": "2026-10-10T07:16:06.957Z",
   "static": {
     "jsFiles": 63,
     "syntaxFailures": [],
@@ -12,7 +12,7 @@
       "available": true,
       "status": 0,
       "stderr": "",
-      "outputBytes": 113685
+      "outputBytes": 114564
     },
     "wxss": {
       "fileCount": 13,
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "22MUP3",
+        "code": "JUC89W",
         "placeId": 1
       }
     },
@@ -277,15 +277,15 @@
     "e2eSteps": 20,
     "e2eFailed": 0,
     "serverTests": {
-      "tests": 126,
-      "pass": 126,
+      "tests": 131,
+      "pass": 131,
       "fail": 0,
       "exitCode": 0
     }
   },
   "tests": {
-    "tests": 126,
-    "pass": 126,
+    "tests": 131,
+    "pass": 131,
     "fail": 0,
     "exitCode": 0
   }

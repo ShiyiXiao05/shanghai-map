@@ -452,6 +452,113 @@ describe('miniprogram regressions', () => {
     assert.equal(page.data.nearbyPlaces[0].id, 1);
   });
 
+  it('入口页：改昵称会先静默登录再落库，并同步页面与本地存储', async () => {
+    const values = new Map();
+    const profiles = [];
+    let loggedIn = 0;
+    const runtime = createRuntime({
+      app: { globalData: { map: { code: 'MAP123', name: '地图' } } },
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        removeStorageSync: (key) => values.delete(key),
+        login: async () => ({ code: 'CODE' }),
+        showToast() {},
+      },
+      modules: {
+        [path.join(miniRoot, 'utils/api.js')]: {
+          api: {
+            login: async () => {
+              loggedIn += 1;
+              return { token: 'TOKEN-1', nickname: '' };
+            },
+            updateProfile: async (nickname) => {
+              profiles.push(nickname);
+              return nickname;
+            },
+          },
+          setAuthRecovery() {},
+        },
+      },
+    });
+    const page = runtime.page('pages/entry/entry.js');
+    assert.equal(values.get('wish-wmp-token'), undefined, '前置：本地没有登录态');
+
+    await page.editNickname();
+    assert.equal(loggedIn, 1, '没有 token 时必须先登录（否则 /api/auth/profile 会 401）');
+    assert.equal(page.data.nickModalShow, true, '登录成功后应打开昵称弹层');
+
+    await page.onNickConfirm({ detail: '新名字' });
+    assert.deepEqual(profiles, ['新名字']);
+    assert.equal(page.data.nickname, '新名字', '页面上的昵称要立即更新');
+    assert.equal(values.get('shanghai-wish-nickname'), '新名字');
+    assert.equal(page.data.nickModalShow, false);
+  });
+
+  it('入口页：登录失败时不弹昵称层（避免白填一次）', async () => {
+    const values = new Map();
+    const toasts = [];
+    const runtime = createRuntime({
+      app: { globalData: {} },
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        login: async () => ({ code: 'CODE' }),
+        showToast: (options) => toasts.push(options.title),
+      },
+      modules: {
+        [path.join(miniRoot, 'utils/api.js')]: {
+          api: {
+            login: async () => {
+              throw new Error('服务暂时不可用');
+            },
+          },
+          setAuthRecovery() {},
+        },
+      },
+    });
+    const page = runtime.page('pages/entry/entry.js');
+    await page.editNickname();
+    assert.ok(!page.data.nickModalShow, '登录失败时不应打开昵称弹层');
+    assert.equal(toasts.at(-1), '服务暂时不可用');
+  });
+
+  it('入口页：退出登录清空本地身份', async () => {
+    const values = new Map([
+      ['wish-wmp-token', 'TOKEN-1'],
+      ['shanghai-wish-nickname', '旧名字'],
+    ]);
+    const toasts = [];
+    const runtime = createRuntime({
+      app: { globalData: {} },
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        removeStorageSync: (key) => values.delete(key),
+        showModal: (options) => options.success({ confirm: true }),
+        showToast: (options) => toasts.push(options.title),
+      },
+    });
+    const page = runtime.page('pages/entry/entry.js');
+    page.setData({ nickname: '旧名字' });
+    page.logout();
+    assert.equal(values.get('wish-wmp-token'), '');
+    assert.equal(values.get('shanghai-wish-nickname'), '');
+    assert.equal(page.data.nickname, '');
+    assert.equal(toasts.at(-1), '已退出登录');
+  });
+
+  it('昵称弹层：打开时预填当前昵称，空白输入不触发确认', () => {
+    const modalJs = fs.readFileSync(path.join(miniRoot, 'components/nickname-modal/nickname-modal.js'), 'utf8');
+    const modalWxml = fs.readFileSync(path.join(miniRoot, 'components/nickname-modal/nickname-modal.wxml'), 'utf8');
+    assert.match(modalJs, /initial:\s*\{\s*type:\s*String/, '弹层要支持预填属性');
+    assert.match(modalJs, /this\.setData\(\{\s*value:\s*this\.data\.initial/, '打开时要把当前昵称填进输入框');
+    assert.match(modalWxml, /\{\{title\}\}/, '标题应可配置（首次是"你的昵称"，改昵称时是"修改昵称"）');
+    const entryWxml = fs.readFileSync(path.join(miniRoot, 'pages/entry/entry.wxml'), 'utf8');
+    assert.match(entryWxml, /我的身份/, '入口页要有改昵称/退出登录入口');
+    assert.match(entryWxml, /initial="\{\{nickname\}\}"/, '入口页要把当前昵称传给弹层');
+  });
+
   it('高德分享解析：marker 链接与裸坐标都能取到经纬度', async () => {
     const { parseAmapShare } = await import(new URL('../../miniprogram/utils/amap.js', import.meta.url));
     const marker = parseAmapShare(

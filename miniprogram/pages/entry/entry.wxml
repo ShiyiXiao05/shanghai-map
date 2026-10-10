@@ -52,6 +52,15 @@
       </view>
       <view class="hint">换码后旧码立即失效；已加入的同学需要用新码重新加入（他们设备里存的是旧码），你自己会自动切换</view>
     </view>
+    <!-- 我的身份：昵称可改、可退出登录；昵称不一致时用户有自救入口 -->
+    <view class="section">
+      <view class="section-title">我的身份</view>
+      <view class="identity-row">
+        <text class="identity-name">{{nickname || '未设置昵称'}}</text>
+        <view class="btn btn-mini" bindtap="editNickname">修改昵称</view>
+        <view class="btn btn-mini" bindtap="logout">退出登录</view>
+      </view>
+    </view>
   </view>
 
   <view wx:elif="{{mode === 'create'}}" class="body">
@@ -96,5 +105,11 @@
     </view>
   </view>
 
-  <nickname-modal show="{{nickModalShow}}" bind:confirm="onNickConfirm" bind:cancel="onNickCancel" />
+  <nickname-modal
+    show="{{nickModalShow}}"
+    initial="{{nickname}}"
+    title="修改昵称"
+    bind:confirm="onNickConfirm"
+    bind:cancel="onNickCancel"
+  />
 </view>

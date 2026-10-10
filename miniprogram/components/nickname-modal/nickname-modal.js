@@ -2,7 +2,16 @@
 // （2022-10 起 wx.getUserProfile 已收回，这是官方唯一的合规取昵称方式）
 Component({
   properties: {
-    show: { type: Boolean, value: false },
+    // 打开时把当前昵称填进输入框：改昵称不必从零重打
+    show: {
+      type: Boolean,
+      value: false,
+      observer(show) {
+        if (show) this.setData({ value: this.data.initial || '' });
+      },
+    },
+    initial: { type: String, value: '' },
+    title: { type: String, value: '你的昵称' },
   },
   data: { value: '' },
   methods: {

@@ -1,6 +1,6 @@
 <view wx:if="{{show}}" class="nick-mask" bindtap="onCancel">
   <view class="nick-card" catchtap="noop">
-    <view class="nick-title">你的昵称</view>
+    <view class="nick-title">{{title}}</view>
     <view class="nick-hint">用于记录是谁标记、留言和想去。点输入框可直接选用微信昵称。</view>
     <input
       class="nick-input"
