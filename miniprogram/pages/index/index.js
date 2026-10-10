@@ -7,6 +7,7 @@ const cache = require('../../utils/cache.js');
 const { applyTheme } = require('../../utils/theme.js');
 const { getMyLocation, setMyLocation, clearMyLocation } = require('../../utils/location.js');
 const { parseAmapShare } = require('../../utils/amap.js');
+const { NEARBY_ANCHORS } = require('../../utils/config.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
@@ -52,6 +53,7 @@ Page({
     refreshing: false, // 列表下拉刷新中
     isDark: false, // 跟随系统深色，控制下拉刷新指示器配色
     markLocation: false, // 正在让用户标记「我的位置」
+    showMyDot: false, // 打开地图定位点（自动定位尝试时打开，由地图组件弹授权）
     nearbyOpen: false,
     nearbyPlaces: [],
     randomOpen: false,
@@ -239,7 +241,77 @@ Page({
       this.showNearby(saved);
       return;
     }
-    this.askMyLocation();
+    // 首次：先尝试自动定位（用地图组件自身能力，不调用被管控的地理位置接口）
+    this.tryAutoLocate().then((point) => {
+      if (point) {
+        setMyLocation(point);
+        this.showNearby(point, 'auto');
+        return;
+      }
+      this.askMyLocation();
+    });
+  },
+
+  // 自动定位尝试：地图组件自带定位（show-location + moveToLocation），不属于需要后台
+  // 申请开通的地理位置接口，只需用户同意授权。组件未生效时返回 null，交给手动方式兜底。
+  async tryAutoLocate() {
+    const authorized = await this.ensureLocationAuth();
+    if (!authorized) return null;
+    if (typeof wx.createMapContext !== 'function') return null;
+    let ctx;
+    try {
+      ctx = this.mapCtx || (this.mapCtx = wx.createMapContext('mainMap', this));
+    } catch (err) {
+      return null;
+    }
+    if (!ctx || typeof ctx.moveToLocation !== 'function' || typeof ctx.getCenterLocation !== 'function') {
+      return null;
+    }
+    // moveToLocation 需要地图先打开定位点
+    await new Promise((resolve) => this.setData({ showMyDot: true }, resolve));
+    const before = { latitude: this.data.latitude, longitude: this.data.longitude };
+    return new Promise((resolve) => {
+      const done = (value) => resolve(value);
+      try {
+        ctx.moveToLocation({});
+      } catch (err) {
+        return done(null);
+      }
+      // 等地图动画结束再读中心点，此时中心点即当前位置
+      setTimeout(() => {
+        ctx.getCenterLocation({
+          success: (center) => {
+            const latitude = Number(center.latitude);
+            const longitude = Number(center.longitude);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return done(null);
+            const moved = haversineKm(before, { lat: latitude, lng: longitude }) > 0.2;
+            return done(moved ? { latitude, longitude } : null);
+          },
+          fail: () => done(null),
+        });
+      }, 1200);
+    });
+  },
+
+  // 读取（必要时申请）地图定位所需的用户授权；明确拒绝过就不再弹
+  ensureLocationAuth() {
+    return new Promise((resolve) => {
+      if (typeof wx.getSetting !== 'function') return resolve(true);
+      wx.getSetting({
+        success: (res) => {
+          const state = res.authSetting ? res.authSetting['scope.userLocation'] : undefined;
+          if (state === true) return resolve(true);
+          if (state === false) return resolve(false);
+          if (typeof wx.authorize !== 'function') return resolve(true);
+          wx.authorize({
+            scope: 'scope.userLocation',
+            success: () => resolve(true),
+            fail: () => resolve(false),
+          });
+        },
+        fail: () => resolve(true),
+      });
+    });
   },
 
   // 第一次用：让用户选一种方式告诉我们他在哪
@@ -249,11 +321,29 @@ Page({
       return;
     }
     wx.showActionSheet({
-      itemList: ['粘贴高德位置链接（最准）', '把地图中心设为我的位置', '在地图上点选我的位置'],
+      itemList: ['从常用地标选（最快）', '把地图中心设为我的位置', '在地图上点选我的位置', '粘贴高德位置链接（最准）'],
       success: (res) => {
-        if (res.tapIndex === 0) this.markByAmapLink();
+        if (res.tapIndex === 0) this.pickAnchor();
         else if (res.tapIndex === 1) this.useMapCenterAsMyLocation();
         else if (res.tapIndex === 2) this.startMarkLocation();
+        else if (res.tapIndex === 3) this.markByAmapLink();
+      },
+      fail: () => {},
+    });
+  },
+
+  // 一键选常用地标（自动定位不可用时的最快方式）
+  pickAnchor() {
+    if (typeof wx.showActionSheet !== 'function') return;
+    wx.showActionSheet({
+      itemList: NEARBY_ANCHORS.map((item) => item.name),
+      success: (res) => {
+        const anchor = NEARBY_ANCHORS[res.tapIndex];
+        if (!anchor) return;
+        const saved = setMyLocation({ latitude: anchor.latitude, longitude: anchor.longitude });
+        if (!saved) return;
+        this.setData({ markLocation: false });
+        this.showNearby(saved);
       },
       fail: () => {},
     });
@@ -357,8 +447,8 @@ Page({
     this.askMyLocation();
   },
 
-  // 按「我的位置」算最近 5 个地点
-  showNearby(location) {
+  // 按「我的位置」算最近 5 个地点；source 为 auto 时表示来自自动定位
+  showNearby(location, source) {
     const nearest = this.data.places
       .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
       .map((place) => {
@@ -374,7 +464,7 @@ Page({
       nearbyPlaces: nearest,
       nearbyOpen: true,
     });
-    wx.showToast({ title: '按你标记的位置排序', icon: 'none' });
+    wx.showToast({ title: source === 'auto' ? '已按当前位置排序' : '按你标记的位置排序', icon: 'none' });
   },
 
   closeNearby() {

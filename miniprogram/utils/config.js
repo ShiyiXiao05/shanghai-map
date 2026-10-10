@@ -20,6 +20,23 @@ export const CLOUD_SERVICE_NAME = 'shanghai-map';
 // 用途：地点关键词搜索 / 逆地理（吸附选点）
 export const TMAP_KEY = '';
 
+// 「附近」在无法自动定位时的快捷锚点：一键选一个大区域，比手动拖动地图省事
+// （坐标取区域中心，精度约 1–2 公里；要更准用「在地图上点选」或「粘贴高德位置链接」）
+export const NEARBY_ANCHORS = [
+  { name: '人民广场', latitude: 31.2331, longitude: 121.4692 },
+  { name: '徐家汇', latitude: 31.1905, longitude: 121.437 },
+  { name: '静安寺', latitude: 31.2246, longitude: 121.4453 },
+  { name: '陆家嘴', latitude: 31.2397, longitude: 121.4998 },
+  { name: '五角场', latitude: 31.301, longitude: 121.5147 },
+  { name: '中山公园', latitude: 31.2213, longitude: 121.42 },
+  { name: '虹桥', latitude: 31.197, longitude: 121.336 },
+  { name: '莘庄', latitude: 31.112, longitude: 121.386 },
+  { name: '松江大学城', latitude: 31.034, longitude: 121.22 },
+  { name: '迪士尼', latitude: 31.144, longitude: 121.657 },
+  { name: '浦东机场', latitude: 31.1443, longitude: 121.8083 },
+  { name: '临港', latitude: 30.9, longitude: 121.9 },
+];
+
 export const CATEGORIES = [
   { id: '景点', emoji: '🏞️', color: '#2fa877' },
   { id: '美食', emoji: '🍜', color: '#e8862e' },

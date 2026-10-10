@@ -27,6 +27,7 @@
       scale="12"
       markers="{{markers}}"
       enable-poi="{{true}}"
+      show-location="{{showMyDot}}"
       bindmarkertap="onMarkerTap"
       bindtap="onMapTapForLocation"
     ></map>

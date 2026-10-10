@@ -44,7 +44,10 @@ function createRuntime({ app = {}, wx = {}, modules = {} } = {}) {
       return {
         ...page,
         data: JSON.parse(JSON.stringify(page.data)),
-        setData(patch) { Object.assign(this.data, patch); },
+        setData(patch, callback) {
+          Object.assign(this.data, patch);
+          if (typeof callback === 'function') callback();
+        },
       };
     },
   };
@@ -266,6 +269,8 @@ describe('miniprogram regressions', () => {
     ] });
 
     page.locateNearby();
+    // locateNearby 会先尝试一次自动定位（异步），这里等它放弃后再断言弹出了手动选择
+    await new Promise((resolve) => setTimeout(resolve, 50));
     assert.equal(sheets.length, 1, '没有标记过时应先询问');
 
     await page.useMapCenterAsMyLocation();
@@ -343,6 +348,110 @@ describe('miniprogram regressions', () => {
     assert.equal(sheets.length, 1);
   });
 
+  it('附近：自动定位可用时直接用当前位置排序（不调用地理位置接口）', async () => {
+    const values = new Map();
+    const toasts = [];
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        getSetting: (options) => options.success({ authSetting: { 'scope.userLocation': true } }),
+        createMapContext: () => ({
+          moveToLocation() {},
+          getCenterLocation: (options) => options.success({ latitude: 31.2054, longitude: 121.4375 }),
+        }),
+        showToast: (options) => toasts.push(options.title),
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({
+      places: [
+        { id: 1, name: '近处', category: '景点', lat: 31.2054, lng: 121.4375 },
+        { id: 2, name: '远处', category: '景点', lat: 31.25, lng: 121.5 },
+      ],
+    });
+    page.locateNearby();
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    assert.equal(page.data.showMyDot, true, '自动定位时需要打开地图定位点');
+    assert.equal(page.data.nearbyPlaces[0].id, 1);
+    assert.equal(page.data.nearbyOpen, true);
+    assert.equal(values.get('wish-my-location').latitude, 31.2054);
+    assert.equal(toasts.at(-1), '已按当前位置排序');
+  });
+
+  it('附近：地图组件定位没生效（中心点未移动）时退回手动方式', async () => {
+    const sheets = [];
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: () => null,
+        setStorageSync() {},
+        getSetting: (options) => options.success({ authSetting: { 'scope.userLocation': true } }),
+        createMapContext: () => ({
+          moveToLocation() {},
+          getCenterLocation: (options) => options.success({ latitude: 31.2304, longitude: 121.4737 }),
+        }),
+        showActionSheet: (options) => sheets.push(options),
+        showToast() {},
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
+    page.locateNearby();
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+    assert.equal(sheets.length, 1, '定位没生效应弹出手动选择');
+    assert.equal(sheets[0].itemList[0], '从常用地标选（最快）');
+    assert.equal(page.data.nearbyOpen, false);
+  });
+
+  it('附近：用户拒绝授权时不再弹授权、直接给手动方式', async () => {
+    const sheets = [];
+    let authorized = 0;
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: () => null,
+        setStorageSync() {},
+        getSetting: (options) => options.success({ authSetting: { 'scope.userLocation': false } }),
+        authorize: () => {
+          authorized += 1;
+        },
+        createMapContext: () => ({
+          moveToLocation() {},
+          getCenterLocation: (options) => options.success({ latitude: 31.2, longitude: 121.4 }),
+        }),
+        showActionSheet: (options) => sheets.push(options),
+        showToast() {},
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
+    page.locateNearby();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(authorized, 0, '明确拒绝过就不该再调 authorize');
+    assert.equal(sheets.length, 1);
+  });
+
+  it('附近：从常用地标一键标记', () => {
+    const values = new Map();
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: (key) => values.get(key),
+        setStorageSync: (key, value) => values.set(key, value),
+        showActionSheet: (options) => options.success({ tapIndex: 1 }), // 徐家汇
+        showToast() {},
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({
+      places: [
+        { id: 1, name: '徐家汇近', category: '景点', lat: 31.1905, lng: 121.437 },
+        { id: 2, name: '人民广场', category: '景点', lat: 31.2331, lng: 121.4692 },
+      ],
+    });
+    page.pickAnchor();
+    assert.equal(values.get('wish-my-location').latitude, 31.1905);
+    assert.equal(page.data.nearbyPlaces[0].id, 1);
+  });
+
   it('高德分享解析：marker 链接与裸坐标都能取到经纬度', async () => {
     const { parseAmapShare } = await import(new URL('../../miniprogram/utils/amap.js', import.meta.url));
     const marker = parseAmapShare(
@@ -415,7 +524,9 @@ describe('miniprogram regressions', () => {
         }
         if (!/\.(js|json|wxml|wxss)$/.test(entry.name)) continue;
         const text = fs.readFileSync(full, 'utf8');
-        for (const token of ['wx.getLocation', 'wx.chooseLocation', 'requiredPrivateInfos', 'scope.userLocation']) {
+        // 注意：scope.userLocation 是"地图组件定位点"所需的用户授权（show-location），
+        // 不属于需要后台准入开通的地理位置接口，因此不在禁止清单里；被管控的是下面这些。
+        for (const token of ['wx.getLocation', 'wx.chooseLocation', 'getFuzzyLocation', 'requiredPrivateInfos']) {
           if (text.includes(token)) offenders.push(path.relative(root, full) + ' → ' + token);
         }
       }
