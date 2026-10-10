@@ -1,6 +1,6 @@
 export const CLIENT_VERSION = '0.4.1';
 export const CHANGELOG = [
-  { version: '0.4.1', date: '2026-10-09', channel: '体验版', notes: ['地点 emoji 图标与六类预设、自定义图标', '首页地点简介、地图比例调整与显示全部地点', '列表缓存、详情预取及操作结果即时更新', '地图改名、删除与 JSON 导出', '浅色、深色与跟随系统，微信版本更新提醒'] },
+  { version: '0.4.1', date: '2026-10-09', channel: '体验版', notes: ['地点 emoji 图标与六类预设、自定义图标', '首页地点简介、地图比例调整与显示全部地点', '列表缓存、详情预取及操作结果即时更新', '地图改名与删除', '浅色、深色与跟随系统，微信版本更新提醒'] },
 ];
 let manager;
 let ready = false;

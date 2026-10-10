@@ -16,6 +16,25 @@
   font-weight: 700;
 }
 
+.page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.page-heading .title {
+  flex: none;
+  white-space: nowrap;
+}
+
+.public-entry {
+  flex: none;
+  padding: 14rpx 20rpx;
+  font-size: 24rpx;
+  white-space: nowrap;
+}
+
 .hint {
   font-size: 24rpx;
   color: var(--ink-soft);
@@ -36,11 +55,18 @@
 }
 
 .map-name {
+  flex: 1;
+  min-width: 0;
   font-size: 30rpx;
   font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .map-code {
+  flex: none;
+  margin-left: 20rpx;
   font-size: 24rpx;
   color: var(--ink-faint);
   letter-spacing: 2rpx;
@@ -93,6 +119,9 @@
 
 .actions .btn {
   flex: 1;
+  min-width: 0;
+  padding: 16rpx 20rpx;
+  white-space: nowrap;
 }
 
 .created {
@@ -129,16 +158,4 @@
   font-size: 24rpx;
   color: var(--ink-faint);
   margin-bottom: 16rpx;
-}
-
-.identity-row {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.identity-name {
-  flex: 1;
-  font-size: 28rpx;
-  color: var(--ink);
 }

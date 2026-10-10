@@ -14,7 +14,7 @@ Page({
     currentCode: '',
     mode: 'list', // list | create | join | rename | created
     name: '',
-    nickname: '', // 登录身份展示用；创建者署名由服务端按登录昵称盖章
+    nickname: '', // 创建地图时展示署名，实际创建者由服务端按登录昵称盖章
     code: '',
     createdCode: '',
     themeModes: THEME_LABELS,
@@ -59,28 +59,12 @@ Page({
     finally { this.renaming = false; }
   },
 
-  async exportMap() {
-    const code = app.globalData.map?.code;
-    if (!code) return;
-    try {
-      wx.showLoading({ title: '导出中…' });
-      const payload = await api.exportMap(code);
-      const fs = wx.getFileSystemManager && wx.getFileSystemManager();
-      if (!fs) throw new Error('当前微信版本不支持文件导出');
-      const path = `${wx.env.USER_DATA_PATH}/map-${code}-${Date.now()}.json`;
-      fs.writeFileSync(path, JSON.stringify(payload, null, 2), 'utf8');
-      wx.hideLoading();
-      if (typeof wx.shareFileMessage === 'function') wx.shareFileMessage({ filePath: path, fileName: `地图-${code}.json` });
-      else wx.showModal({ title: '导出完成', content: `文件已生成：${path}`, showCancel: false });
-    } catch (err) { wx.hideLoading(); wx.showToast({ title: err?.message || '导出失败，请重试', icon: 'none' }); }
-  },
-
   deleteMap() {
     const map = app.globalData.map;
     if (!map?.code) return;
     wx.showModal({
       title: `删除「${map.name}」？`,
-      content: '地图、地点、照片、留言和行程都会永久删除，无法恢复。请先导出 JSON 备份。',
+      content: '地图、地点、照片、留言和行程都会永久删除，无法恢复。',
       confirmText: '永久删除',
       confirmColor: '#be4a43',
       success: async (result) => {
@@ -203,18 +187,7 @@ Page({
     wx.navigateTo({ url: '/pages/trash/trash' });
   },
 
-  // 改昵称：直接复用既有昵称弹层（identity-behavior 的 onNickConfirm 会调 updateProfile 落库）
-  async editNickname() {
-    try {
-      await auth.ensureLogin(); // 没有 token 时 /api/auth/profile 会 401「请先登录」，先静默登录
-    } catch (err) {
-      wx.showToast({ title: (err && err.message) || '登录失败，请重试', icon: 'none' });
-      return;
-    }
-    this.setData({ nickModalShow: true });
-  },
-
-  // 覆盖 identity-behavior 的同名方法：多一步把新昵称同步到本页展示
+  // 确认创建者昵称后，同步创建地图表单中的署名提示。
   async onNickConfirm(event) {
     try {
       const saved = await auth.confirmNickname(this, event.detail);
@@ -222,20 +195,6 @@ Page({
     } catch (err) {
       wx.showToast({ title: (err && err.message) || '保存失败，请重试', icon: 'none' });
     }
-  },
-
-  // 退出登录：清本地 token 与昵称。不清地图，重新写操作时会静默重新登录
-  logout() {
-    wx.showModal({
-      title: '退出登录',
-      content: '退出后重新做写操作会再次静默登录，地图数据不受影响。',
-      success: (res) => {
-        if (!res.confirm) return;
-        auth.logout();
-        this.setData({ nickname: '' });
-        wx.showToast({ title: '已退出登录', icon: 'none' });
-      },
-    });
   },
 
   // 换邀请码：旧码立即失效，本地存的码同步替换，避免自己把自己锁在门外

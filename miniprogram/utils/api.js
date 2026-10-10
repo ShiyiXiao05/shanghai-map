@@ -118,7 +118,6 @@ export const api = {
   createMap: (data) => request('POST', '/api/maps', { body: data }),
   getMap: (code) => get(`/api/maps/${encodeURIComponent(code)}`),
   renameMap: (code, name) => request('PUT', `/api/maps/${encodeURIComponent(code)}`, { body: { name } }),
-  exportMap: (code) => get(`/api/maps/${encodeURIComponent(code)}/export`),
   deleteMap: (code) => request('DELETE', `/api/maps/${encodeURIComponent(code)}`),
   memories: (code) => get(`/api/maps/${encodeURIComponent(code)}/memories`).then((d) => d.memories),
 

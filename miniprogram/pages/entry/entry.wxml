@@ -1,6 +1,9 @@
 <page-meta page-style="{{themeStyle}}"/><view class="page">
   <view wx:if="{{mode === 'list'}}" class="body">
-    <view class="title">我的地图</view>
+    <view class="page-heading">
+      <view class="title">我的地图</view>
+      <view class="btn public-entry" bindtap="enterPublic">🌐 进入公共广场</view>
+    </view>
     <view class="hint">当前：{{currentCode || '未加入'}}</view>
     <view
       wx:for="{{joinedMaps}}"
@@ -29,7 +32,6 @@
       <view class="section-title">当前地图设置</view>
       <view class="actions">
         <view class="btn" bindtap="startRename">✏️ 改名</view>
-        <view class="btn" bindtap="exportMap">⇩ 导出 JSON</view>
         <view class="btn btn-danger" bindtap="deleteMap">🗑️ 删除整张地图</view>
       </view>
     </view>
@@ -41,20 +43,6 @@
         <view class="btn" bindtap="checkUpdates">检查更新 · {{version}}</view>
       </view>
     </view>
-    <view class="actions">
-      <view class="btn" bindtap="enterPublic">🌐 进入公共广场</view>
-    </view>
-
-    <!-- 我的身份：昵称可改、可退出登录（此前用户遇到昵称不一致时没有任何自救入口） -->
-    <view class="section">
-      <view class="section-title">我的身份</view>
-      <view class="identity-row">
-        <text class="identity-name">{{nickname || '未设置昵称'}}</text>
-        <view class="btn btn-mini" bindtap="editNickname">修改昵称</view>
-        <view class="btn btn-mini" bindtap="logout">退出登录</view>
-      </view>
-    </view>
-
     <!-- 当前地图管理：回收站与换邀请码，此前只能去网页版操作 -->
     <view class="section" wx:if="{{currentCode}}">
       <view class="section-title">地图管理 · {{currentCode}}</view>
