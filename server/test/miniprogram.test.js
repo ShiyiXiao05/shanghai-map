@@ -386,6 +386,50 @@ describe('miniprogram regressions', () => {
     assert.equal(toasts.at(-1), '地点搜索暂时不可用，请稍后再试');
   });
 
+  // 合成一块"墨迹"画布：rect 内 alpha=255，其余透明（用来验算 measureEmojiInk 的几何）
+  function fakeInkCanvas(rect) {
+    const size = 160;
+    const data = new Uint8ClampedArray(size * size * 4);
+    for (let y = rect.y0; y <= rect.y1; y += 1) {
+      for (let x = rect.x0; x <= rect.x1; x += 1) {
+        data[(y * size + x) * 4 + 3] = 255;
+      }
+    }
+    const ctx = {
+      setTransform() {},
+      clearRect() {},
+      fillText() {},
+      getImageData: () => ({ data }),
+    };
+    return { ctx, canvas: { width: 0, height: 0 } };
+  }
+
+  it('emoji 墨迹测量：按真实着色范围算缩放与居中偏移（不再依赖字体度量）', () => {
+    const runtime = createRuntime({ wx: {} });
+    const page = runtime.page('pages/index/index.js');
+    // 墨迹 40×50，中心 (59.5, 74.5)，参考字号 96、dpr 2、目标直径 26 逻辑 px
+    const { ctx, canvas } = fakeInkCanvas({ x0: 40, x1: 79, y0: 50, y1: 99 });
+    const fit = page.measureEmojiInk(ctx, canvas, '🍜', 2);
+    assert.equal(canvas.width, 160, '测量用的画布尺寸');
+    assert.equal(fit.fontLogical, 48, '绘制时逻辑字号 = 参考字号 / dpr');
+    assert.ok(Math.abs(fit.k - 52 / 50) < 1e-9, '缩放取较长边（50 → 52 设备像素）');
+    assert.ok(Math.abs(fit.ox + 29.75) < 1e-9, '横向偏移应把墨迹中心对到圆心');
+    assert.ok(Math.abs(fit.oy + 37.25) < 1e-9, '纵向偏移同理');
+  });
+
+  it('emoji 墨迹测量：宽 emoji 按宽度收敛；空画布返回 null（页面走兜底绘制）', () => {
+    const runtime = createRuntime({ wx: {} });
+    const page = runtime.page('pages/index/index.js');
+    const wide = fakeInkCanvas({ x0: 20, x1: 99, y0: 60, y1: 99 }); // 80×40
+    assert.ok(Math.abs(page.measureEmojiInk(wide.ctx, wide.canvas, '👨‍👩‍👧', 2).k - 52 / 80) < 1e-9);
+    const empty = fakeInkCanvas({ x0: 0, x1: -1, y0: 0, y1: -1 });
+    assert.equal(page.measureEmojiInk(empty.ctx, empty.canvas, 'x', 2), null);
+    // 回归守卫：绘制流程必须用测量结果（缩放 + 偏移），不能退回按字号估算
+    const source = fs.readFileSync(path.join(miniRoot, 'pages/index/index.js'), 'utf8');
+    assert.match(source, /ctx\.scale\(inkFit\.k, inkFit\.k\)/, '应按墨迹缩放绘制');
+    assert.match(source, /ctx\.fillText\(emoji, inkFit\.ox, inkFit\.oy\)/, '应按墨迹偏移绘制');
+  });
+
   it('入口页：改昵称会先静默登录再落库，并同步页面与本地存储', async () => {
     const values = new Map();
     const profiles = [];
