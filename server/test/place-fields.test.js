@@ -140,8 +140,11 @@ describe('place fields: price_hint / hours / tags', () => {
       const response = await request('POST', '/api/places', { body: { ...basePlace, map_code: code, emoji } });
       assert.equal(response.status, 400, String(emoji));
     }
-    for (const emoji of ['🇨🇳', '1️⃣', '❤️', '🏳️‍🌈']) {
-      const response = await request('POST', '/api/places', { body: { ...basePlace, map_code: code, emoji } });
+    // 名称取唯一值：加地点现在有同名去重（409），这里只验证 emoji 规则
+    for (const [index, emoji] of ['🇨🇳', '1️⃣', '❤️', '🏳️‍🌈'].entries()) {
+      const response = await request('POST', '/api/places', {
+        body: { ...basePlace, map_code: code, name: `emoji-${index}`, emoji },
+      });
       assert.equal(response.status, 201, emoji);
     }
   });

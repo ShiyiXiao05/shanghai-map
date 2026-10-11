@@ -189,6 +189,9 @@
 .random-sheet { text-align: center; padding-top: 38rpx; }
 .random-sheet-close { position: absolute; top: 14rpx; right: 18rpx; }
 .random-kicker { margin-bottom: 20rpx; color: var(--ink-soft); font-size: 25rpx; }
+/* 抽取范围 chips：复用首页 .chip 视觉，可换行居中 */
+.random-cats { display: flex; flex-wrap: wrap; justify-content: center; gap: 10rpx; margin-bottom: 14rpx; }
+.random-scope { margin-bottom: 18rpx; color: var(--ink-faint); font-size: 23rpx; }
 .random-card {
   min-height: 300rpx;
   box-sizing: border-box;
@@ -246,6 +249,39 @@
 
 .chips-scroll {
   white-space: nowrap;
+}
+
+/* 关键词搜索框：贴在分类 chips 上方 */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-bottom: 12rpx;
+  padding: 6rpx 20rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid var(--line);
+  background: var(--paper);
+}
+
+.search-bar-icon {
+  flex: none;
+  font-size: 24rpx;
+  color: var(--ink-faint);
+}
+
+.search-bar-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10rpx 0;
+  font-size: 26rpx;
+  color: var(--ink);
+}
+
+.search-bar-clear {
+  flex: none;
+  padding: 6rpx 10rpx;
+  color: var(--ink-faint);
+  font-size: 26rpx;
 }
 
 .chips {

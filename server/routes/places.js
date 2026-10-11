@@ -171,6 +171,18 @@ export function createPlacesRouter({ store, uploader, pusher, contentSecurity })
       }
       const checked = validatePlace(req.body, { partial: false });
       if (checked.error) return res.status(400).json({ error: checked.error });
+      // 去重：同一张地图里已有同名或几乎同坐标的地点 → 409 拒绝，避免误点两次/重复导入
+      const { duplicate, trashed } = await store.findDuplicatePlace(code, {
+        name: checked.value.name,
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          error: `地图里已经有「${duplicate.name}」了`,
+          code: 'DUPLICATE_PLACE',
+          duplicate: { id: Number(duplicate.id), name: duplicate.name },
+          trashed: trashed ? { id: Number(trashed.id), name: trashed.name } : null,
+        });
+      }
       // 内容安全：UGC 文本写入前先过一遍微信内容检测（未配置时自动跳过）
       const guard = await guardTexts(
         contentSecurity,

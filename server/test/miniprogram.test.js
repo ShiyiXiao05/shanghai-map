@@ -669,4 +669,241 @@ describe('miniprogram regressions', () => {
     assert.equal(page.data.markers.length, 1, '没有图标也必须画出点位');
     assert.equal(page.data.markers[0].iconPath, undefined);
   });
+
+  it('首页搜索：关键词并入筛选管道，空词恢复全部且与分类叠加', async () => {
+    const places = [
+      { id: 1, name: '武康大楼', category: '景点', address: '淮海中路1850号', tags: ['拍照'], visited: false },
+      { id: 2, name: '老吉士酒家', category: '美食', address: '天平路41号', tags: 'Brunch, 本帮菜', visited: false },
+      { id: 3, name: '上海博物馆', category: '展馆', address: '人民大道201号', visited: true },
+    ];
+    const app = { globalData: { map: { code: 'MAP123', name: '地图' } } };
+    const runtime = createRuntime({
+      app,
+      wx: { getStorageSync: () => undefined, setStorageSync() {} },
+      modules: { [path.join(miniRoot, 'utils/api.js')]: { api: { listPlaces: async () => places } } },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places, activeCategories: ['景点', '美食', '展馆'] });
+
+    // 名称命中（前后空格先 trim）
+    page.onSearchInput({ detail: { value: '  武康  ' } });
+    assert.equal(page.data.searchKeyword, '  武康  ');
+    assert.equal(page.data.filtered.map((p) => p.id).join(','), '1');
+    assert.equal(page.data.markers.map((m) => m.id).join(','), '1', 'markers 与列表共用同一份 filtered');
+
+    // tags 不区分大小写（字符串形式的 tags 也能命中）
+    page.onSearchInput({ detail: { value: 'brunch' } });
+    assert.equal(page.data.filtered.map((p) => p.id).join(','), '2');
+
+    // address / category 也在匹配范围内
+    page.onSearchInput({ detail: { value: '人民大道' } });
+    assert.equal(page.data.filtered.map((p) => p.id).join(','), '3');
+    page.onSearchInput({ detail: { value: '美食' } });
+    assert.equal(page.data.filtered.map((p) => p.id).join(','), '2');
+
+    // 空关键词恢复全部（默认 newest：id 倒序）
+    page.onSearchInput({ detail: { value: '' } });
+    assert.equal(page.data.filtered.map((p) => p.id).join(','), '3,2,1');
+
+    // 与分类筛选叠加：只留「美食 / 展馆」时，命中的「景点」被挡掉
+    page.setData({ activeCategories: ['美食', '展馆'] });
+    page.onSearchInput({ detail: { value: '武康' } });
+    assert.equal(page.data.filtered.length, 0);
+    page.onSearchInput({ detail: { value: '人民大道' } });
+    assert.equal(page.data.filtered.map((p) => p.id).join(','), '3');
+
+    // 与「只看还没去的」叠加
+    page.setData({ activeCategories: ['景点', '美食', '展馆'], hideVisitedOnly: true });
+    page.onSearchInput({ detail: { value: '' } });
+    assert.equal(page.data.filtered.map((p) => p.id).join(','), '2,1');
+
+    // 清除搜索（先关掉「只看还没去的」，只验证关键词这一层）
+    page.setData({ hideVisitedOnly: false });
+    page.onSearchInput({ detail: { value: '武康' } });
+    assert.equal(page.data.filtered.length, 1);
+    page.clearSearch();
+    assert.equal(page.data.searchKeyword, '');
+    assert.equal(page.data.filtered.length, 3);
+
+    // 下拉刷新（force）后清空关键词：列表不能还停在上一次的搜索结果里
+    page.onSearchInput({ detail: { value: '武康' } });
+    await page.loadPlaces(true);
+    assert.equal(page.data.searchKeyword, '');
+    assert.equal(page.data.filtered.length, 3);
+
+    // 切换地图后同样清空关键词
+    page.onSearchInput({ detail: { value: '武康' } });
+    app.globalData.map = { code: 'MAP456', name: '新地图' };
+    await page.loadPlaces();
+    assert.equal(page.data.searchKeyword, '');
+  });
+
+  it('随机抽取：只在选中的分类里抽，候选为空时只提示不开动画', async () => {
+    const toasts = [];
+    const runtime = createRuntime({
+      wx: {
+        getStorageSync: () => undefined,
+        setStorageSync() {},
+        showToast: (options) => toasts.push(options.title),
+      },
+      modules: { [path.join(miniRoot, 'utils/api.js')]: { api: {} } },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({
+      places: [
+        { id: 1, name: '武康大楼', category: '景点' },
+        { id: 2, name: '老吉士酒家', category: '美食' },
+        { id: 3, name: '南翔小笼', category: '美食' },
+      ],
+    });
+
+    page.toggleRandomCat({ currentTarget: { dataset: { id: '美食' } } });
+    assert.equal(page.data.randomScope, '从 美食 中随机选择');
+    assert.equal(page.randomCandidates().map((p) => p.id).join(','), '2,3');
+
+    page.drawRandom();
+    assert.equal(page.data.randomOpen, true);
+    assert.equal(page.data.randomDrawing, true);
+    await new Promise((resolve) => setTimeout(resolve, 2600)); // 等 2.4s 滚动动画跑完
+    assert.equal(page.data.randomDrawing, false);
+    assert.equal(page.data.randomPlace.category, '美食');
+    assert.equal(toasts.length, 0);
+
+    // 选中的分类里没有地点：只提示、不开抽奖动画（面板仍打开，用户能直接改分类）
+    page.applyRandomCats(['购物']);
+    const drawn = page.data.randomPlace;
+    page.drawRandom();
+    assert.equal(page.data.randomDrawing, false);
+    assert.equal(page.data.randomPlace, drawn, '没有候选时不应重新滚动');
+    assert.equal(page.data.randomOpen, true);
+    assert.equal(toasts.at(-1), '这个分类下还没有地点');
+  });
+
+  it('随机抽取：分类选择写在本地存储，脏数据回落「全部」', () => {
+    const values = new Map();
+    const runtime = createRuntime({
+      wx: { getStorageSync: (key) => values.get(key), setStorageSync: (key, value) => values.set(key, value) },
+      modules: { [path.join(miniRoot, 'utils/api.js')]: { api: {} } },
+    });
+    const page = runtime.page('pages/index/index.js');
+    assert.equal(page.data.randomCats.length, 0, '默认「全部」');
+    assert.equal(page.data.randomScope, '从全部地点中随机选择');
+
+    page.toggleRandomCat({ currentTarget: { dataset: { id: '美食' } } });
+    page.toggleRandomCat({ currentTarget: { dataset: { id: '娱乐' } } });
+    assert.equal(page.data.randomCats.join(','), '美食,娱乐');
+    assert.equal(values.get('wish-random-cats').join(','), '美食,娱乐');
+    assert.equal(page.data.randomScope, '从 美食 · 娱乐 中随机选择');
+
+    // 再点一次同一个分类 = 取消；「全部」= 清空
+    page.toggleRandomCat({ currentTarget: { dataset: { id: '美食' } } });
+    assert.equal(page.data.randomCats.join(','), '娱乐');
+    page.toggleRandomCat({ currentTarget: { dataset: { id: '全部' } } });
+    assert.equal(page.data.randomCats.length, 0);
+    assert.equal(values.get('wish-random-cats').length, 0);
+    assert.equal(page.data.randomScope, '从全部地点中随机选择');
+
+    // 冷启动（onLoad）从存储恢复
+    values.set('wish-random-cats', ['购物']);
+    page.restoreRandomCats();
+    assert.equal(page.data.randomCats.join(','), '购物');
+
+    // 存储里是脏数据（已下线的分类 / 不是数组）时当成「全部」
+    values.set('wish-random-cats', ['不存在的分类']);
+    page.restoreRandomCats();
+    assert.equal(page.data.randomCats.length, 0);
+    values.set('wish-random-cats', '美食');
+    page.restoreRandomCats();
+    assert.equal(page.data.randomCats.length, 0);
+  });
+
+  it('添加地点：重复被拒时弹「已经添加过了」，保存按钮复位', async () => {
+    const modals = [];
+    const navs = [];
+    const runtime = createRuntime({
+      app: { globalData: { map: { code: 'MAP123', name: '地图' } } },
+      wx: {
+        showToast() {},
+        navigateTo: (options) => navs.push(options.url),
+        showModal: (options) => {
+          modals.push(options);
+          if (options.success) options.success({ confirm: true });
+        },
+      },
+      modules: {
+        [path.join(miniRoot, 'utils/auth.js')]: { requireIdentity: async () => '同学' },
+        [path.join(miniRoot, 'utils/identity-behavior.js')]: {},
+        [path.join(miniRoot, 'utils/api.js')]: {
+          api: {
+            createPlace: async () => {
+              // 服务端 409 契约（api.js 只透传 message / code）
+              const error = new Error('地图里已经有「武康大楼」了');
+              error.code = 'DUPLICATE_PLACE';
+              error.status = 409;
+              error.duplicate = { id: 12, name: '武康大楼' };
+              error.trashed = { id: 7, name: '武康大楼' };
+              throw error;
+            },
+          },
+          setAuthRecovery() {},
+        },
+      },
+    });
+    const page = runtime.page('pages/search/search.js');
+    page.setData({
+      picked: { name: '武康大楼', address: '淮海中路1850号', latitude: 31.2054, longitude: 121.4375 },
+      name: '武康大楼',
+      category: '景点',
+    });
+    await page.save();
+
+    assert.equal(modals.length, 1);
+    assert.equal(modals[0].title, '已经添加过了');
+    assert.equal(modals[0].confirmText, '去看看');
+    assert.equal(modals[0].cancelText, '知道了');
+    assert.match(modals[0].content, /地图里已经有「武康大楼」了/);
+    assert.match(modals[0].content, /回收站里也有一个同名的/);
+    assert.equal(navs.join(','), '/pages/detail/detail?placeId=12');
+    assert.equal(page.data.saving, false, '失败后按钮要恢复可点');
+    assert.equal(page.submitting, false);
+  });
+
+  it('添加地点：服务端没给 duplicate 时，用本地缓存回查也能「去看看」', async () => {
+    const navs = [];
+    const runtime = createRuntime({
+      app: { globalData: { map: { code: 'MAP123', name: '地图' } } },
+      wx: {
+        showToast() {},
+        navigateTo: (options) => navs.push(options.url),
+        showModal: (options) => { if (options.success) options.success({ confirm: true }); },
+      },
+      modules: {
+        [path.join(miniRoot, 'utils/auth.js')]: { requireIdentity: async () => '同学' },
+        [path.join(miniRoot, 'utils/identity-behavior.js')]: {},
+        [path.join(miniRoot, 'utils/cache.js')]: {
+          readPlaces: (code) => (code === 'MAP123'
+            ? { places: [{ id: 8, name: ' 武康大楼 ' }, { id: 9, name: '别的地方' }] }
+            : null),
+        },
+        [path.join(miniRoot, 'utils/api.js')]: {
+          api: {
+            createPlace: async () => {
+              const error = new Error('地图里已经有「武康大楼」了');
+              error.code = 'DUPLICATE_PLACE';
+              throw error;
+            },
+          },
+          setAuthRecovery() {},
+        },
+      },
+    });
+    const page = runtime.page('pages/search/search.js');
+    page.setData({
+      picked: { name: '武康大楼', address: '', latitude: 31.2054, longitude: 121.4375 },
+      name: '武康大楼',
+    });
+    await page.save();
+    // 缓存里的同名地点忽略大小写/首尾空格（与服务端同一套判定）
+    assert.equal(navs.join(','), '/pages/detail/detail?placeId=8');
+  });
 });

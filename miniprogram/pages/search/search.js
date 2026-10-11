@@ -4,6 +4,7 @@ const { CATEGORIES } = require('../../utils/config.js');
 const auth = require('../../utils/auth.js');
 const identityBehavior = require('../../utils/identity-behavior.js');
 const storage = require('../../utils/storage.js');
+const cache = require('../../utils/cache.js');
 const { displayEmoji, validEmoji } = require('../../utils/emoji.js');
 const { applyTheme } = require('../../utils/theme.js');
 
@@ -195,10 +196,57 @@ Page({
       wx.showToast({ title: '已添加到地图' });
       setTimeout(() => wx.navigateBack(), 700);
     } catch (err) {
+      // 保存失败按钮必须回到可点：先复位 saving，再按错误类型给提示
       this.setData({ saving: false });
-      wx.showToast({ title: err.message, icon: 'none' });
+      if (err && err.code === 'DUPLICATE_PLACE') {
+        this.showDuplicateModal(err, name); // 服务端去重拦截：409 + code=DUPLICATE_PLACE
+        return;
+      }
+      wx.showToast({ title: (err && err.message) || '保存失败，请重试', icon: 'none' });
     } finally {
       this.submitting = false;
+    }
+  },
+
+  // 重复地点（409）：标题固定，内容优先用服务端那句中文 error（api.js 已透传 message）；
+  // attemptName 是本次要保存的名称，服务端 duplicate/trashed 拿不到时用它兜底文案与回查
+  showDuplicateModal(err, attemptName) {
+    const duplicate = (err && err.duplicate) || null;
+    const trashed = (err && err.trashed) || null;
+    const name = (duplicate && duplicate.name) || (trashed && trashed.name) || attemptName || '';
+    let content = (err && err.message) || (name ? `地图里已经有「${name}」了` : '这张地图里已经有同一个地点了');
+    if (trashed) content += '\n回收站里也有一个同名的，可以先去回收站恢复';
+    wx.showModal({
+      title: '已经添加过了',
+      content,
+      confirmText: '去看看',
+      cancelText: '知道了',
+      success: (res) => {
+        if (!res || !res.confirm) return;
+        const id = this.duplicatePlaceId(err, name);
+        if (id) wx.navigateTo({ url: `/pages/detail/detail?placeId=${id}` });
+        else wx.showToast({ title: '在地图列表里就能看到它', icon: 'none' });
+      },
+    });
+  },
+
+  // 服务端 409 里的 duplicate.id 没有被 api.js 透传（utils/ 不在本次改动范围），
+  // 因此先看 err.duplicate，再退回本地地点缓存按名称回查一次（纯本地，不发请求）
+  duplicatePlaceId(err, name) {
+    const duplicate = err && err.duplicate;
+    if (duplicate && duplicate.id !== undefined && duplicate.id !== null) return Number(duplicate.id);
+    if (!name) return null;
+    try {
+      const code = (app.globalData.map && app.globalData.map.code) || '';
+      const entry = cache.readPlaces(code);
+      // 与服务端同一套判定：忽略大小写与首尾空格
+      const target = String(name).trim().toLowerCase();
+      const hit = ((entry && entry.places) || []).find(
+        (place) => String(place.name == null ? '' : place.name).trim().toLowerCase() === target
+      );
+      return hit ? Number(hit.id) : null;
+    } catch (err2) {
+      return null;
     }
   },
 

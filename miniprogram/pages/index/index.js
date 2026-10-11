@@ -14,6 +14,9 @@ const EMOJI_FONT_PX = 20;
 const EMOJI_NUDGE_X = 0;
 const EMOJI_NUDGE_Y = 1;
 
+// 随机抽取的分类范围：跨地图记住，空数组 = 全部地点（与 storage.js 的既有键风格一致）
+const RANDOM_CATS_KEY = 'wish-random-cats';
+
 function haversineKm(a, b) {
   const rad = Math.PI / 180;
   const dLat = (Number(b.lat) - Number(a.latitude)) * rad;
@@ -44,6 +47,7 @@ Page({
     hideVisitedOnly: false,
     sort: 'newest',
     sortIndex: 0, // picker 索引，与 storage.SORTS 顺序一致
+    searchKeyword: '', // 列表关键词：纯本地过滤，输入时不发请求
     places: [],
     filtered: [],
     markers: [],
@@ -61,6 +65,8 @@ Page({
     randomOpen: false,
     randomDrawing: false,
     randomPlace: null,
+    randomCats: [], // 随机抽取的分类范围（空 = 全部地点）
+    randomScope: '从全部地点中随机选择', // 随机面板副标题，随选择变化
     selectedPlace: null,
     mapFraction: 0.43,
   },
@@ -89,6 +95,7 @@ Page({
     }
     this.mapCtx = wx.createMapContext('mainMap', this);
     this.restoreSort();
+    this.restoreRandomCats();
     const savedFraction = Number(wx.getStorageSync('wish-map-fraction'));
     if (savedFraction >= 0.25 && savedFraction <= 0.7) this.setData({ mapFraction: savedFraction });
 
@@ -361,14 +368,65 @@ Page({
     this.openDetail(place);
   },
 
+  // 从本地存储恢复抽取范围（脏数据 —— 非数组 / 已下线的分类 —— 一律当成「全部」）
+  restoreRandomCats() {
+    const raw = wx.getStorageSync(RANDOM_CATS_KEY);
+    const ids = CATEGORIES.map((c) => c.id);
+    const cats = Array.isArray(raw) ? ids.filter((id) => raw.indexOf(id) !== -1) : [];
+    this.setData({ randomCats: cats, randomScope: this.randomScopeText(cats) });
+  },
+
+  // 面板副标题：让用户一眼看到这次的抽取范围
+  randomScopeText(cats) {
+    return cats && cats.length ? `从 ${cats.join(' · ')} 中随机选择` : '从全部地点中随机选择';
+  },
+
+  // 抽取候选 = 选中分类 ∩ 当前地图地点；没选分类（全部）时就是全部地点
+  randomCandidates() {
+    const places = this.data.places || [];
+    const cats = this.data.randomCats || [];
+    return cats.length ? places.filter((p) => cats.indexOf(p.category) !== -1) : places;
+  },
+
+  // 「全部」= 清空选择（data-id="全部"）；具体分类支持多选，再点一次取消
+  toggleRandomCat(event) {
+    const id = event.currentTarget.dataset.id;
+    if (id === '全部') {
+      this.applyRandomCats([]);
+      return;
+    }
+    const current = this.data.randomCats || [];
+    const next = current.indexOf(id) !== -1 ? current.filter((c) => c !== id) : [...current, id];
+    this.applyRandomCats(next);
+  },
+
+  // 归一化：只留合法分类、顺序与 chips 一致，然后写本地存储（不改 storage.js，沿用首页既有写法）
+  applyRandomCats(cats) {
+    const valid = CATEGORIES.map((c) => c.id).filter((id) => cats.indexOf(id) !== -1);
+    wx.setStorageSync(RANDOM_CATS_KEY, valid);
+    this.setData({ randomCats: valid, randomScope: this.randomScopeText(valid) });
+  },
+
   drawRandom() {
-    const places = this.data.places;
+    const cats = this.data.randomCats || [];
+    const places = this.randomCandidates();
     if (places.length === 0) {
-      wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
+      if (cats.length === 0) {
+        wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
+        return;
+      }
+      // 选中分类里没有地点：只提示、不开抽奖动画；同时把面板打开，用户能直接改分类而不是走进死路
+      this.setData({ randomOpen: true, randomScope: this.randomScopeText(cats) });
+      wx.showToast({ title: '这个分类下还没有地点', icon: 'none' });
       return;
     }
     clearInterval(this.randomTimer);
-    this.setData({ randomOpen: true, randomDrawing: true, randomPlace: null });
+    this.setData({
+      randomOpen: true,
+      randomDrawing: true,
+      randomPlace: null,
+      randomScope: this.randomScopeText(cats),
+    });
     let ticks = 0;
     let previousIndex = -1;
     const drawInterval = 80;
@@ -439,6 +497,11 @@ Page({
     this._placesRequestId = requestId;
     // 先清空：避免「新地图名 + 旧地图数据」，也避免旧数据在失败时被当成有效结果
     this.setData({ places: [], filtered: [], markers: [], loading: true, loadError: '' });
+    // 切换地图或下拉刷新后清空关键词：否则列表还是被上一次的搜索词过滤着，用户会以为地点丢了
+    if (force || this._loadedMapCode !== code) {
+      this._loadedMapCode = code;
+      if (this.data.searchKeyword) this.setData({ searchKeyword: '' });
+    }
     try {
       const places = code ? await api.listPlaces(code, { force }) : await api.publicPlaces();
       if (requestId !== this._placesRequestId || code !== (app.globalData.map?.code || '')) return;
@@ -456,10 +519,42 @@ Page({
     this.loadPlaces(true);
   },
 
+  // 关键词匹配：name / address / tags / category，trim 后不区分大小写（中文直接 includes）。
+  // 纯本地过滤，输入时不发任何请求。
+  matchKeyword(place, keyword) {
+    const needle = String(keyword == null ? '' : keyword).trim().toLowerCase();
+    if (!needle) return true;
+    const p = place || {};
+    const tags = Array.isArray(p.tags) ? p.tags.join(' ') : p.tags;
+    return [p.name, p.address, p.category, tags].some(
+      (value) => String(value == null ? '' : value).toLowerCase().indexOf(needle) !== -1
+    );
+  },
+
+  onSearchInput(event) {
+    const value = (event && event.detail && event.detail.value) || '';
+    this.setData({ searchKeyword: value });
+    this.applyFilters(); // 输入即过滤，不需要「搜索」按钮
+  },
+
+  // 键盘「搜索」：输入时已经过滤过，这里只是确认时再跑一次兜底
+  onSearchConfirm() {
+    this.applyFilters();
+  },
+
+  clearSearch() {
+    if (!this.data.searchKeyword) return;
+    this.setData({ searchKeyword: '' });
+    this.applyFilters();
+  },
+
   applyFilters() {
-    const { places, activeCategories, hideVisitedOnly, sort } = this.data;
+    const { places, activeCategories, hideVisitedOnly, sort, searchKeyword } = this.data;
     let filtered = places.filter(
-      (p) => activeCategories.indexOf(p.category) !== -1 && !(hideVisitedOnly && p.visited)
+      (p) =>
+        activeCategories.indexOf(p.category) !== -1 &&
+        !(hideVisitedOnly && p.visited) &&
+        this.matchKeyword(p, searchKeyword)
     );
     if (sort === 'name') {
       filtered = [...filtered].sort((a, b) => String(a.name).localeCompare(String(b.name), 'zh'));

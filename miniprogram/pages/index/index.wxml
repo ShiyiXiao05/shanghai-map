@@ -54,6 +54,20 @@
       <view class="btn btn-primary preview-detail" catchtap="openSelectedDetail">查看详情</view>
     </view>
     <view class="filters">
+      <!-- 关键词搜索：只过滤已加载的地点，输入即出结果（不发请求） -->
+      <view class="search-bar">
+        <text class="search-bar-icon">🔍</text>
+        <input
+          class="search-bar-input"
+          value="{{searchKeyword}}"
+          maxlength="50"
+          placeholder="搜索地图里的地点"
+          confirm-type="search"
+          bindinput="onSearchInput"
+          bindconfirm="onSearchConfirm"
+        />
+        <view wx:if="{{searchKeyword}}" class="search-bar-clear" catchtap="clearSearch">✕</view>
+      </view>
       <scroll-view scroll-x class="chips-scroll">
         <view class="chips">
           <view
@@ -97,10 +111,18 @@
         <text>正在加载地点…</text>
       </view>
       <view wx:elif="{{filtered.length === 0}}" class="empty">
-        <text class="empty-icon">🌃</text>
-        <text>{{places.length === 0 ? '这张地图还没有地点' : '这个筛选下没有地点'}}</text>
-        <view class="btn btn-primary" wx:if="{{!isPublicView}}" bindtap="goSearch">＋ 搜索添加地点</view>
-        <view class="btn" wx:else bindtap="enterEntry">创建 / 加入地图</view>
+        <!-- 搜索无结果：与「地图里还没有地点」区分开，一键清词回到全部 -->
+        <block wx:if="{{searchKeyword}}">
+          <text class="empty-icon">🔍</text>
+          <text>没有匹配「{{searchKeyword}}」的地点</text>
+          <view class="btn btn-primary" bindtap="clearSearch">清除搜索</view>
+        </block>
+        <block wx:else>
+          <text class="empty-icon">🌃</text>
+          <text>{{places.length === 0 ? '这张地图还没有地点' : '这个筛选下没有地点'}}</text>
+          <view class="btn btn-primary" wx:if="{{!isPublicView}}" bindtap="goSearch">＋ 搜索添加地点</view>
+          <view class="btn" wx:else bindtap="enterEntry">创建 / 加入地图</view>
+        </block>
       </view>
       <view
         wx:for="{{filtered}}"
@@ -148,10 +170,23 @@
     <view class="discover-sheet random-sheet" catchtap="noop">
       <view class="sheet-close random-sheet-close" bindtap="closeRandom">✕</view>
       <view class="random-kicker">今天去哪里？</view>
+      <!-- 抽取范围：默认「全部」，点具体分类即只在该分类里抽，支持多选（选择记在本地） -->
+      <view class="random-cats">
+        <view class="chip {{randomCats.length === 0 ? 'chip-on' : ''}}" data-id="全部" bindtap="toggleRandomCat">全部</view>
+        <view
+          wx:for="{{categories}}"
+          wx:key="id"
+          class="chip {{randomCats.indexOf(item.id) !== -1 ? 'chip-on' : ''}}"
+          style="{{randomCats.indexOf(item.id) !== -1 ? 'background:' + item.color + '1f; border-color:' + item.color : ''}}"
+          data-id="{{item.id}}"
+          bindtap="toggleRandomCat"
+        >{{item.emoji}} {{item.id}}</view>
+      </view>
+      <view class="random-scope">{{randomScope}}</view>
       <view class="random-card {{randomDrawing ? 'random-card-drawing' : ''}}">
         <text class="random-emoji">{{randomPlace ? randomPlace.emoji : '🎲'}}</text>
         <text class="random-name">{{randomPlace ? randomPlace.name : '准备抽取'}}</text>
-        <text class="random-meta">{{randomPlace ? randomPlace.category + (randomPlace.address ? ' · ' + randomPlace.address : '') : '从当前地图的全部地点中随机选择'}}</text>
+        <text class="random-meta">{{randomPlace ? randomPlace.category + (randomPlace.address ? ' · ' + randomPlace.address : '') : randomScope}}</text>
       </view>
       <view class="random-actions">
         <view class="btn" bindtap="drawRandom">再抽一次</view>

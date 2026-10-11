@@ -41,6 +41,9 @@ function sendRequest(method, path, { body, mapCode } = {}) {
       const error = new Error((res.data && res.data.error) || `请求失败（${res.statusCode}）`);
       error.status = res.statusCode;
       error.code = res.data && res.data.code;
+      // 409 去重：把已有地点/回收站条目一并透传，页面才能给出「去看看」「去回收站恢复」
+      error.duplicate = (res.data && res.data.duplicate) || null;
+      error.trashed = (res.data && res.data.trashed) || null;
       error.authToken = token;
       reject(error);
     };

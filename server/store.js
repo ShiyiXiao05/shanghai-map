@@ -471,6 +471,36 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     }));
   }
 
+  // 同一张地图内的重复地点检测：**按名称判定**（忽略大小写与首尾空格）。
+  //
+  // 为什么不用坐标判定：真实数据里相距十几米的两个地点往往是不同的地方
+  // （例如「武康大楼」与「酷矿冰淇淋(武康大楼店)」），按坐标拦会误伤正常添加。
+  // 而重复添加的典型来源（同一地点被搜两次、粘贴高德分享两次）名称必然相同。
+  //
+  // 返回 { duplicate, trashed }：duplicate 是仍在图上的同名地点（命中则拒绝新增），
+  // trashed 是回收站里的同名条目（用于给用户"可去回收站恢复"的提示）。
+  async function findDuplicatePlace(mapCode, { name } = {}) {
+    const normalized = String(name ?? '')
+      .trim()
+      .toLowerCase();
+    if (!normalized) return { duplicate: null, trashed: null };
+    const { rows } = await pool.query(
+      'SELECT id, name, deleted_at FROM public.places WHERE map_code = $1 ORDER BY id ASC',
+      [mapCode]
+    );
+    let duplicate = null;
+    let trashed = null;
+    for (const row of rows) {
+      if (String(row.name ?? '').trim().toLowerCase() !== normalized) continue;
+      if (row.deleted_at) {
+        trashed = { id: Number(row.id), name: row.name };
+        continue;
+      }
+      if (!duplicate) duplicate = { id: Number(row.id), name: row.name };
+    }
+    return { duplicate, trashed };
+  }
+
   async function create(data) {
     const { rows } = await pool.query(
       `INSERT INTO public.places
@@ -1131,6 +1161,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     deleteMap,
     listPlaces,
     create,
+    findDuplicatePlace,
     update,
     remove,
     getPlace,
