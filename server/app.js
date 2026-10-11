@@ -148,8 +148,10 @@ export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecu
     if (err && err.type === 'entity.too.large') {
       return res.status(413).json({ error: '上传内容过大，请压缩图片后重试' });
     }
-    console.error(err);
-    res.status(500).json({ error: '服务器内部错误' });
+    // 错误追踪号：响应里带上、日志里也带上，用户报"500"时能一键在日志里定位到这条堆栈
+    const ref = Math.random().toString(36).slice(2, 10);
+    console.error(`[500:${ref}] ${req.method} ${req.originalUrl}`, err);
+    res.status(500).json({ error: '服务器内部错误', ref });
   });
 
   return app;

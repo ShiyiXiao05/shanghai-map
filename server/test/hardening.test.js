@@ -858,6 +858,48 @@ describe('微信消息推送 URL 校验握手（否则后台保存不了）', ()
 
 
 // 每个用例自建服务并在 finally 中关闭，避免共享变量与残留监听
+describe('错误处理', () => {
+  it('未捕获异常返回 500 且带可追踪的 ref，日志里有同一追踪号', async () => {
+    const logs = [];
+    const original = console.error;
+    console.error = (...args) => logs.push(args.map((a) => (a && a.message) || String(a)).join(' '));
+    const db = newDb();
+    const pgLib = db.adapters.createPg();
+    const pool = new pgLib.Pool();
+    const store = createPlaceStore(pool);
+    await store.init();
+    const app = buildApp({ store, mapConfig: { key: 'k' } });
+    const srv = app.listen(0, '127.0.0.1');
+    await new Promise((resolve) => srv.once('listening', resolve));
+    const base = `http://127.0.0.1:${srv.address().port}`;
+    try {
+      // 先建一张真实地图：否则路由会在"地图不存在"处 404，走不到 500
+      const map = await (await fetch(`${base}/api/maps`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: '错误处理图' }),
+      })).json();
+      // 制造一个必然抛错的路由依赖：listPlaces 抛错
+      store.listPlaces = async () => {
+        throw new Error('模拟数据库故障');
+      };
+      const res = await fetch(`${base}/api/places?map=${map.code}`);
+      assert.equal(res.status, 500);
+      const body = await res.json();
+      assert.equal(body.error, '服务器内部错误');
+      assert.match(body.ref, /^[a-z0-9]{8}$/, '500 应带 8 位追踪号');
+      assert.ok(
+        logs.some((line) => line.includes(`[500:${body.ref}]`)),
+        '日志里应有同一追踪号，便于按号定位堆栈'
+      );
+    } finally {
+      console.error = original;
+      srv.closeAllConnections();
+      await srv.close();
+    }
+  });
+});
+
 describe('二次复核问题的回归测试', () => {
   const uploaderOk = {
     configured: true,
