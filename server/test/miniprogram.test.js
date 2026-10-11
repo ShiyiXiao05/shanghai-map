@@ -394,12 +394,46 @@ describe('miniprogram regressions', () => {
     const size = Number(match[1]);
     assert.ok(size >= 18 && size <= 22, `字号应在 18~22 之间（当前 ${size}）：过小显得空、过大会溢出`);
     assert.match(source, /ctx\.font = `\$\{EMOJI_FONT_PX\}px sans-serif`/, '绘制应使用该常量');
-    assert.match(source, /ctx\.textAlign = 'center'/, '横向居中交给 canvas');
+    assert.match(source, /ctx\.textAlign = layout\.align/, '横向锚点由 pickEmojiLayout 决定');
     assert.match(source, /ctx\.textBaseline = 'middle'/, '纵向居中交给 canvas');
     // 回归守卫：真机实测 getImageData 会返回整块不透明数据，缩放系数被算成极小 → emoji 消失。
     // 只禁"调用"（注释里解释原因是可以的）。
     assert.ok(!/getImageData\s*\(/.test(source), '不要再调用 getImageData 做像素测量');
     assert.ok(!/measureEmojiInk\s*\(/.test(source), '不要再引入墨迹测量方案');
+  });
+
+  it('emoji 锚点自适应：正常宽度居中；宽度异常时改用左对齐，不被 advance 推偏', () => {
+    const runtime = createRuntime({ wx: {} });
+    const page = runtime.page('pages/index/index.js');
+    const F = 20;
+
+    // 正常：advance ≈ 字号 → 交给 canvas 居中
+    const normal = page.pickEmojiLayout(() => 20, '🍜', F);
+    // 注意：页面方法在 vm 沙箱里执行，返回对象的原型与测试不同，逐字段断言
+    assert.equal(normal.text, '🍜');
+    assert.equal(normal.align, 'center');
+    assert.equal(normal.x, 22);
+    assert.equal(normal.suspicious, false);
+
+    // 异常 + 含变体选择符：去掉 U+FE0F 后变窄 → 用去掉后的串，并回到居中
+    const withVs = page.pickEmojiLayout((t) => (t.indexOf('\uFE0F') >= 0 ? 40 : 20), '🏞️', F);
+    assert.equal(withVs.text, '🏞', '应去掉变体选择符');
+    assert.equal(withVs.align, 'center');
+    assert.equal(withVs.suspicious, false);
+
+    // 异常且无法通过去变体选择符改善：改用左对齐锚点（与 advance 无关）
+    const bad = page.pickEmojiLayout(() => 60, '🎡', F);
+    assert.equal(bad.align, 'left');
+    assert.equal(bad.x, 22 - F / 2);
+    assert.equal(bad.suspicious, true);
+
+    // measure 返回 NaN/0（某些机型）→ 按字号处理，不误判为异常
+    assert.equal(page.pickEmojiLayout(() => NaN, '🍜', F).align, 'center');
+    assert.equal(page.pickEmojiLayout(() => 0, '🍜', F).align, 'center');
+
+    // 回归守卫：绘制必须使用 layout 的结果
+    const source = fs.readFileSync(path.join(miniRoot, 'pages/index/index.js'), 'utf8');
+    assert.match(source, /ctx\.fillText\(layout\.text, layout\.x/, '应按 layout 绘制');
   });
 
   it('入口页：改昵称会先静默登录再落库，并同步页面与本地存储', async () => {

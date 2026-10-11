@@ -489,6 +489,29 @@ Page({
     this.preparePlaceIcons(this.data.filtered);
   },
 
+  // 计算 emoji 的绘制参数。
+  // 背景：canvas 的 textAlign='center' 是按"排版宽度(advance)"居中的。真机实测 🏞️(U+1F3DE+FE0F)
+  // 的排版宽度被异常放大，居中后 emoji 被推到圆圈左边外面；而 🍜/🏛️/🛍️/🎡 都正常。
+  // 策略：① 若宽度异常且去掉变体选择符(U+FE0F)后变窄 → 用去掉后的串（同一图案）；
+  //       ② 仍然异常 → 放弃按 advance 居中，改成"以名义 em 方框的左边对齐"，与 advance 无关。
+  pickEmojiLayout(measure, glyph, fontPx) {
+    let text = String(glyph == null ? '' : glyph);
+    let advance = Number(measure(text));
+    if (!Number.isFinite(advance) || advance <= 0) advance = fontPx;
+    if (advance > fontPx * 1.35 && text.indexOf('\uFE0F') >= 0) {
+      const stripped = text.split('\uFE0F').join('');
+      const strippedAdvance = Number(measure(stripped));
+      if (Number.isFinite(strippedAdvance) && strippedAdvance > 0 && strippedAdvance < advance) {
+        text = stripped;
+        advance = strippedAdvance;
+      }
+    }
+    if (advance > fontPx * 1.35) {
+      return { text: text, align: 'left', x: 22 - fontPx / 2, suspicious: true };
+    }
+    return { text: text, align: 'center', x: 22, suspicious: false };
+  },
+
   drawDotIcon(color, emoji = '', visited = false) {
     return new Promise((resolve) => {
       // 任何一步异常都 resolve('')，保证 Promise 一定 settle（页面用系统默认标记兜底）
@@ -519,15 +542,21 @@ Page({
               ctx.strokeStyle = '#ffffff';
               ctx.stroke();
               if (emoji) {
-                // 用 canvas 自身的居中能力画 emoji（不再做像素测量/缩放变换：
-                // getImageData 在部分机型上返回整块不透明数据，会把缩放系数算成极小，
-                // emoji 直接看不见）。字号与圆圈的比例已按"填满但不溢出"调好，
-                // 个别机型若仍有偏移，只改上面的 EMOJI_FONT_PX / EMOJI_NUDGE_* 常量。
+                // 居中交给 canvas；仅当排版宽度异常（见 pickEmojiLayout）才改用左对齐锚点。
+                // 不做像素测量/缩放变换：getImageData 在真机上返回整块不透明数据，会把 emoji 画没。
                 ctx.font = `${EMOJI_FONT_PX}px sans-serif`;
-                ctx.textAlign = 'center';
+                const measure = (text) => {
+                  ctx.font = `${EMOJI_FONT_PX}px sans-serif`;
+                  return ctx.measureText(text).width;
+                };
+                const layout = this.pickEmojiLayout(measure, emoji, EMOJI_FONT_PX);
+                if (layout.suspicious) {
+                  console.warn('[index] emoji 排版宽度异常，改用左对齐锚点：', emoji);
+                }
+                ctx.textAlign = layout.align;
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#ffffff';
-                ctx.fillText(emoji, 22 + EMOJI_NUDGE_X, 22 + EMOJI_NUDGE_Y);
+                ctx.fillText(layout.text, layout.x + EMOJI_NUDGE_X, 22 + EMOJI_NUDGE_Y);
               }
               if (visited) {
                 ctx.beginPath();
