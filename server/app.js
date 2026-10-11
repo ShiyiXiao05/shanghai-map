@@ -100,6 +100,30 @@ export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecu
   // 挂在全局 /api 限流与 express.json 之后、/api 404 兜底之前，且不在其它路由的前缀下。
   // amapKey 必须是高德「Web服务」类型的 key（AMAP_WEB_SERVICE_KEY）：
   // 网页版那个 JS API key 会返回 USERKEY_PLAT_NOMATCH
+  // 诊断：把失败请求（≥400）落库。挂在这里可以覆盖 /api/geo 之后的业务路由；
+  // 只记非 GET（读请求量大且无关紧要），并靠 store.recordServerError 自身容错。
+  app.use((req, res, next) => {
+    if (req.method === 'GET') return next();
+    const startedAt = Date.now();
+    const originalJson = res.json.bind(res);
+    res.json = (payload) => {
+      if (res.statusCode >= 400) {
+        store
+          .recordServerError?.({
+            ref: payload && payload.ref,
+            method: req.method,
+            path: req.originalUrl,
+            status: res.statusCode,
+            message: (payload && payload.error) || '',
+            detail: `耗时 ${Date.now() - startedAt}ms`,
+          })
+          .catch(() => {});
+      }
+      return originalJson(payload);
+    };
+    next();
+  });
+
   app.use('/api/geo', createGeoRouter({ amapKey: geo?.amapKey, fetchImpl: geo?.fetchImpl }));
 
   app.use('/api/maps', createMapsRouter({ store, uploader }));
@@ -151,6 +175,17 @@ export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecu
     // 错误追踪号：响应里带上、日志里也带上，用户报"500"时能一键在日志里定位到这条堆栈
     const ref = Math.random().toString(36).slice(2, 10);
     console.error(`[500:${ref}] ${req.method} ${req.originalUrl}`, err);
+    // 落库一份，便于没有控制台日志权限时排查线上问题（尽力而为）
+    store
+      .recordServerError?.({
+        ref,
+        method: req.method,
+        path: req.originalUrl,
+        status: 500,
+        message: err?.message ?? String(err),
+        detail: err?.stack ?? '',
+      })
+      .catch(() => {});
     res.status(500).json({ error: '服务器内部错误', ref });
   });
 

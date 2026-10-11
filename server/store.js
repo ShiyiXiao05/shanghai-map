@@ -17,6 +17,30 @@ export function generateMapCode() {
 
 export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) {
   // 轻量探针：/api/ready 用它区分"进程活着"与"数据库可用"
+  // 记录一次服务端错误/失败请求（尽力而为：自身失败只打日志，绝不影响请求处理）
+  async function recordServerError({ ref, method, path, status, message, detail } = {}) {
+    try {
+      await pool.query(
+        `INSERT INTO server_errors (ref, method, path, status, message, detail)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          String(ref ?? '').slice(0, 20),
+          String(method ?? '').slice(0, 10),
+          String(path ?? '').slice(0, 300),
+          Number(status) || 0,
+          String(message ?? '').slice(0, 500),
+          String(detail ?? '').slice(0, 4000),
+        ]
+      );
+      // 顺手清理：只留最近 300 条
+      await pool.query(
+        'DELETE FROM server_errors WHERE id < (SELECT COALESCE(MAX(id), 0) - 300 FROM server_errors)'
+      );
+    } catch (err) {
+      console.warn('[store] 错误落库失败：', err?.message ?? err);
+    }
+  }
+
   async function ping() {
     await pool.query('SELECT 1');
   }
@@ -190,6 +214,21 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     await pool.query(
       'CREATE INDEX IF NOT EXISTS idx_photos_trace ON place_photos (trace_id)'
     );
+    // 服务端错误落库（诊断用）：云托管控制台不便查看时，可直接查这张表定位线上问题。
+    // 只保留最近 300 条，避免无限增长。
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS server_errors (
+        id SERIAL PRIMARY KEY,
+        ref TEXT NOT NULL DEFAULT '',
+        method TEXT NOT NULL DEFAULT '',
+        path TEXT NOT NULL DEFAULT '',
+        status INTEGER NOT NULL DEFAULT 0,
+        message TEXT NOT NULL DEFAULT '',
+        detail TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+
     // 审核结果暂存：微信回调可能早于 trace_id 落库，先存这里，等照片写入后再补关联
     await pool.query(`
       CREATE TABLE IF NOT EXISTS media_check_results (
@@ -1162,6 +1201,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     listPlaces,
     create,
     findDuplicatePlace,
+    recordServerError,
     update,
     remove,
     getPlace,

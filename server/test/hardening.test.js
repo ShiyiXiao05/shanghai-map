@@ -858,6 +858,39 @@ describe('微信消息推送 URL 校验握手（否则后台保存不了）', ()
 
 
 // 每个用例自建服务并在 finally 中关闭，避免共享变量与残留监听
+describe('线上诊断通道', () => {
+  it('失败请求（≥400 的写操作）会落库到 server_errors，便于无控制台时排查', async () => {
+    const db = newDb();
+    const pgLib = db.adapters.createPg();
+    const pool = new pgLib.Pool();
+    const store = createPlaceStore(pool);
+    await store.init();
+    const app = buildApp({ store, mapConfig: { key: 'k' } });
+    const srv = app.listen(0, '127.0.0.1');
+    await new Promise((resolve) => srv.once('listening', resolve));
+    const base = `http://127.0.0.1:${srv.address().port}`;
+    try {
+      // 触发一次 400：缺少邀请码
+      const res = await fetch(`${base}/api/places`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: '没有邀请码' }),
+      });
+      assert.equal(res.status, 400);
+      // 落库是异步的（不阻塞响应），稍等再查
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const rows = (await pool.query('SELECT method, path, status, message FROM server_errors ORDER BY id DESC')).rows;
+      assert.ok(rows.length >= 1, '失败请求应落库');
+      assert.equal(rows[0].method, 'POST');
+      assert.match(rows[0].path, /\/api\/places/);
+      assert.equal(rows[0].status, 400);
+    } finally {
+      srv.closeAllConnections();
+      await srv.close();
+    }
+  });
+});
+
 describe('错误处理', () => {
   it('未捕获异常返回 500 且带可追踪的 ref，日志里有同一追踪号', async () => {
     const logs = [];
