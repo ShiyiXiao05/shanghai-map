@@ -10,6 +10,7 @@
 // - access_token 用 stable_token 接口获取并缓存，提前 5 分钟刷新
 
 import crypto from 'node:crypto';
+import { wechatFetch } from './net.js';
 
 const STABLE_TOKEN_URL = 'https://api.weixin.qq.com/cgi-bin/stable_token';
 const MSG_SEC_CHECK_URL = 'https://api.weixin.qq.com/wxa/msg_sec_check';
@@ -42,9 +43,14 @@ export function createContentSecurity({
   secret,
   enabled = true,
   msgToken = '',
-  fetchImpl = fetch,
+  fetchImpl,
   logger = console,
 } = {}) {
+  // 微信接口统一走 wechatFetch：云托管容器内自动改用 http（平台本地代理 + 自签证书），
+  // 普通环境下仍是 https。测试注入的 fetchImpl 优先，保持可测性。
+  const wechatFetchImpl = fetchImpl
+    ? (url, options) => fetchImpl(url, options)
+    : (url, options) => wechatFetch(url, options, { logger });
   const configured = Boolean(enabled && appid && secret);
   // 异步图片审核依赖回调通道：没配 Token 就没有结果回来，送审没有意义
   const mediaCheckEnabled = configured && Boolean(msgToken);
@@ -53,7 +59,7 @@ export function createContentSecurity({
 
   async function getAccessToken() {
     if (token && Date.now() < tokenExpireAt) return token;
-    const res = await fetchImpl(STABLE_TOKEN_URL, {
+    const res = await wechatFetchImpl(STABLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ grant_type: 'client_credential', appid, secret }),
@@ -84,7 +90,7 @@ export function createContentSecurity({
     if (!text) return { checked: false, pass: true };
     try {
       const accessToken = await getAccessToken();
-      const res = await fetchImpl(
+      const res = await wechatFetchImpl(
         `${MSG_SEC_CHECK_URL}?access_token=${encodeURIComponent(accessToken)}`,
         {
           method: 'POST',
@@ -128,7 +134,7 @@ export function createContentSecurity({
     if (!/^https:\/\//.test(url)) return { submitted: false, reason: 'not-public-url' };
     try {
       const accessToken = await getAccessToken();
-      const res = await fetchImpl(
+      const res = await wechatFetchImpl(
         `${MEDIA_CHECK_URL}?access_token=${encodeURIComponent(accessToken)}`,
         {
           method: 'POST',

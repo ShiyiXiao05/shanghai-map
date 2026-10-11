@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-11T15:50:05.173Z",
+  "checkedAt": "2026-10-11T18:03:42.499Z",
   "static": {
     "jsFiles": 67,
     "syntaxFailures": [],
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "PDCHZD",
+        "code": "HZKGCN",
         "placeId": 1
       }
     },
@@ -277,15 +277,15 @@
     "e2eSteps": 20,
     "e2eFailed": 0,
     "serverTests": {
-      "tests": 163,
-      "pass": 163,
+      "tests": 166,
+      "pass": 166,
       "fail": 0,
       "exitCode": 0
     }
   },
   "tests": {
-    "tests": 163,
-    "pass": 163,
+    "tests": 166,
+    "pass": 166,
     "fail": 0,
     "exitCode": 0
   }

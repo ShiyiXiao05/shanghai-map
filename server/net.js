@@ -9,9 +9,11 @@
 //   ② 系统解析失败或 2.5 秒未返回 → 用公共 DNS（默认 223.5.5.5 / 119.29.29.29 /
 //      114.114.114.114，UDP 直连指定服务器，不依赖容器里的 resolv.conf）兜底。
 // 另提供 fetchWithRetry：瞬时网络失败重试一次。
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { lookup as systemLookup } from 'node:dns';
 import { Resolver } from 'node:dns/promises';
+import tls from 'node:tls';
 
 const require = createRequire(import.meta.url);
 
@@ -87,6 +89,73 @@ export function installDnsFallback({ servers, enabled = true, logger = console }
       if (previous) undici.setGlobalDispatcher(previous);
     },
   };
+}
+
+// 微信云托管容器内，发往 api.weixin.qq.com 的请求会被平台「开放接口服务」本地代理接管，
+// 并使用容器内一次性生成的自签名证书（官方文档：开放接口服务 → 证书与 HTTPS）。
+// 官方建议容器内直接用 **http://** 调 api.weixin.qq.com（请求不出公网、被本地代理接管）；
+// 若用 https，则需要信任 /app/cert/certificate.crt，否则报 DEPTH_ZERO_SELF_SIGNED_CERT。
+const CLOUD_CERT_PATH = '/app/cert/certificate.crt';
+const WECHAT_HOST = 'api.weixin.qq.com';
+
+/** 当前环境该用 http 还是 https 访问微信接口（容器内代理存在时用 http）。 */
+export function wechatApiBase({ certPath = process.env.WECHAT_CERT_PATH || CLOUD_CERT_PATH } = {}) {
+  try {
+    if (fs.existsSync(certPath)) return `http://${WECHAT_HOST}`;
+  } catch (err) {
+    // 读不到就按普通环境处理
+  }
+  return `https://${WECHAT_HOST}`;
+}
+
+// 备用通道：https + 信任容器内注入的自签名证书（undici Agent 指定 ca）
+let containerCertAgent = null;
+function httpsAgentTrustingContainerCert(certPath) {
+  if (containerCertAgent !== null) return containerCertAgent;
+  try {
+    const undici = require('undici');
+    const extra = fs.readFileSync(certPath);
+    containerCertAgent = new undici.Agent({ connect: { ca: [...tls.rootCertificates, extra] } });
+  } catch (err) {
+    containerCertAgent = false; // 用不了（文件不存在/undici 缺失），后续不再尝试
+  }
+  return containerCertAgent;
+}
+
+/**
+ * 调微信接口专用 fetch（三级通道，全部失败才抛出）：
+ * ① 容器内有云调用证书 → 走官方推荐的 http（本地代理接管，不出公网）；
+ *    普通环境 → 正常 https；
+ * ② https 遇证书校验失败（DEPTH_ZERO_SELF_SIGNED_CERT）→ 退回 http；
+ * ③ http 被代理拒绝（社区有 502 案例）→ 用 https + 信任容器内证书再试一次。
+ * 其余瞬时失败由 fetchWithRetry 重试。
+ */
+export async function wechatFetch(url, options = {}, { retries = 1, logger = console, certPath } = {}) {
+  const resolvedCertPath = certPath || process.env.WECHAT_CERT_PATH || CLOUD_CERT_PATH;
+  const base = wechatApiBase({ certPath: resolvedCertPath });
+  const target = String(url).replace(/^https?:\/\/api\.weixin\.qq\.com/, base);
+  try {
+    return await fetchWithRetry(target, options, { retries, logger });
+  } catch (err) {
+    const reason = String(err?.cause?.code || err?.cause?.message || '');
+    const certIssue = /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ALT_NAME/i.test(reason);
+    if (target.startsWith('https://') && certIssue) {
+      logger.warn?.('[net] 微信接口证书校验失败，改用容器内 http 代理重试：', reason);
+      return fetchWithRetry(target.replace(/^https:/, 'http:'), options, { retries, logger });
+    }
+    if (target.startsWith('http://')) {
+      const agent = httpsAgentTrustingContainerCert(resolvedCertPath);
+      if (agent) {
+        logger.warn?.('[net] http 通道失败，改用 https + 容器证书重试：', err?.message ?? err);
+        return fetchWithRetry(
+          target.replace(/^http:/, 'https:'),
+          { ...options, dispatcher: agent },
+          { retries, logger }
+        );
+      }
+    }
+    throw err;
+  }
 }
 
 /** 瞬时网络失败（连接被重置、DNS 抖动）重试一次；HTTP 状态码不算失败，直接返回。 */

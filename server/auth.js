@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { fetchWithRetry } from './net.js';
+import { wechatFetch } from './net.js';
 
 // 小程序登录：wx.login 的 code 换 openid（code2Session），HMAC 签名 token。
 // 未配置 MINIPROGRAM_APPID/SECRET 时整体停用（登录接口 503），与 pusher/uploader 的降级风格一致。
@@ -22,7 +22,7 @@ export function createAuth({ appid, secret, signSecret, store, fetchSession }) {
       let res;
       try {
         // 瞬时网络失败（DNS 抖动、连接被重置）重试一次
-        res = await fetchWithRetry(url, { signal: AbortSignal.timeout(5000) }, { retries: 1 });
+        res = await wechatFetch(url, { signal: AbortSignal.timeout(5000) }, { retries: 1 });
       } catch (err) {
         // 微信接口不可达/超时：包成 502，否则会退化成笼统的 500「服务器内部错误」
         // 把底层原因（如 ENOTFOUND / ECONNRESET）一并带上，便于线上定位
