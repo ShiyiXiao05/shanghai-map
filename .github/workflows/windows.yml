@@ -1,0 +1,41 @@
+name: Windows desktop
+on:
+  workflow_dispatch:
+  push:
+    paths: ['windows/**', 'server/**', '.github/workflows/windows.yml']
+  pull_request:
+    paths: ['windows/**', 'server/**', '.github/workflows/windows.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm --prefix server ci
+      - name: Core and isolated API regression
+        shell: pwsh
+        run: |
+          $service = Start-Process node -ArgumentList 'windows/scripts/test-server.mjs' -PassThru -WindowStyle Hidden
+          try {
+            $ready=$false
+            for($i=0;$i -lt 30;$i++) {
+              try { Invoke-RestMethod http://127.0.0.1:47831/api/health | Out-Null; $ready=$true; break } catch { Start-Sleep -Seconds 1 }
+            }
+            if(!$ready){throw 'Isolated server did not start'}
+            dotnet run --project windows/Modu.Tests/Modu.Tests.csproj -c Release -- http://127.0.0.1:47831
+            if($LASTEXITCODE -ne 0){throw 'Desktop regressions failed'}
+          } finally { Stop-Process -Id $service.Id -ErrorAction SilentlyContinue }
+      - name: Publish standalone desktop EXE
+        shell: pwsh
+        run: ./windows/scripts/build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ModuExplore-Windows-x64-preview
+          path: windows/artifacts/release/

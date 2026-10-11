@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net8.0-windows10.0.19041.0</TargetFramework><UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>ModuExplore</AssemblyName>
+    <Version>0.1.0</Version><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>Assets/app.ico</ApplicationIcon>
+    <PublishSingleFile>true</PublishSingleFile><IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile><DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Modu.Core/Modu.Core.csproj" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <Resource Include="Assets/avatar.png" />
+    <EmbeddedResource Include="Assets/map.html" />
+  </ItemGroup>
+</Project>
