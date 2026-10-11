@@ -23,7 +23,10 @@ export function createAuthRouter({ auth, store, contentSecurity }) {
       res.json(await auth.login(code));
     } catch (err) {
       if (err?.status) return res.status(err.status).json({ error: err.message });
-      next(err);
+      // 剩下的都是没预料到的异常（例如数据库不可用）：明确说"登录环节出错"，
+      // 比笼统的 500 更好定位，也方便客户端提示用户重试
+      console.warn('[auth] 登录失败：', err?.message ?? err);
+      return res.status(502).json({ error: '登录暂时不可用，请稍后重试' });
     }
   });
 

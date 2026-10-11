@@ -18,8 +18,25 @@ export function createAuth({ appid, secret, signSecret, store, fetchSession }) {
         `?appid=${encodeURIComponent(appid)}&secret=${encodeURIComponent(secret)}` +
         `&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
       // 登录接口也要有超时：微信侧慢时不能让写请求无限等待
-      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
-      const data = await res.json();
+      let res;
+      try {
+        res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      } catch (err) {
+        // 微信接口不可达/超时：包成 502，否则会退化成笼统的 500「服务器内部错误」
+        const wrapped = new Error(
+          err?.name === 'TimeoutError' ? '微信登录服务响应超时，请稍后重试' : '微信登录服务暂时不可用，请稍后重试'
+        );
+        wrapped.status = 502;
+        throw wrapped;
+      }
+      let data;
+      try {
+        data = await res.json();
+      } catch (err) {
+        const wrapped = new Error('微信登录服务返回异常，请稍后重试');
+        wrapped.status = 502;
+        throw wrapped;
+      }
       if (data.errcode) {
         const err = new Error(data.errmsg || `微信登录失败（${data.errcode}）`);
         err.status = 502;

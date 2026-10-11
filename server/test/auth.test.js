@@ -8,7 +8,7 @@ import { createAuth } from '../auth.js';
 const png =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-async function startServer({ configured = true } = {}) {
+async function startServer({ configured = true, fetchSessionBroken } = {}) {
   const db = newDb();
   const pgLib = db.adapters.createPg();
   const pool = new pgLib.Pool();
@@ -21,6 +21,12 @@ async function startServer({ configured = true } = {}) {
     store,
     // 不真调微信接口：code 即测试身份（openid-<code>），bad-code 模拟 code2Session 失败
     fetchSession: async (code) => {
+      if (fetchSessionBroken === 'network') {
+        // 模拟真实实现里的网络层失败（它自己会包成 502；这里直接抛带 status 的错）
+        const err = new Error('微信登录服务暂时不可用，请稍后重试');
+        err.status = 502;
+        throw err;
+      }
       if (code === 'bad-code') {
         const err = new Error('invalid code');
         err.status = 502;
@@ -140,6 +146,18 @@ describe('miniprogram auth', () => {
     ).json();
     const authors = list.comments.map((item) => item.author).sort();
     assert.deepEqual(authors, ['新名字', '旧名字']);
+  });
+
+  it('code2Session 不可达/超时 → 502，而不是笼统的 500', async () => {
+    const { server, request } = await startServer({ fetchSessionBroken: 'network' });
+    try {
+      const res = await request('POST', '/api/auth/login', { body: { code: 'any' } });
+      assert.equal(res.status, 502);
+      assert.match((await res.json()).error, /微信登录|登录暂时不可用/);
+    } finally {
+      server.closeAllConnections();
+      await server.close();
+    }
   });
 
   it('profile：未登录 401，空昵称 400，超长 400', async () => {
