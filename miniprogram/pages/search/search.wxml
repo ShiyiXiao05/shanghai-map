@@ -1,4 +1,33 @@
 <page-meta page-style="{{themeStyle}}"/><view class="page">
+  <!-- 关键词搜索：服务端代理高德，选一条即等于选好位置（地图点选仍然保留） -->
+  <view wx:if="{{!mapPick}}" class="search-block">
+    <view class="search-row">
+      <input
+        class="input search-input"
+        value="{{searchKeyword}}"
+        maxlength="50"
+        placeholder="搜索地点名，比如：武康大楼"
+        confirm-type="search"
+        bindinput="onSearchInput"
+        bindconfirm="doSearch"
+      />
+      <view class="btn btn-primary search-btn {{searching ? 'btn-busy' : ''}}" bindtap="doSearch">{{searching ? '搜索中…' : '搜索'}}</view>
+    </view>
+    <view class="search-hint" wx:if="{{searchHint}}">{{searchHint}}</view>
+    <view class="search-results" wx:if="{{searchResults.length}}">
+      <view
+        class="search-result"
+        wx:for="{{searchResults}}"
+        wx:key="id"
+        data-index="{{index}}"
+        bindtap="pickSearchResult"
+      >
+        <view class="search-result-name">{{item.name}}</view>
+        <view class="search-result-address">{{item.address || '（无地址）'}}</view>
+      </view>
+    </view>
+  </view>
+
   <!-- 地图手动点选：未开通地理位置接口权限时的兜底，不依赖任何隐私接口 -->
   <view wx:if="{{mapPick}}" class="map-pick">
     <view class="map-pick-tip">点一下地图上的位置（可拖动缩放），再点「确定」</view>

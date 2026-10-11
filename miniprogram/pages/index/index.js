@@ -5,9 +5,6 @@ const storage = require('../../utils/storage.js');
 const { displayEmoji } = require('../../utils/emoji.js');
 const cache = require('../../utils/cache.js');
 const { applyTheme } = require('../../utils/theme.js');
-const { getMyLocation, setMyLocation, clearMyLocation } = require('../../utils/location.js');
-const { parseAmapShare } = require('../../utils/amap.js');
-const { NEARBY_ANCHORS } = require('../../utils/config.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
 
@@ -52,7 +49,6 @@ Page({
     isMapFs: false, // 地图全屏态
     refreshing: false, // 列表下拉刷新中
     isDark: false, // 跟随系统深色，控制下拉刷新指示器配色
-    markLocation: false, // 正在让用户标记「我的位置」
     showMyDot: false, // 打开地图定位点（自动定位尝试时打开，由地图组件弹授权）
     nearbyOpen: false,
     nearbyPlaces: [],
@@ -229,31 +225,39 @@ Page({
   },
 
   // 「附近」使用手机当前位置；定位失败时不使用地图中心点替代。
-  // 「附近」：以用户标记的「我的位置」为原点。
-  // 不读设备定位：地理位置接口需要后台准入开通，未开通时包里出现接口名会被提审拦截。
+  // 「附近」：只用当前所在位置（地图组件定位能力，不调用被管控的地理位置接口）
   locateNearby() {
     if (this.data.places.length === 0) {
       wx.showToast({ title: '当前地图还没有地点', icon: 'none' });
       return;
     }
-    const saved = getMyLocation();
-    if (saved) {
-      this.showNearby(saved);
-      return;
-    }
-    // 首次：先尝试自动定位（用地图组件自身能力，不调用被管控的地理位置接口）
-    this.tryAutoLocate().then((point) => {
-      if (point) {
-        setMyLocation(point);
-        this.showNearby(point, 'auto');
-        return;
-      }
-      this.askMyLocation();
-    });
+    wx.showLoading({ title: '定位中…' });
+    this.tryAutoLocate()
+      .then((point) => {
+        if (point) this.showNearby(point);
+        else this.promptLocation();
+      })
+      .finally(() => wx.hideLoading());
   },
 
-  // 自动定位尝试：地图组件自带定位（show-location + moveToLocation），不属于需要后台
-  // 申请开通的地理位置接口，只需用户同意授权。组件未生效时返回 null，交给手动方式兜底。
+  // 定位不可用时的提示：能确定是用户拒绝就引导去设置，其余给可读原因
+  promptLocation() {
+    if (this.lastLocationDenied) {
+      wx.showModal({
+        title: '需要位置权限',
+        content: '请在设置中允许使用位置信息，之后重新点「附近」。',
+        confirmText: '去设置',
+        success: (res) => {
+          if (res.confirm && typeof wx.openSetting === 'function') wx.openSetting({});
+        },
+      });
+      return;
+    }
+    wx.showToast({ title: '暂时定位不到，请稍后重试', icon: 'none' });
+  },
+
+  // 自动定位：地图组件自带定位（show-location + moveToLocation），不属于需要后台申请开通的
+  // 地理位置接口，只要用户同意授权即可。组件未生效（未授权/中心点没移动）时返回 null。
   async tryAutoLocate() {
     const authorized = await this.ensureLocationAuth();
     if (!authorized) return null;
@@ -301,12 +305,18 @@ Page({
         success: (res) => {
           const state = res.authSetting ? res.authSetting['scope.userLocation'] : undefined;
           if (state === true) return resolve(true);
-          if (state === false) return resolve(false);
+          if (state === false) {
+            this.lastLocationDenied = true; // 明确拒绝过：可以引导去设置页
+            return resolve(false);
+          }
           if (typeof wx.authorize !== 'function') return resolve(true);
           wx.authorize({
             scope: 'scope.userLocation',
             success: () => resolve(true),
-            fail: () => resolve(false),
+            fail: () => {
+              this.lastLocationDenied = true;
+              resolve(false);
+            },
           });
         },
         fail: () => resolve(true),
@@ -314,141 +324,8 @@ Page({
     });
   },
 
-  // 第一次用：让用户选一种方式告诉我们他在哪
-  askMyLocation() {
-    if (typeof wx.showActionSheet !== 'function') {
-      this.useMapCenterAsMyLocation();
-      return;
-    }
-    wx.showActionSheet({
-      itemList: ['从常用地标选（最快）', '把地图中心设为我的位置', '在地图上点选我的位置', '粘贴高德位置链接（最准）'],
-      success: (res) => {
-        if (res.tapIndex === 0) this.pickAnchor();
-        else if (res.tapIndex === 1) this.useMapCenterAsMyLocation();
-        else if (res.tapIndex === 2) this.startMarkLocation();
-        else if (res.tapIndex === 3) this.markByAmapLink();
-      },
-      fail: () => {},
-    });
-  },
-
-  // 一键选常用地标（自动定位不可用时的最快方式）
-  pickAnchor() {
-    if (typeof wx.showActionSheet !== 'function') return;
-    wx.showActionSheet({
-      itemList: NEARBY_ANCHORS.map((item) => item.name),
-      success: (res) => {
-        const anchor = NEARBY_ANCHORS[res.tapIndex];
-        if (!anchor) return;
-        const saved = setMyLocation({ latitude: anchor.latitude, longitude: anchor.longitude });
-        if (!saved) return;
-        this.setData({ markLocation: false });
-        this.showNearby(saved);
-      },
-      fail: () => {},
-    });
-  },
-
-  // 用一条高德位置分享当「我的位置」：高德 App 可分享自己的当前位置，
-  // 解析出来的就是精确经纬度——不依赖微信的地理位置接口权限，精度却和定位一致。
-  markByAmapLink() {
-    const guide = () => {
-      wx.showModal({
-        title: '怎么拿到链接',
-        content: '打开高德地图 → 长按你所在的位置 → 分享 → 复制链接，然后回到这里再点一次。',
-        showCancel: false,
-      });
-    };
-    if (typeof wx.getClipboardData !== 'function') {
-      guide();
-      return;
-    }
-    wx.getClipboardData({
-      success: (res) => {
-        let parsed;
-        try {
-          parsed = parseAmapShare(res.data || '');
-        } catch (err) {
-          parsed = { error: '链接格式不正确' };
-        }
-        if (parsed.error || !Number.isFinite(Number(parsed.lng)) || !Number.isFinite(Number(parsed.lat))) {
-          guide();
-          return;
-        }
-        const saved = setMyLocation({ latitude: parsed.lat, longitude: parsed.lng });
-        if (!saved) {
-          wx.showToast({ title: '坐标不可用，请重试', icon: 'none' });
-          return;
-        }
-        this.setData({ markLocation: false });
-        this.showNearby(saved);
-      },
-      fail: () => {
-        wx.showToast({ title: '读不到剪贴板，请手动标记', icon: 'none' });
-        guide();
-      },
-    });
-  },
-
-  startMarkLocation() {
-    this.setData({ markLocation: true, nearbyOpen: false });
-    wx.showToast({ title: '点一下地图上你的位置', icon: 'none' });
-  },
-
-  cancelMarkLocation() {
-    this.setData({ markLocation: false });
-  },
-
-  // 取地图当前中心点（MapContext.getCenterLocation 不需要任何权限）
-  resolveMapCenter() {
-    return new Promise((resolve) => {
-      const fallback = { latitude: this.data.latitude, longitude: this.data.longitude };
-      if (typeof wx.createMapContext !== 'function') return resolve(fallback);
-      try {
-        const ctx = this.mapCtx || (this.mapCtx = wx.createMapContext('mainMap', this));
-        ctx.getCenterLocation({
-          success: (center) => resolve({ latitude: center.latitude, longitude: center.longitude }),
-          fail: () => resolve(fallback),
-        });
-      } catch (err) {
-        resolve(fallback);
-      }
-    });
-  },
-
-  async useMapCenterAsMyLocation() {
-    const center = await this.resolveMapCenter();
-    const saved = setMyLocation(center);
-    if (!saved) {
-      wx.showToast({ title: '没取到地图中心，请重试', icon: 'none' });
-      return;
-    }
-    this.setData({ markLocation: false });
-    this.showNearby(saved);
-  },
-
-  // 地图点击选点：只在标记模式下生效，避免和"点标记看详情"冲突
-  onMapTapForLocation(event) {
-    if (!this.data.markLocation) return;
-    const detail = event.detail || {};
-    const saved = setMyLocation({ latitude: detail.latitude, longitude: detail.longitude });
-    if (!saved) {
-      wx.showToast({ title: '没取到坐标，请再点一次', icon: 'none' });
-      return;
-    }
-    this.setData({ markLocation: false });
-    this.showNearby(saved);
-  },
-
-  // 重新标记：忘掉本地记住的位置，重新问一次
-  remarkMyLocation() {
-    clearMyLocation();
-    this.setData({ nearbyOpen: false });
-    this.askMyLocation();
-  },
-
-  // 按「我的位置」算最近 5 个地点；source 为 auto 时表示来自自动定位
-  showNearby(location, source) {
+  // 按当前位置算最近 5 个地点
+  showNearby(location) {
     const nearest = this.data.places
       .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
       .map((place) => {
@@ -464,7 +341,7 @@ Page({
       nearbyPlaces: nearest,
       nearbyOpen: true,
     });
-    wx.showToast({ title: source === 'auto' ? '已按当前位置排序' : '按你标记的位置排序', icon: 'none' });
+    wx.showToast({ title: '已按当前位置排序', icon: 'none' });
   },
 
   closeNearby() {
@@ -636,11 +513,30 @@ Page({
               ctx.strokeStyle = '#ffffff';
               ctx.stroke();
               if (emoji) {
-                ctx.font = '22px sans-serif';
+                // emoji 字形普遍比字号大（彩色字体还会外扩），直接按 22px 画会溢出 34px 的圆，
+                // 且 textBaseline='middle' 对 emoji 不等于视觉居中。这里：
+                // ① 先按圆内可用直径收敛字号；② 再用实测宽度二次收敛（宽 emoji / 组合 emoji）；
+                // ③ 能用 actualBoundingBox 时按真实墨迹居中，否则退回少量像素补偿。
+                const inner = 25; // 圆内可用直径（半径 17 − 4px 白描边 − 余量）
+                let size = 18;
+                ctx.font = `${size}px sans-serif`;
+                const metrics = ctx.measureText(emoji);
+                const width = Number(metrics.width) || size;
+                if (width > inner) {
+                  size = Math.max(9, Math.floor((size * inner) / width));
+                  ctx.font = `${size}px sans-serif`;
+                }
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#ffffff';
-                ctx.fillText(emoji, 22, 22);
+                const measured = ctx.measureText(emoji);
+                const ascent = Number(measured.actualBoundingBoxAscent);
+                const descent = Number(measured.actualBoundingBoxDescent);
+                const dy =
+                  Number.isFinite(ascent) && Number.isFinite(descent)
+                    ? (ascent - descent) / 2
+                    : size * 0.08;
+                ctx.fillText(emoji, 22, 22 + dy);
               }
               if (visited) {
                 ctx.beginPath();

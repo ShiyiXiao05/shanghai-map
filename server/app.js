@@ -11,8 +11,9 @@ import { createApiRateLimiters } from './ratelimit.js';
 import { createContentSecurity } from './content-security.js';
 import { createReportsRouter } from './routes/reports.js';
 import { createWechatRouter } from './routes/wechat.js';
+import { createGeoRouter } from './routes/geo.js';
 
-export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecurity }) {
+export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecurity, geo }) {
   const app = express();
   // 未显式注入时：有 AppID/Secret 就启用内容安全，否则整体停用（写入不受影响）
   const security =
@@ -94,6 +95,12 @@ export function buildApp({ store, mapConfig, uploader, pusher, auth, contentSecu
     app.use('/api', auth.middleware());
     app.use('/api/auth', createAuthRouter({ auth, store, contentSecurity: security }));
   }
+
+  // 地点关键词搜索：服务端代理高德（小程序端不需要 key，也不用给它加请求域名）。
+  // 挂在全局 /api 限流与 express.json 之后、/api 404 兜底之前，且不在其它路由的前缀下。
+  // amapKey 必须是高德「Web服务」类型的 key（AMAP_WEB_SERVICE_KEY）：
+  // 网页版那个 JS API key 会返回 USERKEY_PLAT_NOMATCH
+  app.use('/api/geo', createGeoRouter({ amapKey: geo?.amapKey, fetchImpl: geo?.fetchImpl }));
 
   app.use('/api/maps', createMapsRouter({ store, uploader }));
   app.use('/api/places', createPlacesRouter({ store, uploader, pusher, contentSecurity: security }));

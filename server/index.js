@@ -79,6 +79,11 @@ const app = buildApp({
   pusher,
   auth,
   contentSecurity,
+  // 地点搜索代理：key 只留在服务端，小程序端不配置、也不加请求域名。
+  // 用「Web 服务」类型的 key：本地实测 AMAP_KEY 是「Web端(JS API)」key，
+  // 直接调 restapi.amap.com 会返回 status=0 / USERKEY_PLAT_NOMATCH（502）；
+  // AMAP_WEB_SERVICE_KEY 才可用。线上若只有 AMAP_KEY，请在其为 Web 服务类型或补配该变量。
+  geo: { amapKey: process.env.AMAP_WEB_SERVICE_KEY || process.env.AMAP_KEY },
 });
 app.use(
   express.static(publicDir, {

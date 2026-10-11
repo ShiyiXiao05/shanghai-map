@@ -31,6 +31,11 @@ Page({
     nickname: '', // 登录身份展示用；署名由服务端按登录昵称盖章
     saving: false,
     emoji: '',
+    // 关键词搜索（服务端代理高德）：结果与地图点选共用 picked
+    searchKeyword: '',
+    searching: false,
+    searchResults: [],
+    searchHint: '',
   },
 
   onShow() {
@@ -69,6 +74,66 @@ Page({
 
   cancelMapPick() {
     this.setData({ mapPick: false });
+  },
+
+  // 关键词搜索：走服务端 /api/geo/search 代理高德（小程序端不配 key、也不加请求域名）
+  onSearchInput(event) {
+    this.setData({ searchKeyword: event.detail.value });
+  },
+
+  async doSearch() {
+    if (this.searching) return; // 防重复提交：连点不会重复请求上游
+    const keyword = (this.data.searchKeyword || '').trim();
+    if (!keyword) {
+      wx.showToast({ title: '请输入地点名称', icon: 'none' });
+      return;
+    }
+    this.searching = true;
+    this.setData({ searching: true, searchResults: [], searchHint: '' });
+    try {
+      const places = await api.searchPlaces(keyword);
+      if (!places.length) {
+        this.setData({ searchResults: [], searchHint: '没找到，换个关键词或在地图上点选' });
+        return;
+      }
+      this.setData({ searchResults: places, searchHint: '' });
+    } catch (err) {
+      // 后端不可用（503/502/网络异常）：明确给出兜底路径，绝不把页面留在「搜索中」
+      this.setData({
+        searchResults: [],
+        searchHint: '搜索暂时不可用，可以改用下面的「在地图上点选位置」',
+      });
+      wx.showToast({ title: (err && err.message) || '搜索失败，可改用地图点选', icon: 'none' });
+    } finally {
+      // 无论成功失败都复位，按钮不会一直停在「搜索中…」
+      this.searching = false;
+      this.setData({ searching: false });
+    }
+  },
+
+  // 选中搜索结果：与地图点选写入同一个 picked 结构，保存逻辑不用改
+  pickSearchResult(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const place = this.data.searchResults[index];
+    if (!place) return;
+    const latitude = Number(place.lat);
+    const longitude = Number(place.lng);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      wx.showToast({ title: '这条结果没有坐标，请改用地图点选', icon: 'none' });
+      return;
+    }
+    this.setData({
+      picked: {
+        name: place.name || '',
+        address: place.address || '',
+        latitude,
+        longitude,
+      },
+      searchResults: [], // 收起结果列表，让上方 picker 卡片就是「已选中」的反馈
+      searchHint: '',
+    });
+    if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0, duration: 200 });
+    wx.showToast({ title: '已选择', icon: 'success' });
   },
 
   onName(event) {

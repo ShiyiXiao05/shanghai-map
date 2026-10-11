@@ -129,3 +129,60 @@
   font-size: 24rpx;
   color: var(--ink-faint);
 }
+
+/* 关键词搜索：输入框 + 按钮一行，结果列表贴在下方 */
+.search-block {
+  margin-bottom: 28rpx;
+}
+
+.search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16rpx;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-btn {
+  min-height: 88rpx; /* 移动端点击区域：不小于 44px */
+  padding: 0 36rpx;
+  font-size: 28rpx;
+  white-space: nowrap;
+}
+
+.search-hint {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: var(--ink-soft);
+}
+
+.search-results {
+  margin-top: 16rpx;
+  background: var(--card);
+  border: 1rpx solid var(--line);
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+
+.search-result {
+  padding: 24rpx;
+  border-bottom: 1rpx solid var(--line);
+}
+
+.search-result:last-child {
+  border-bottom: none;
+}
+
+.search-result-name {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.search-result-address {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: var(--ink-soft);
+}

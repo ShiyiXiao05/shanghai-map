@@ -131,6 +131,12 @@ export const api = {
         return d.places;
       });
     }),
+  // 地点关键词搜索：服务端代理高德，小程序端不需要 key、也不加请求域名
+  // 返回 [{ id, name, address, lng, lat, category }]；失败抛带中文 message 的 Error
+  searchPlaces: (keyword, city) =>
+    get(
+      `/api/geo/search?keyword=${encodeURIComponent(keyword)}${city ? `&city=${encodeURIComponent(city)}` : ''}`
+    ).then((d) => (d && d.places) || []),
   createPlace: (code, data) =>
     request('POST', '/api/places', { body: { ...data, map_code: code } }).then((place) => {
       if (place && place.id !== undefined) cache.upsertPlace(code, place);
