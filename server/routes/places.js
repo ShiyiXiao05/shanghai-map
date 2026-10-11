@@ -171,10 +171,18 @@ export function createPlacesRouter({ store, uploader, pusher, contentSecurity })
       }
       const checked = validatePlace(req.body, { partial: false });
       if (checked.error) return res.status(400).json({ error: checked.error });
-      // 去重：同一张地图里已有同名或几乎同坐标的地点 → 409 拒绝，避免误点两次/重复导入
-      const { duplicate, trashed } = await store.findDuplicatePlace(code, {
-        name: checked.value.name,
-      });
+      // 去重：同一张地图里已有同名地点 → 409 拒绝，避免误点两次/重复导入。
+      // 容错：去重只是保护措施，它自己出问题（方法缺失/数据库抖动）绝不能挡住正常添加，
+      // 因此整体 try/catch 后按"不重复"继续。
+      let duplicate = null;
+      let trashed = null;
+      try {
+        ({ duplicate, trashed } = await store.findDuplicatePlace(code, {
+          name: checked.value.name,
+        }));
+      } catch (err) {
+        console.warn('[places] 去重检查失败，按不重复处理：', err?.message ?? err);
+      }
       if (duplicate) {
         return res.status(409).json({
           error: `地图里已经有「${duplicate.name}」了`,

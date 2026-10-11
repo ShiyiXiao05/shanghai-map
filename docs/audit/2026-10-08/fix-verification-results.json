@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-11T15:20:48.311Z",
+  "checkedAt": "2026-10-11T15:32:27.697Z",
   "static": {
     "jsFiles": 65,
     "syntaxFailures": [],
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "28S32S",
+        "code": "H2CCSA",
         "placeId": 1
       }
     },
@@ -277,15 +277,15 @@
     "e2eSteps": 20,
     "e2eFailed": 0,
     "serverTests": {
-      "tests": 155,
-      "pass": 155,
+      "tests": 156,
+      "pass": 156,
       "fail": 0,
       "exitCode": 0
     }
   },
   "tests": {
-    "tests": 155,
-    "pass": 155,
+    "tests": 156,
+    "pass": 156,
     "fail": 0,
     "exitCode": 0
   }

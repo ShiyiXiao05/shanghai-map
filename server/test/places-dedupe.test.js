@@ -89,6 +89,40 @@ describe('加地点去重', () => {
     assert.equal(list.places.length, 2);
   });
 
+  it('去重检查自身出错时不挡添加（按不重复处理）', async () => {
+    const db = newDb();
+    const pgLib = db.adapters.createPg();
+    const pool = new pgLib.Pool();
+    const store = createPlaceStore(pool);
+    await store.init();
+    const app = buildApp({ store, mapConfig: { key: 'k' } });
+    const srv = app.listen(0, '127.0.0.1');
+    await new Promise((resolve) => srv.once('listening', resolve));
+    const base = `http://127.0.0.1:${srv.address().port}`;
+    const call = (method, path, body) =>
+      fetch(base + path, {
+        method,
+        headers: body === undefined ? {} : { 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    const warns = [];
+    const original = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try {
+      const code = (await (await call('POST', '/api/maps', { name: '容错图' })).json()).code;
+      store.findDuplicatePlace = async () => {
+        throw new Error('模拟去重查询失败');
+      };
+      const res = await call('POST', '/api/places', placeBody(code));
+      assert.equal(res.status, 201, '去重失败不应影响添加');
+      assert.match(warns.join('\n'), /去重检查失败/);
+    } finally {
+      console.warn = original;
+      srv.closeAllConnections();
+      await srv.close();
+    }
+  });
+
   it('不同地图之间互不影响', async () => {
     const a = await newMap('图A');
     const b = await newMap('图B');
