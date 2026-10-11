@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-11T06:37:22.591Z",
+  "checkedAt": "2026-10-11T06:39:14.101Z",
   "static": {
     "jsFiles": 64,
     "syntaxFailures": [],
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "G2AVDZ",
+        "code": "RJR9KP",
         "placeId": 1
       }
     },

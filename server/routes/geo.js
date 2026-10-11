@@ -1,6 +1,8 @@
 // 地点关键词搜索：服务端代理高德「关键字搜索」Web 服务。
 // 为什么要代理：小程序端没有配置腾讯/高德的小程序 key，也不想往 mp 后台加请求域名，
-// 而服务端已经有 AMAP_KEY（Render 环境变量）。于是搜索统一走本服务，key 只留在服务端。
+// 而服务端本来就有高德 key。于是搜索统一走本服务，key 只留在服务端。
+// 注意：必须用「Web服务」类型的 key（AMAP_WEB_SERVICE_KEY）；网页端那个 JS API key
+// 调 restapi 会返回 USERKEY_PLAT_NOMATCH。
 // 成本控制：按 IP 限流 + 5 分钟内存缓存，避免用户连点把高德配额刷爆。
 import { Router } from 'express';
 import { createRateLimiter } from '../ratelimit.js';
@@ -98,7 +100,8 @@ export function createGeoRouter({ amapKey, fetchImpl } = {}) {
         // 契约（与 /api/map-config 同风格）：客户端只看这句，具体该配哪个变量写在日志与注释里
         // 注意：网页版用的 JS API key 不能用于本接口，这里必须是「Web服务」类型的 key
         console.warn('[geo] 未配置地点搜索 key：请配置 AMAP_WEB_SERVICE_KEY（高德「Web服务」类型 key）');
-        return res.status(503).json({ error: '服务端未配置高德 key（AMAP_KEY）' });
+        // 客户端文案不带变量名（用户看不懂也没法处理），该配哪个变量在上一行日志里
+        return res.status(503).json({ error: '地点搜索暂未开通' });
       }
       const keyword = String(req.query.keyword ?? '').trim();
       if (!keyword || keyword.length > MAX_KEYWORD) {

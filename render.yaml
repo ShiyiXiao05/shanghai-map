@@ -20,5 +20,8 @@ services:
         sync: false
       - key: AMAP_SECURITY_CODE
         sync: false
+      # 地点搜索用：必须是高德「Web服务」类型的 key（AMAP_KEY 是网页端 JS API 类型，不能用于 REST）
+      - key: AMAP_WEB_SERVICE_KEY
+        sync: false
       - key: CLOUDINARY_URL
         sync: false

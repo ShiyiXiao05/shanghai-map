@@ -182,14 +182,23 @@ describe('GET /api/geo/search 参数校验', () => {
 });
 
 describe('GET /api/geo/search 故障路径', () => {
-  it('未配置搜索 key → 503，并指明该配哪个变量', async () => {
+  it('未配置 key → 503（与 /api/map-config 同风格），日志指明该配哪个变量', async () => {
     const { fetchImpl, calls } = stubFetch();
-    await withServer({ amapKey: '', fetchImpl }, async (request) => {
-      const res = await request('/api/geo/search?keyword=test');
-      assert.equal(res.status, 503);
-      assert.match(res.body.error, /AMAP_WEB_SERVICE_KEY/, '要告诉部署者该配哪个变量');
-      assert.equal(calls.length, 0);
-    });
+    const warns = [];
+    const original = console.warn;
+    console.warn = (...args) => warns.push(args.join(' '));
+    try {
+      await withServer({ amapKey: '', fetchImpl }, async (request) => {
+        const res = await request('/api/geo/search?keyword=test');
+        assert.equal(res.status, 503);
+        // 客户端可见文案按契约固定；「必须是 Web服务 类型 key」的排查提示走日志
+        assert.equal(res.body.error, '地点搜索暂未开通');
+        assert.equal(calls.length, 0);
+      });
+    } finally {
+      console.warn = original;
+    }
+    assert.match(warns.join('\n'), /AMAP_WEB_SERVICE_KEY/, '要告诉部署者该配哪个变量');
   });
 
   it('高德 status=0 → 502，并 console.warn 记录原因（不泄漏 key）', async () => {
