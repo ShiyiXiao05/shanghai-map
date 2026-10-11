@@ -7,8 +7,12 @@ const cache = require('../../utils/cache.js');
 const { applyTheme } = require('../../utils/theme.js');
 
 const SHANGHAI_CENTER = { longitude: 121.4737, latitude: 31.2304 };
-// 圆形标记里 emoji 的"实际着色直径"目标值（逻辑 px）：圆内可用直径 30，留 2px 余量
-const EMOJI_INK_PX = 26;
+// 圆形标记里的 emoji 字号（逻辑 px）。圆内可用直径约 32，emoji 实际着色范围通常比字号大
+// 1.2~1.4 倍，取 20px 既不溢出也能填满圆圈。
+// 若在某些机型上仍有肉眼可见的偏移，只改这里即可（单位：逻辑 px）。
+const EMOJI_FONT_PX = 20;
+const EMOJI_NUDGE_X = 0;
+const EMOJI_NUDGE_Y = 1;
 
 function haversineKm(a, b) {
   const rad = Math.PI / 180;
@@ -485,62 +489,6 @@ Page({
     this.preparePlaceIcons(this.data.filtered);
   },
 
-  // 量出 emoji 的"真实墨迹"（实际着色像素）外接框，据此算出缩放与偏移。
-  // 为什么要这么做：
-  //   ① emoji 字形普遍大于字号（彩色字体还会外扩），按固定字号画会溢出圆圈；
-  //   ② 各平台 emoji 字体度量不同，measureText 的排版宽度 ≠ 图案宽度，
-  //      textAlign='center' 居中的是排版框 → 实测会出现"偏左/偏小"。
-  // 做法：把 emoji 以参考字号画在画布上，扫描 alpha 通道求出墨迹框，再换算成
-  // "在 (22,22) 处按 k 缩放、从 (ox,oy) 起画"的参数。测量用设备像素，绘制用逻辑坐标。
-  measureEmojiInk(ctx, canvas, emoji, dpr) {
-    try {
-      const REF = 96; // 参考字号（设备像素）
-      const scratch = 160;
-      canvas.width = scratch;
-      canvas.height = scratch;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, scratch, scratch);
-      ctx.font = `${REF}px sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText(emoji, 12, 130);
-
-      const { data } = ctx.getImageData(0, 0, scratch, scratch);
-      let minX = scratch;
-      let maxX = -1;
-      let minY = scratch;
-      let maxY = -1;
-      for (let y = 0; y < scratch; y += 1) {
-        for (let x = 0; x < scratch; x += 1) {
-          if (data[(y * scratch + x) * 4 + 3] > 16) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
-      if (maxX < 0 || maxY < 0) return null; // 画布上没画出任何东西（字体缺失等）
-
-      const inkW = maxX - minX + 1;
-      const inkH = maxY - minY + 1;
-      const inkCx = (minX + maxX) / 2;
-      const inkCy = (minY + maxY) / 2;
-      const target = EMOJI_INK_PX * dpr; // 期望的墨迹直径（设备像素）
-      const k = target / Math.max(inkW, inkH);
-      return {
-        k,
-        fontLogical: REF / dpr,
-        // translate(22,22) + scale(k) 之后，把墨迹中心落到原点
-        ox: -inkCx / dpr,
-        oy: -inkCy / dpr,
-      };
-    } catch (err) {
-      console.warn('[index] emoji 墨迹测量失败，改用估算居中', err);
-      return null;
-    }
-  },
-
   drawDotIcon(color, emoji = '', visited = false) {
     return new Promise((resolve) => {
       // 任何一步异常都 resolve('')，保证 Promise 一定 settle（页面用系统默认标记兜底）
@@ -559,38 +507,27 @@ Page({
             try {
               const ctx = canvas.getContext('2d');
               const dpr = 2;
-              // 先量出 emoji 的真实墨迹（会临时改画布尺寸，随后重置）
-              const inkFit = emoji ? this.measureEmojiInk(ctx, canvas, emoji, dpr) : null;
               canvas.width = 44 * dpr; // 重置尺寸同时清空画布，避免上一张图残留
               canvas.height = 44 * dpr;
               ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // 之后都用 44×44 的逻辑坐标
               ctx.clearRect(0, 0, 44, 44);
               ctx.beginPath();
-              ctx.arc(22, 22, 17, 0, Math.PI * 2);
+              ctx.arc(22, 22, 17.5, 0, Math.PI * 2);
               ctx.fillStyle = color;
               ctx.fill();
-              ctx.lineWidth = 4;
+              ctx.lineWidth = 3;
               ctx.strokeStyle = '#ffffff';
               ctx.stroke();
               if (emoji) {
-                // 不再依赖字体度量：按像素测出的墨迹框缩放并居中（见 measureEmojiInk）。
+                // 用 canvas 自身的居中能力画 emoji（不再做像素测量/缩放变换：
+                // getImageData 在部分机型上返回整块不透明数据，会把缩放系数算成极小，
+                // emoji 直接看不见）。字号与圆圈的比例已按"填满但不溢出"调好，
+                // 个别机型若仍有偏移，只改上面的 EMOJI_FONT_PX / EMOJI_NUDGE_* 常量。
+                ctx.font = `${EMOJI_FONT_PX}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
                 ctx.fillStyle = '#ffffff';
-                if (inkFit) {
-                  ctx.save();
-                  ctx.translate(22, 22);
-                  ctx.scale(inkFit.k, inkFit.k);
-                  ctx.font = `${inkFit.fontLogical}px sans-serif`;
-                  ctx.textAlign = 'left';
-                  ctx.textBaseline = 'alphabetic';
-                  ctx.fillText(emoji, inkFit.ox, inkFit.oy);
-                  ctx.restore();
-                } else {
-                  // 兜底（画布不支持像素读取时）：按字号估算居中
-                  ctx.textAlign = 'center';
-                  ctx.textBaseline = 'middle';
-                  ctx.font = '20px sans-serif';
-                  ctx.fillText(emoji, 22, 22);
-                }
+                ctx.fillText(emoji, 22 + EMOJI_NUDGE_X, 22 + EMOJI_NUDGE_Y);
               }
               if (visited) {
                 ctx.beginPath();
