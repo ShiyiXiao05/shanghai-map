@@ -17,6 +17,19 @@ export function generateMapCode() {
 
 export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) {
   // 轻量探针：/api/ready 用它区分"进程活着"与"数据库可用"
+  // 记录一次容器启动（尽力而为；只保留最近 50 条）
+  async function recordBoot({ platform = '', features = '' } = {}) {
+    try {
+      await pool.query(
+        'INSERT INTO boot_events (platform, features, node, pid) VALUES ($1, $2, $3, $4)',
+        [String(platform).slice(0, 40), String(features).slice(0, 200), process.version, process.pid]
+      );
+      await pool.query('DELETE FROM boot_events WHERE id < (SELECT COALESCE(MAX(id), 0) - 50 FROM boot_events)');
+    } catch (err) {
+      console.warn('[store] 启动记录写入失败：', err?.message ?? err);
+    }
+  }
+
   // 记录一次服务端错误/失败请求（尽力而为：自身失败只打日志，绝不影响请求处理）
   async function recordServerError({ ref, method, path, status, message, detail } = {}) {
     try {
@@ -214,6 +227,18 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     await pool.query(
       'CREATE INDEX IF NOT EXISTS idx_photos_trace ON place_photos (trace_id)'
     );
+    // 启动记录（诊断用）：每次容器启动写一条，便于确认"新版本何时真正上线"
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS boot_events (
+        id SERIAL PRIMARY KEY,
+        platform TEXT NOT NULL DEFAULT '',
+        features TEXT NOT NULL DEFAULT '',
+        node TEXT NOT NULL DEFAULT '',
+        pid INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+
     // 服务端错误落库（诊断用）：云托管控制台不便查看时，可直接查这张表定位线上问题。
     // 只保留最近 300 条，避免无限增长。
     await pool.query(`
@@ -1202,6 +1227,7 @@ export function createPlaceStore(pool, { generateCode = generateMapCode } = {}) 
     create,
     findDuplicatePlace,
     recordServerError,
+    recordBoot,
     update,
     remove,
     getPlace,

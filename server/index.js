@@ -8,7 +8,10 @@ import { createCloudinaryUploader } from './uploader.js';
 import { createPusher } from './pusher.js';
 import { createAuth } from './auth.js';
 import { createContentSecurity } from './content-security.js';
-import { installDnsFallback } from './net.js';
+import { installDnsFallback, wechatApiBase } from './net.js';
+
+// 每次部署改这里：用于在数据库里确认新版本是否已上线
+const BOOT_FEATURES = 'wechatFetch-http-proxy-v1';
 
 async function resolveStore() {
   if (productionStore) return productionStore;
@@ -32,6 +35,14 @@ const store = await resolveStore();
 installDnsFallback();
 
 await store.init();
+
+// 记录启动：platform=cloudrun 表示容器内检测到云调用证书（即微信云托管），
+// features 是本次部署的特性标记，用于确认"新版本何时真正上线"
+const bootPlatform = wechatApiBase().startsWith('http://') ? 'cloudrun' : 'render-or-local';
+store
+  .recordBoot?.({ platform: bootPlatform, features: BOOT_FEATURES })
+  .then(() => console.log(`[boot] ${bootPlatform} | ${BOOT_FEATURES}`))
+  .catch(() => {});
 
 const uploader = createCloudinaryUploader(process.env.CLOUDINARY_URL);
 if (!uploader.configured) {
