@@ -316,4 +316,28 @@ describe('GET /api/geo/search 缓存与限流', () => {
     }
   });
 
+  it('上游第一次抖动、第二次成功 → 200（跨境偶发失败被重试吃掉）', async () => {
+    let calls = 0;
+    const fetchImpl = async () => {
+      calls += 1;
+      if (calls === 1) throw Object.assign(new Error('socket hang up'), { name: 'FetchError' });
+      return { status: 200, ok: true, json: async () => AMAP_OK_BODY };
+    };
+    await withServer({ fetchImpl }, async (request) => {
+      const res = await request('/api/geo/search?keyword=' + encodeURIComponent('武侯祠'));
+      assert.equal(res.status, 200);
+      assert.equal(res.body.places.length, 2);
+      assert.equal(calls, 2, '应当在瞬时失败后重试一次');
+    });
+  });
+
+  it('业务层错误（status=0）不重试，直接 502', async () => {
+    const stub = stubFetch({ body: { status: '0', info: 'DAILY_QUERY_OVER_LIMIT' } });
+    await withServer({ fetchImpl: stub.fetchImpl }, async (request) => {
+      const res = await request('/api/geo/search?keyword=test');
+      assert.equal(res.status, 502);
+      assert.equal(stub.calls.length, 1, '确定性错误不该浪费配额重试');
+    });
+  });
+
 });

@@ -120,18 +120,28 @@ export function createGeoRouter({ amapKey, fetchImpl } = {}) {
         `&city=${encodeURIComponent(city)}` +
         `&citylimit=true&offset=${MAX_RESULTS}&page=1&extensions=base`;
 
-      let upstream;
-      try {
-        // 5s 超时：高德抖动时宁可让用户改用地图点选，也不让请求悬着
-        upstream = await doFetch(url, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
-      } catch (err) {
-        // 注意：日志不要带 url（含 key）
-        console.warn('[geo] 高德搜索请求失败：', err?.name === 'TimeoutError' ? '超时' : err?.message ?? err);
-        return res.status(502).json({ error: UPSTREAM_ERROR });
+      // 实测 Render(新加坡) → 高德(国内) 偶发抖动（约每 6 次 1 次失败），
+      // 因此瞬时失败（网络异常 / 超时 / HTTP 非 200）重试一次再放弃；
+      // 业务层错误（status!=='1'）不重试：那是确定性的（配额、key 类型）。
+      let upstream = null;
+      let lastError = 'unknown';
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          // 5s 超时：高德抖动时宁可让用户改用地图点选，也不让请求悬着
+          const response = await doFetch(url, { signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+          if (upstreamOk(response)) {
+            upstream = response;
+            break;
+          }
+          lastError = `HTTP ${response?.status ?? 'unknown'}`;
+        } catch (err) {
+          // 注意：日志不要带 url（含 key）
+          lastError = err?.name === 'TimeoutError' ? '超时' : err?.message ?? String(err);
+        }
+        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
       }
-
-      if (!upstreamOk(upstream)) {
-        console.warn('[geo] 高德搜索返回异常状态：', upstream?.status ?? 'unknown');
+      if (!upstream) {
+        console.warn('[geo] 高德搜索两次都失败：', lastError);
         return res.status(502).json({ error: UPSTREAM_ERROR });
       }
 

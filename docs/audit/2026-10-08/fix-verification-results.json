@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-10-11T06:39:14.101Z",
+  "checkedAt": "2026-10-11T06:56:56.825Z",
   "static": {
     "jsFiles": 64,
     "syntaxFailures": [],
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "RJR9KP",
+        "code": "KGU5MR",
         "placeId": 1
       }
     },
@@ -277,15 +277,15 @@
     "e2eSteps": 20,
     "e2eFailed": 0,
     "serverTests": {
-      "tests": 140,
-      "pass": 140,
+      "tests": 142,
+      "pass": 142,
       "fail": 0,
       "exitCode": 0
     }
   },
   "tests": {
-    "tests": 140,
-    "pass": 140,
+    "tests": 142,
+    "pass": 142,
     "fail": 0,
     "exitCode": 0
   }
