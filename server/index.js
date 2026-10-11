@@ -8,6 +8,7 @@ import { createCloudinaryUploader } from './uploader.js';
 import { createPusher } from './pusher.js';
 import { createAuth } from './auth.js';
 import { createContentSecurity } from './content-security.js';
+import { installDnsFallback } from './net.js';
 
 async function resolveStore() {
   if (productionStore) return productionStore;
@@ -26,6 +27,10 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(here, '..', 'public');
 
 const store = await resolveStore();
+// 容器内 DNS 不可用会让所有外部请求（微信登录、高德、Cloudinary）以 fetch failed 结束，
+// 表现为"添加地点报服务器内部错误"，因此启动时先装一层 DNS 兜底（系统解析失败→公共 DNS）
+installDnsFallback();
+
 await store.init();
 
 const uploader = createCloudinaryUploader(process.env.CLOUDINARY_URL);

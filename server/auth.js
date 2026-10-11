@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { fetchWithRetry } from './net.js';
 
 // 小程序登录：wx.login 的 code 换 openid（code2Session），HMAC 签名 token。
 // 未配置 MINIPROGRAM_APPID/SECRET 时整体停用（登录接口 503），与 pusher/uploader 的降级风格一致。
@@ -20,13 +21,19 @@ export function createAuth({ appid, secret, signSecret, store, fetchSession }) {
       // 登录接口也要有超时：微信侧慢时不能让写请求无限等待
       let res;
       try {
-        res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+        // 瞬时网络失败（DNS 抖动、连接被重置）重试一次
+        res = await fetchWithRetry(url, { signal: AbortSignal.timeout(5000) }, { retries: 1 });
       } catch (err) {
         // 微信接口不可达/超时：包成 502，否则会退化成笼统的 500「服务器内部错误」
+        // 把底层原因（如 ENOTFOUND / ECONNRESET）一并带上，便于线上定位
+        const cause = err?.cause?.code || err?.cause?.message || '';
         const wrapped = new Error(
-          err?.name === 'TimeoutError' ? '微信登录服务响应超时，请稍后重试' : '微信登录服务暂时不可用，请稍后重试'
+          (err?.name === 'TimeoutError' ? '微信登录服务响应超时' : '微信登录服务暂时不可用') +
+            (cause ? `（${cause}）` : '') +
+            '，请稍后重试'
         );
         wrapped.status = 502;
+        wrapped.cause = err?.cause ?? err;
         throw wrapped;
       }
       let data;

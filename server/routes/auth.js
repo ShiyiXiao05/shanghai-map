@@ -22,10 +22,31 @@ export function createAuthRouter({ auth, store, contentSecurity }) {
       if (!code) return res.status(400).json({ error: '缺少 code（wx.login 的登录凭证）' });
       res.json(await auth.login(code));
     } catch (err) {
-      if (err?.status) return res.status(err.status).json({ error: err.message });
+      if (err?.status) {
+        store
+          .recordServerError?.({
+            method: 'POST',
+            path: '/api/auth/login',
+            status: err.status,
+            message: err.message,
+            detail: `cause=${err?.cause?.code || err?.cause?.message || 'n/a'}`,
+          })
+          .catch(() => {});
+        return res.status(err.status).json({ error: err.message });
+      }
       // 剩下的都是没预料到的异常（例如数据库不可用）：明确说"登录环节出错"，
       // 比笼统的 500 更好定位，也方便客户端提示用户重试
       console.warn('[auth] 登录失败：', err?.message ?? err);
+      // 落库底层原因（如 fetch failed / ENOTFOUND），便于没有控制台日志时排查
+      store
+        .recordServerError?.({
+          method: 'POST',
+          path: '/api/auth/login',
+          status: 502,
+          message: err?.message ?? String(err),
+          detail: `cause=${err?.cause?.code || err?.cause?.message || 'n/a'}\n${err?.stack ?? ''}`,
+        })
+        .catch(() => {});
       return res.status(502).json({ error: '登录暂时不可用，请稍后重试' });
     }
   });

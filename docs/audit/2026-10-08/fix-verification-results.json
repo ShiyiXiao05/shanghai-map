@@ -1,7 +1,7 @@
 {
-  "checkedAt": "2026-10-11T15:44:22.766Z",
+  "checkedAt": "2026-10-11T15:50:05.173Z",
   "static": {
-    "jsFiles": 65,
+    "jsFiles": 67,
     "syntaxFailures": [],
     "jsonFiles": 22,
     "jsonFailures": [],
@@ -77,7 +77,7 @@
       "name": "建图 + 加地点",
       "ok": true,
       "evidence": {
-        "code": "35PCZ5",
+        "code": "PDCHZD",
         "placeId": 1
       }
     },
@@ -277,15 +277,15 @@
     "e2eSteps": 20,
     "e2eFailed": 0,
     "serverTests": {
-      "tests": 159,
-      "pass": 159,
+      "tests": 163,
+      "pass": 163,
       "fail": 0,
       "exitCode": 0
     }
   },
   "tests": {
-    "tests": 159,
-    "pass": 159,
+    "tests": 163,
+    "pass": 163,
     "fail": 0,
     "exitCode": 0
   }
