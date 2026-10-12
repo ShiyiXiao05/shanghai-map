@@ -254,6 +254,12 @@ Page({
         }
         this.promptLocation();
       })
+      .catch((err) => {
+        // 兜底：定位流程里任何意外异常都必须给用户一个出口，
+        // 否则会出现"转圈后什么都没有"的静默失败（正式版曾出现）
+        console.warn('[index] 定位流程异常：', err);
+        this.promptLocation();
+      })
       .finally(() => {
         if (typeof wx.hideLoading === 'function') wx.hideLoading();
       });

@@ -477,6 +477,29 @@ describe('miniprogram regressions', () => {
     assert.equal(toasts.at(-1), '按地图中心排序');
   });
 
+  it('附近：定位流程抛异常时也要给出口（不允许"转圈后什么都没有"）', async () => {
+    const modals = [];
+    const toasts = [];
+    const runtime = createRuntime({
+      wx: {
+        // 让 getSetting 直接抛错，模拟定位链路里的意外异常
+        getSetting: () => {
+          throw new Error('模拟底层异常');
+        },
+        showLoading() {},
+        hideLoading() {},
+        showToast: (options) => toasts.push(options.title),
+        showModal: (options) => modals.push(options),
+      },
+    });
+    const page = runtime.page('pages/index/index.js');
+    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
+    page.locateNearby();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    assert.equal(modals.length, 1, '异常时也必须弹出口提示');
+    assert.equal(page.data.nearbyOpen, false);
+  });
+
   it('入口页：改昵称会先静默登录再落库，并同步页面与本地存储', async () => {
     const values = new Map();
     const profiles = [];
