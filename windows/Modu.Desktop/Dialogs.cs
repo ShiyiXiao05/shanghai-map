@@ -13,7 +13,8 @@ public partial class MainWindow
         Ui.Resource(w, BackgroundProperty, "Canvas"); var panel = new Grid { Margin = new Thickness(28) }; panel.RowDefinitions.Add(new() { Height = GridLength.Auto }); panel.RowDefinitions.Add(new() { MaxHeight = 610 }); panel.RowDefinitions.Add(new() { Height = GridLength.Auto });
         var header = Ui.Column(Ui.Text(heading, 24, weight: FontWeights.SemiBold), Ui.Space(5), Ui.Muted(subheading, 12), Ui.Space(22)); panel.Children.Add(header);
         var body = new StackPanel(); var scroll = new ScrollViewer { Content = body }; Grid.SetRow(scroll, 1); panel.Children.Add(scroll);
-        var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) }; footer.Children.Add(Ui.Quiet("取消", () => w.Close())); Grid.SetRow(footer, 2); panel.Children.Add(footer); w.Content = panel;
+        var footer = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) }; footer.Children.Add(Ui.Quiet("取消", () => w.Close())); footer.Orientation = Orientation.Horizontal;
+        footer.Loaded += (_, _) => { for (int i = 0; i < footer.Children.Count - 1; i++) if (footer.Children[i] is FrameworkElement element) element.Margin = new Thickness(0, 0, Ui.ControlGap, 0); }; Grid.SetRow(footer, 2); panel.Children.Add(footer); w.Content = panel;
         w.PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape && !writing) { w.Close(); e.Handled = true; } }; w.Closing += (_, e) => { if (writing) e.Cancel = true; };
         dialogControls.Add(body); dialogControls.Add(footer); w.Closed += (_, _) => { dialogControls.Remove(body); dialogControls.Remove(footer); };
         return (w, body, footer);
@@ -49,7 +50,7 @@ public partial class MainWindow
         var kind = new ComboBox { ItemsSource = Rules.Categories, SelectedItem = p.Category }; System.Windows.Automation.AutomationProperties.SetName(kind, "地点分类");
         var lng = Ui.Input("经度", p.Lng.ToString("0.######", CultureInfo.InvariantCulture)); var lat = Ui.Input("纬度", p.Lat.ToString("0.######", CultureInfo.InvariantCulture));
         body.Children.Add(Ui.Field("地点名称", name)); body.Children.Add(Ui.Field("分类", kind)); body.Children.Add(Ui.Field("地点图标 · 留空使用分类默认 emoji", emoji, "Windows + . 可打开系统表情选择器"));
-        var choices = new WrapPanel(); foreach (var e in new[] { "🏞️", "🍜", "🏛️", "🛍️", "🎡", "📍", "☕", "🌳", "🌸", "🌉", "🎨", "🍰" }) choices.Children.Add(Ui.Quiet(e, () => emoji.Text = e)); body.Children.Add(choices); body.Children.Add(Ui.Space(12));
+        var choices = new WrapPanel(); foreach (var e in new[] { "🏞️", "🍜", "🏛️", "🛍️", "🎡", "📍", "☕", "🌳", "🌸", "🌉", "🎨", "🍰" }) { var choice = Ui.Quiet(e, () => emoji.Text = e); choice.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji"); choice.FontSize = 20; choice.Width = 40; choice.Height = 40; choice.Padding = new Thickness(0); choice.Margin = new Thickness(0, 0, 12, 12); choices.Children.Add(choice); } body.Children.Add(choices); body.Children.Add(Ui.Space(12));
         body.Children.Add(Ui.Field("地址", address)); body.Children.Add(Ui.Field("描述 · 最多 500 字", description)); body.Children.Add(Ui.Field("人均价格", price)); body.Children.Add(Ui.Field("营业时间", hours)); body.Children.Add(Ui.Field("标签", tags));
         body.Children.Add(Ui.Field("经度（高德 GCJ-02）", lng)); body.Children.Add(Ui.Field("纬度（高德 GCJ-02）", lat)); var error = Ui.Text("", 12, "#B35D4C"); body.Children.Add(error);
         Button save = null!; save = Ui.Button("保存地点", () => _ = Save(), true); footer.Children.Add(save);
@@ -62,5 +63,15 @@ public partial class MainWindow
         }
         w.ShowDialog();
     }
-    private void DrawPlace() { var candidates = Rules.Filter(places, query, category, unvisited, sort).ToList(); if (candidates.Count == 0) { Notice("当前筛选下没有可抽取的地点"); return; } var p = candidates[Random.Shared.Next(candidates.Count)]; var (w, body, footer) = Dialog("下一站，去这里。", "给平常的一天一点随机惊喜。", 490); var name = Ui.Text(p.Name, 26, weight: FontWeights.SemiBold); var emoji = Ui.Text(p.DisplayEmoji, 60); body.Children.Add(Ui.Column(emoji, Ui.Space(14), name, Ui.Space(8), Ui.Muted(p.Address))); footer.Children.Add(Ui.Button("再抽一次", () => { p = candidates[Random.Shared.Next(candidates.Count)]; name.Text = p.Name; emoji.Text = p.DisplayEmoji; })); footer.Children.Add(Ui.Button("看看这个地方", () => { w.Close(); SetPage("explore"); SelectPlace(p); }, true)); w.ShowDialog(); }
+    private void DrawPlace()
+    {
+        var candidates = Rules.Filter(places, query, category, unvisited, sort).ToList(); if (candidates.Count == 0) { Notice("当前筛选下没有可抽取的地点"); return; }
+        var p = candidates[Random.Shared.Next(candidates.Count)]; var (w, body, footer) = Dialog("下一站，去这里。", "给平常的一天一点随机惊喜。", 490);
+        var name = Ui.Text(p.Name, Ui.HeroSize, weight: FontWeights.SemiBold); name.TextAlignment = TextAlignment.Center;
+        var emoji = Ui.Text(p.DisplayEmoji, 60); emoji.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji"); emoji.HorizontalAlignment = HorizontalAlignment.Center;
+        var address = Ui.Muted(p.Address); address.TextAlignment = TextAlignment.Center;
+        body.Children.Add(Ui.Column(emoji, Ui.Space(24), name, Ui.Space(12), address));
+        footer.Children.Add(Ui.Button("再抽一次", () => { p = candidates[Random.Shared.Next(candidates.Count)]; name.Text = p.Name; emoji.Text = p.DisplayEmoji; address.Text = p.Address; }));
+        footer.Children.Add(Ui.Button("看看这个地方", () => { w.Close(); SetPage("explore"); SelectPlace(p); }, true)); w.ShowDialog();
+    }
 }

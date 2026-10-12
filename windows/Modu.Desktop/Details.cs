@@ -14,29 +14,34 @@ public partial class MainWindow
     private StackPanel photoPanel = new(), commentPanel = new();
     private TextBox? commentInput;
     private bool photosReady, commentsReady;
-    private void CloseDetail() { selected = null; detailRevision++; detailCancellation.Cancel(); detailBorder.Visibility = Visibility.Collapsed; exploreGrid.ColumnDefinitions[3].Width = new GridLength(0); exploreGrid.ColumnDefinitions[0].Width = new GridLength(300); details.Children.Clear(); _ = MapScript("window.setPick(false)"); }
+    private void CloseDetail() { selected = null; detailRevision++; detailCancellation.Cancel(); detailBorder.Visibility = Visibility.Collapsed; exploreGrid.ColumnDefinitions[3].Width = new GridLength(0); exploreGrid.ColumnDefinitions[0].Width = new GridLength(300); exploreGrid.ColumnDefinitions[1].Width = new GridLength(Ui.CardGap); details.Children.Clear(); _ = MapScript("window.setPick(false)"); }
     private void SelectPlace(Place p)
     {
         if (page != "explore") SetPage("explore"); selected = p; detailCancellation.Cancel(); detailCancellation.Dispose(); detailCancellation = new(); var stamp = ++detailRevision; var code = active?.Code;
-        detailBorder.Visibility = Visibility.Visible; exploreGrid.ColumnDefinitions[3].Width = new GridLength(340); exploreGrid.ColumnDefinitions[0].Width = new GridLength(ActualWidth < 1260 ? 0 : 280);
-        details.Children.Clear(); details.Children.Add(Ui.Row(Ui.Badge(p.Category), Ui.Quiet("×", () => { CloseDetail(); RenderPlaces(); }, "关闭详情 · Esc"))); details.Children.Add(Ui.Space(14)); details.Children.Add(Ui.Text(p.DisplayEmoji, 42)); details.Children.Add(Ui.Space(12)); details.Children.Add(Ui.Text(p.Name, 24, weight: FontWeights.SemiBold)); details.Children.Add(Ui.Space(8)); details.Children.Add(Ui.Muted(p.Address, 12)); details.Children.Add(Ui.Space(16));
+        detailBorder.Visibility = Visibility.Visible; exploreGrid.ColumnDefinitions[3].Width = new GridLength(360); exploreGrid.ColumnDefinitions[0].Width = new GridLength(ActualWidth < 1260 ? 0 : 280);
+        UpdateExploreLayout();
+        details.Children.Clear();
+        var top = new DockPanel(); var close = Ui.IconAction("close", () => { CloseDetail(); RenderPlaces(); }, "关闭详情 · Esc"); DockPanel.SetDock(close, Dock.Right); top.Children.Add(close); var caption = Ui.Eyebrow("PLACE NOTES / 地点手记"); caption.VerticalAlignment = VerticalAlignment.Center; top.Children.Add(caption); details.Children.Add(top);
+        details.Children.Add(Ui.Space(16)); details.Children.Add(Ui.PlaceCover(p)); details.Children.Add(Ui.Space(16));
+        details.Children.Add(Ui.Row(Ui.Badge(p.Category), Ui.Muted(code == null ? "公共分享 · 只读" : p.Visited ? "已收藏 · 已打卡" : "已收藏 · 待出发", Ui.CaptionSize))); details.Children.Add(Ui.Space(4));
+        details.Children.Add(Ui.Text(p.Name, 24, weight: FontWeights.SemiBold)); details.Children.Add(Ui.Space(8)); details.Children.Add(Ui.Muted(p.Address, 11)); details.Children.Add(Ui.Space(16));
         var badges = new WrapPanel(); if (p.Visited) badges.Children.Add(Ui.Badge("✓ 已去过")); if (p.IsPublic) badges.Children.Add(Ui.Badge("公共可见")); if (!string.IsNullOrWhiteSpace(p.PriceHint)) badges.Children.Add(Ui.Badge(p.PriceHint)); if (!string.IsNullOrWhiteSpace(p.Hours)) badges.Children.Add(Ui.Badge(p.Hours)); details.Children.Add(badges);
         if (!string.IsNullOrWhiteSpace(p.Description)) details.Children.Add(Ui.Text(p.Description, 13)); if (!string.IsNullOrWhiteSpace(p.Tags)) { details.Children.Add(Ui.Space(10)); details.Children.Add(Ui.Muted(p.Tags, 11)); }
         details.Children.Add(Ui.Space(18));
-        details.Children.Add(Ui.Wrap(Ui.Button("↗ 高德导航", () => OpenUrl(Rules.Navigation(p)), true), Ui.Button("分享链接", () => Copy(api.BaseUrl + "/?" + (code == null ? "" : $"map={code}&") + $"place={p.Id}"))));
+        details.Children.Add(Ui.Pair(Ui.Action("arrow", "高德导航", () => OpenUrl(Rules.Navigation(p)), true), Ui.Button("分享链接", () => Copy(api.BaseUrl + "/?" + (code == null ? "" : $"map={code}&") + $"place={p.Id}"))));
         if (code != null)
         {
-            details.Children.Add(Ui.Wrap(Ui.Button(p.Wishes.Contains(store.Settings.Nickname) ? $"♥ 想去 {p.Wishes.Count}" : $"♡ 想去 {p.Wishes.Count}", () => _ = Wish(p)), Ui.Button(p.Visited ? "撤销打卡" : "✓ 我去过了", () => _ = Visit(p))));
+            details.Children.Add(Ui.Pair(Ui.Button(p.Wishes.Contains(store.Settings.Nickname) ? $"♥ 想去 {p.Wishes.Count}" : $"♡ 想去 {p.Wishes.Count}", () => _ = Wish(p)), Ui.Button(p.Visited ? "撤销打卡" : "✓ 我去过了", () => _ = Visit(p))));
             if (p.Wishes.Count > 0) details.Children.Add(Ui.Muted(string.Join("、", p.Wishes) + " 想去", 11));
-            details.Children.Add(Ui.Wrap(Ui.Quiet("编辑地点", () => EditPlace(p)), Ui.Quiet(p.IsPublic ? "取消公开" : "公开到广场", () => _ = TogglePublic(p)), Ui.Quiet("加入行程", () => _ = AddToRoute(p))));
+            details.Children.Add(Ui.Space(2)); details.Children.Add(Ui.Pair(Ui.Button("编辑地点", () => EditPlace(p)), Ui.Action("plus", "加入行程", () => _ = AddToRoute(p)))); details.Children.Add(Ui.Quiet(p.IsPublic ? "取消公开" : "公开到广场", () => _ = TogglePublic(p)));
             details.Children.Add(Ui.Rule());
             photoPanel = new(); commentPanel = new(); detailPhotos = []; detailComments = []; photosReady = false; commentsReady = false;
-            details.Children.Add(Ui.Row(Ui.Text("照片", 15, weight: FontWeights.SemiBold), Ui.Quiet("＋ 上传", () => _ = UploadPhoto(p)))); details.Children.Add(photoPanel); details.Children.Add(Ui.Space(16));
-            details.Children.Add(Ui.Text("留言", 15, weight: FontWeights.SemiBold)); details.Children.Add(Ui.Space(10)); details.Children.Add(commentPanel); commentInput = Ui.Input("留言", max: 280, multi: true); commentInput.MinHeight = 74; details.Children.Add(commentInput); details.Children.Add(Ui.Space(8)); details.Children.Add(Ui.Button("发送留言", () => _ = SendComment(p, commentInput), true));
+            details.Children.Add(Ui.SectionHeading("照片", Ui.Action("plus", "上传", () => _ = UploadPhoto(p)))); details.Children.Add(photoPanel); details.Children.Add(Ui.Space(16));
+            details.Children.Add(Ui.SectionHeading("留言")); details.Children.Add(commentPanel); details.Children.Add(Ui.Space(12)); commentInput = Ui.Input("留言", max: 280, multi: true); commentInput.MinHeight = 74; details.Children.Add(commentInput); details.Children.Add(Ui.Space(8)); details.Children.Add(Ui.Button("发送留言", () => _ = SendComment(p, commentInput), true));
             var key = code + ":" + p.Id; if (demo) { photosReady = true; commentsReady = true; RenderPhotos(p, stamp); RenderComments(p); } else if (mediaCache.TryGetValue(key, out var cached) && DateTimeOffset.Now - cached.Time < TimeSpan.FromSeconds(60)) { detailPhotos = cached.Photos; detailComments = cached.Comments; photosReady = true; commentsReady = true; RenderPhotos(p, stamp); RenderComments(p); } else { photoPanel.Children.Add(Ui.Muted("正在加载照片…")); commentPanel.Children.Add(Ui.Muted("正在加载留言…")); _ = LoadPhotos(code, p, stamp, detailCancellation.Token); _ = LoadComments(code, p, stamp, detailCancellation.Token); }
             details.Children.Add(Ui.Rule()); details.Children.Add(Ui.Quiet("移入回收站", () => _ = RemovePlace(p)));
         }
-        else details.Children.Add(Ui.Muted("公共地点仅供浏览。创建或加入地图后，可管理你的照片、留言与行程。", 12));
+        else { details.Children.Add(Ui.Space(12)); var note = Ui.Card(Ui.Column(Ui.Text("来自公共广场", Ui.SectionSize, weight: FontWeights.SemiBold), Ui.Space(8), Ui.Muted("公开地点只读浏览，不显示地图邀请码及私人照片、留言。"), Ui.Space(16), Ui.Button("创建 / 加入我的地图", () => SetPage("maps"))), new Thickness(18), 12); Ui.Resource(note, Border.BackgroundProperty, "Tint"); details.Children.Add(note); }
         details.Children.Add(Ui.Space(10)); details.Children.Add(Ui.Muted($"由 {p.AddedBy.DefaultIfEmpty("城市探索者")} 标记", 10)); details.Children.Add(Ui.Quiet("举报内容", () => ReportDialog(p))); RenderPlaces(); _ = MapScript("window.focusPlace(" + System.Text.Json.JsonSerializer.Serialize(p, Wire.Json) + ")");
     }
     private async Task Wish(Place p)
@@ -70,7 +75,7 @@ public partial class MainWindow
     private void CacheMedia(string code, long id) { if (photosReady && commentsReady) mediaCache[code + ":" + id] = (DateTimeOffset.Now, detailPhotos.ToList(), detailComments.ToList()); }
     private void RenderPhotos(Place p, int stamp)
     {
-        photoPanel.Children.Clear(); if (detailPhotos.Count == 0) { photoPanel.Children.Add(Ui.Muted("还没有照片，把这一刻留在这里。", 12)); return; }
+        photoPanel.Children.Clear(); if (detailPhotos.Count == 0) { var empty = Ui.Card(Ui.Column(Ui.Eyebrow("MOMENTS"), Ui.Space(6), Ui.Muted("把这一刻，留在这里。", 12)), new Thickness(16), 12); Ui.Resource(empty, Border.BackgroundProperty, "Tint"); empty.BorderThickness = new Thickness(0); photoPanel.Children.Add(empty); return; }
         var wrap = new WrapPanel(); photoPanel.Children.Add(wrap); var code = active!.Code;
         foreach (var photo in detailPhotos) { var image = new System.Windows.Controls.Image { Width = 126, Height = 95, Stretch = Stretch.UniformToFill }; var picture = Ui.Button("查看照片", () => _ = PreviewPhoto(photo, code)); picture.Content = image; picture.Padding = new Thickness(0); picture.Width = 126; picture.Height = 95; picture.Margin = new Thickness(0, 0, 8, 0); var tile = Ui.Column(picture, Ui.Quiet("删除", () => _ = DeletePhoto(p, photo))); tile.Margin = new Thickness(0, 0, 0, 8); wrap.Children.Add(tile); _ = Load(); async Task Load() { try { image.Source = await Images.Load(photo.Thumb, detailCancellation.Token); } catch (OperationCanceledException) { } catch { if (stamp == detailRevision) picture.Content = Ui.Muted("图片加载失败\n点击查看原图", 10); } } }
     }

@@ -71,7 +71,7 @@ public partial class MainWindow
     }
     private async Task MapScript(string script) { if (!mapLoaded || closing) return; try { await mapView.CoreWebView2.ExecuteScriptAsync(script); } catch (Exception e) { if (!closing) Notice("地图通信失败 · " + Error(e)); } }
     private async Task Locate() { if (!store.Settings.MapConsent) { await ConsentMap(); } if (mapLoaded) await MapScript("window.locate()"); }
-    private void ToggleMapFocus() { if (exploreGrid.ColumnDefinitions[0].Width.Value == 0 && selected == null) { exploreGrid.ColumnDefinitions[0].Width = new GridLength(300); } else { CloseDetail(); exploreGrid.ColumnDefinitions[0].Width = new GridLength(0); } }
+    private void ToggleMapFocus() { if (exploreGrid.ColumnDefinitions[0].Width.Value == 0 && selected == null) { exploreGrid.ColumnDefinitions[0].Width = new GridLength(300); exploreGrid.ColumnDefinitions[1].Width = new GridLength(Ui.CardGap); } else { CloseDetail(); exploreGrid.ColumnDefinitions[0].Width = new GridLength(0); exploreGrid.ColumnDefinitions[1].Width = new GridLength(0); } }
     private async Task PickOnMap() { if (!RequireMap()) return; if (!store.Settings.MapConsent) await ConsentMap(); if (mapLoaded) { mapHint.Text = "点击地图选择一个地点 · Esc 取消"; await MapScript("window.setPick(true)"); } }
     private async Task<List<PickedPoint>> SearchMap(string text)
     {

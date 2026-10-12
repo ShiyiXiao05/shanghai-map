@@ -18,9 +18,37 @@ public partial class MainWindow
         CloseDetail(); Check(exploreGrid.ColumnDefinitions[3].Width.Value == 0, "Detail panel collapses without taking map space");
         foreach (var target in new[] { "route", "memories", "maps", "poster", "trash", "settings", "explore" }) { SetPage(target); await Task.Delay(100); UpdateLayout(); Check(content.Content is FrameworkElement, "Page renders: " + target); }
         search.Text = "武康"; Check(placeList.Items.Count == 1, "Search filters by place name"); search.Text = "";
+        var personalMap = active; categoryFilter.SelectedIndex = 1; unvisitedFilter.IsChecked = true;
+        var publicEntry = navigation.Children.OfType<Button>().Single(b => AutomationProperties.GetName(b) == "公共广场"); publicEntry.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); UpdateLayout();
+        Check(active == null && title.Text == "公共广场" && collectionTitle.Text == "广场地点", "Primary navigation opens the public square with its own heading");
+        Check(category == "全部" && !unvisited && query == "", "Switching to the square resets private map filters");
+        Check(placeList.Items.Count == 4, "Demo public square displays public fixture places"); SelectPlace(places[0]); UpdateLayout();
+        Check(!FindChildren<Button>(details).Any(b => AutomationProperties.GetName(b) is "编辑地点" or "发送留言" or "加入行程"), "Public details expose read-only actions");
+        await SwitchMap(personalMap); UpdateLayout();
+        Check(active?.Code == personalMap?.Code && places.Count == 6, "Returning from public square restores the private map");
         ApplyTheme(true); Check(((SolidColorBrush)Application.Current.Resources["Canvas"]).Color.R < 40, "Dark theme changes semantic palette"); ApplyTheme(false);
         var unnamed = FindChildren<Button>(root).Where(b => string.IsNullOrWhiteSpace(AutomationProperties.GetName(b))).Count(); Check(unnamed == 0, "All action buttons have accessible names");
-        Width = 1100; Height = 760; UpdateLayout(); SelectPlace(places[0]); Check(exploreGrid.ColumnDefinitions[0].Width.Value == 0, "Compact window prioritizes map and detail"); CloseDetail(); Width = 1460; Height = 950; UpdateLayout();
+        var standard = Ui.Button("排版", () => { }); var withIcon = Ui.Action("plus", "排版", () => { });
+        Check(standard.FontSize == withIcon.FontSize && FindChildren<TextBlock>(withIcon).All(t => t.FontSize == standard.FontSize), "Text and icon buttons share a font size");
+        var iconButton = Ui.IconAction("plus", () => { }, "居中图标"); var glyph = (FrameworkElement)iconButton.Content;
+        Check(glyph.HorizontalAlignment == HorizontalAlignment.Center && glyph.VerticalAlignment == VerticalAlignment.Center, "Icon-only controls center their glyphs");
+        SetPage("settings"); UpdateLayout(); var cardPairs = FindChildren<Grid>(content).Where(g => g.ColumnDefinitions.Count == 3 && g.Children.OfType<Border>().Count() == 2).ToList();
+        Check(cardPairs.Count == 2 && cardPairs.All(g => g.ColumnDefinitions[1].Width.Value == Ui.CardGap), "Settings card columns have consistent 24px gutters"); SetPage("explore");
+        foreach (var (name, show) in new (string, Action)[] { ("edit-dialog", () => EditPlace(places[0])), ("add-dialog", OpenAdd), ("history-dialog", ShowHistory) })
+        {
+            var capture = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+            capture.Tick += (_, _) => {
+                capture.Stop(); var dialog = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.Owner == this && w.IsVisible);
+                Check(dialog != null, "Native modal renders: " + name); if (dialog == null) return;
+                dialog.UpdateLayout(); var visual = (FrameworkElement)dialog.Content;
+                var drawing = new DrawingVisual(); using (var dc = drawing.RenderOpen()) { var rect = new Rect(0, 0, visual.ActualWidth, visual.ActualHeight); dc.DrawRectangle(dialog.Background, null, rect); dc.DrawRectangle(new VisualBrush(visual) { Stretch = Stretch.Fill }, null, rect); }
+                var shot = new RenderTargetBitmap((int)Math.Ceiling(visual.ActualWidth), (int)Math.Ceiling(visual.ActualHeight), 96, 96, PixelFormats.Pbgra32); shot.Render(drawing); var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(shot)); using (var outputFile = File.Create(Path.Combine(store.DirectoryPath, name + ".png"))) png.Save(outputFile);
+                Check(FindChildren<StackPanel>(visual).Where(p => p.Orientation == Orientation.Horizontal && p.HorizontalAlignment == HorizontalAlignment.Right).All(p => p.Children.OfType<FrameworkElement>().SkipLast(1).All(e => e.Margin.Right == Ui.ControlGap)), "Modal actions retain 12px spacing: " + name);
+                dialog.Close();
+            };
+            capture.Start(); show(); capture.Stop();
+        }
+        SelectPlace(places[0]); Width = 1100; Height = 760; UpdateLayout(); Check(exploreGrid.ColumnDefinitions[0].Width.Value == 0, "Resizing an open detail panel collapses the list"); SelectPlace(places[0]); Check(exploreGrid.ColumnDefinitions[0].Width.Value == 0, "Compact window prioritizes map and detail"); Width = 1460; Height = 950; UpdateLayout(); Check(exploreGrid.ColumnDefinitions[0].Width.Value > 0, "Enlarging the window restores the place list"); CloseDetail();
         var poster = BuildPoster(); Check(poster.Width == 640 && poster.Height == 820, "Poster has stable export dimensions");
         poster.Measure(new Size(640, 820)); poster.Arrange(new Rect(0, 0, 640, 820)); var render = new RenderTargetBitmap(640, 820, 96, 96, PixelFormats.Pbgra32); render.Render(poster); var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(render)); var photoPath = Path.Combine(store.DirectoryPath, "test-photo.png"); using (var file = File.Create(photoPath)) encoder.Save(file);
         var prepared = await Images.Prepare(photoPath); Check(Convert.FromBase64String(prepared.Full[(prepared.Full.IndexOf(',') + 1)..]).Length < 1500000 && Convert.FromBase64String(prepared.Thumb[(prepared.Thumb.IndexOf(',') + 1)..]).Length < 64000, "Native photo compression respects API budgets"); Check((await Images.Load(prepared.Thumb)).PixelWidth <= 320, "Native thumbnail decodes without external codecs");
@@ -53,6 +81,9 @@ public partial class MainWindow
             for (int i = 0; i < 30 && !commentsReady; i++) await Task.Delay(100); commentInput!.Text = "原生输入框留言"; await SendComment(selected!, commentInput); Check(detailComments.Count == 1 && commentInput.Text == "", "Native comment input submits and clears on success");
             await AddToRoute(selected!); SetPage("route"); await Task.Delay(200); Check(stops.Count == 1, "Native itinerary page reflects persisted stop"); SetPage("memories"); await Task.Delay(200); Check(FindChildren<TextBlock>(content).Any(t => t.Text == "原生控件测试"), "Native memory page displays visited place");
             await api.DeletePlace(map.Code, p.Id); SetPage("trash"); await Task.Delay(200); Check(FindChildren<TextBlock>(content).Any(t => t.Text == "原生控件测试"), "Native trash page renders deleted place"); await api.Restore(map.Code, p.Id); await Reload(); Check(places.Count == 1, "Refresh restores visible data after recovery");
+            await api.Publish(map.Code, p.Id); await SwitchMap(null); Check(active == null && title.Text == "公共广场" && places.Any(x => x.Id == p.Id), "Published place appears in the real public square endpoint");
+            SelectPlace(places.Single(x => x.Id == p.Id)); Check(!FindChildren<Button>(details).Any(b => AutomationProperties.GetName(b) == "编辑地点"), "Public square detail hides private editing controls");
+            await SwitchMap(map); Check(active?.Code == map.Code && places.Any(x => x.Id == p.Id), "Public-to-private navigation reloads the original map");
             await File.WriteAllLinesAsync(Path.Combine(store.DirectoryPath, "functional-ui-checks.txt"), report);
         }
         finally { await api.Raw("DELETE", $"/api/maps/{map.Code}"); store.Forget(map.Code); active = null; places = []; SetPage("explore"); }
