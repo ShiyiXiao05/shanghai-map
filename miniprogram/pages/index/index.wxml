@@ -27,11 +27,9 @@
       scale="12"
       markers="{{markers}}"
       enable-poi="{{true}}"
-      show-location="{{showMyDot}}"
       bindmarkertap="onMarkerTap"
     ></map>
     <view class="map-tools">
-      <view class="map-tool-btn" bindtap="locateNearby">◎ 附近</view>
       <view class="map-tool-btn map-tool-random" bindtap="drawRandom">🎲 抽一个</view>
       <view class="map-tool-btn" bindtap="toggleMapFs">{{isMapFs ? '✕ 退出' : '⛶ 全屏'}}</view>
     </view>
@@ -144,26 +142,6 @@
         <view class="place-wish" wx:if="{{item.wishCount > 0}}">♡ {{item.wishCount}}</view>
       </view>
     </scroll-view>
-  </view>
-
-  <view wx:if="{{nearbyOpen}}" class="modal-mask" bindtap="closeNearby">
-    <view class="discover-sheet" catchtap="noop">
-      <view class="sheet-head">
-        <view>
-          <view class="sheet-title">◎ 离我最近</view>
-          <view class="sheet-sub">{{nearbyScope}}</view>
-        </view>
-        <view class="sheet-close" bindtap="closeNearby">✕</view>
-      </view>
-      <view wx:for="{{nearbyPlaces}}" wx:key="id" class="nearby-row" data-id="{{item.id}}" bindtap="openNearbyPlace">
-        <text class="nearby-emoji">{{item.emoji}}</text>
-        <view class="nearby-main">
-          <text class="nearby-name">{{item.name}}</text>
-          <text class="nearby-meta ellipsis">{{item.category}}{{item.address ? ' · ' + item.address : ''}}</text>
-        </view>
-        <text class="nearby-distance">{{item.distance}}</text>
-      </view>
-    </view>
   </view>
 
   <view wx:if="{{randomOpen}}" class="modal-mask" bindtap="closeRandom">

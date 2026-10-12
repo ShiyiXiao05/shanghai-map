@@ -172,19 +172,6 @@
 .sheet-sub { margin-top: 6rpx; color: var(--ink-faint); font-size: 22rpx; }
 .sheet-close { padding: 12rpx; color: var(--ink-soft); font-size: 28rpx; }
 
-.nearby-row {
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-  min-height: 92rpx;
-  padding: 8rpx 6rpx;
-  border-top: 1rpx solid var(--line);
-}
-.nearby-emoji { width: 54rpx; text-align: center; font-size: 34rpx; }
-.nearby-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5rpx; }
-.nearby-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink); font-size: 28rpx; font-weight: 600; }
-.nearby-meta { color: var(--ink-faint); font-size: 21rpx; }
-.nearby-distance { flex: none; color: var(--metro); font-size: 23rpx; font-weight: 600; }
 
 .random-sheet { text-align: center; padding-top: 38rpx; }
 .random-sheet-close { position: absolute; top: 14rpx; right: 18rpx; }
@@ -453,8 +440,3 @@
   background: rgba(0, 0, 0, 0.06);
 }
 
-.nearby-repoint {
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: var(--brand, #2fa877);
-}

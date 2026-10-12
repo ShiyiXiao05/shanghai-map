@@ -20,11 +20,6 @@
   },
   "darkmode": true,
   "themeLocation": "theme.json",
-  "permission": {
-    "scope.userLocation": {
-      "desc": "用于按当前位置排序附近地点（仅在本机计算，不上传服务器）"
-    }
-  },
   "usingComponents": {
     "nickname-modal": "/components/nickname-modal/nickname-modal",
     "emoji-picker": "/components/emoji-picker/emoji-picker"

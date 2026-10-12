@@ -9,12 +9,6 @@ export const CLOUD_ENV_ID = 'shanghai-map-d4gh58zcjddcf3dc1';
 // 云托管服务名：与控制台创建的服务名一致（见 docs/微信云托管部署指引.md）
 export const CLOUD_SERVICE_NAME = 'shanghai-map';
 
-// 关于「附近」的说明
-//
-// 「附近」只用当前所在位置：走地图组件自带的定位能力（show-location + moveToLocation），
-// 不属于需要后台准入开通的地理位置接口（那些接口未开通时包里出现接口名会被 61040 拦截）。
-// 用户拒绝授权或定位不可用时给出提示，不再提供手动标记等替代方式。
-
 // 2. 腾讯位置服务 key（https://lbs.qq.com 控制台创建，选「WebServiceAPI」并勾选微信小程序授权）
 // 用途：地点关键词搜索 / 逆地理（吸附选点）
 export const TMAP_KEY = '';

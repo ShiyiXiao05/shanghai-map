@@ -360,144 +360,26 @@ describe('miniprogram regressions', () => {
     assert.match(source, /ctx\.fillText\(layout\.text, layout\.x/, '应按 layout 绘制');
   });
 
-  it('附近：已授权时移动并读取当前位置排序（不再依赖 wx.authorize）', async () => {
-    const toasts = [];
-    let authorized = false;
-    const runtime = createRuntime({
-      wx: {
-        getSetting: (options) => options.success({ authSetting: authorized ? { 'scope.userLocation': true } : {} }),
-        authorize: () => {
-          throw new Error('不应调用 wx.authorize（对 scope.userLocation 不可靠）');
-        },
-        createMapContext: () => ({
-          moveToLocation() {},
-          getCenterLocation: (options) => options.success({ latitude: 31.2054, longitude: 121.4375 }),
-        }),
-        showLoading() {},
-        hideLoading() {},
-        showToast: (options) => toasts.push(options.title),
-      },
-    });
-    const page = runtime.page('pages/index/index.js');
-    page.setData({
-      places: [
-        { id: 1, name: '近处', category: '景点', lat: 31.2054, lng: 121.4375 },
-        { id: 2, name: '远处', category: '景点', lat: 31.25, lng: 121.5 },
-      ],
-    });
-    authorized = true;
-    page.locateNearby();
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    assert.equal(page.data.nearbyPlaces[0].id, 1);
-    assert.equal(page.data.nearbyOpen, true);
-    assert.equal(page.data.showMyDot, true);
-    assert.equal(toasts.at(-1), '已按当前位置排序');
-  });
-
-  it('附近：未决定授权 → 打开定位点等待弹窗；用户允许后即可定位', async () => {
-    const toasts = [];
-    let authorized = false;
-    let settingCalls = 0;
-    const runtime = createRuntime({
-      wx: {
-        getSetting: (options) => {
-          settingCalls += 1;
-          // 第 3 次查询（约 1 秒后）模拟用户点了"允许"
-          if (settingCalls >= 3) authorized = true;
-          options.success({ authSetting: authorized ? { 'scope.userLocation': true } : {} });
-        },
-        createMapContext: () => ({
-          moveToLocation() {},
-          getCenterLocation: (options) => options.success({ latitude: 31.2054, longitude: 121.4375 }),
-        }),
-        showLoading() {},
-        hideLoading() {},
-        showToast: (options) => toasts.push(options.title),
-      },
-    });
-    const page = runtime.page('pages/index/index.js');
-    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2054, lng: 121.4375 }] });
-    page.locateNearby();
-    await new Promise((resolve) => setTimeout(resolve, 2500));
-    assert.equal(page.data.showMyDot, true, '要先打开地图定位点以触发授权弹窗');
-    assert.equal(page.data.nearbyOpen, true, '授权后应出结果');
-    assert.ok(settingCalls >= 2, '应轮询授权结果');
-  });
-
-  it('附近：一直未授权 → 弹双出口（去设置 / 用地图中心）', async () => {
-    const modals = [];
-    const runtime = createRuntime({
-      wx: {
-        getSetting: (options) => options.success({ authSetting: {} }),
-        createMapContext: () => ({ moveToLocation() {}, getCenterLocation: (options) => options.fail({}) }),
-        showLoading() {},
-        hideLoading() {},
-        showToast() {},
-        showModal: (options) => modals.push(options),
-      },
-    });
-    const page = runtime.page('pages/index/index.js');
-    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2304, lng: 121.4737 }] });
-    page.locateNearby();
-    await new Promise((resolve) => setTimeout(resolve, 9500));
-    assert.equal(modals.length, 1);
-    assert.equal(modals[0].confirmText, '去设置');
-    assert.equal(modals[0].cancelText, '用地图中心');
-  });
-
-  it('附近：拒绝授权后选「用地图中心」也能出结果（不再走进死路）', async () => {
-    const modals = [];
-    const toasts = [];
-    const runtime = createRuntime({
-      wx: {
-        getSetting: (options) => options.success({ authSetting: { 'scope.userLocation': false } }),
-        createMapContext: () => ({ moveToLocation() {}, getCenterLocation: (options) => options.fail({}) }),
-        showLoading() {},
-        hideLoading() {},
-        showToast: (options) => toasts.push(options.title),
-        showModal: (options) => {
-          modals.push(options);
-          options.success({ confirm: false, cancel: true }); // 用户点「用地图中心」
-        },
-      },
-    });
-    const page = runtime.page('pages/index/index.js');
-    page.setData({
-      longitude: 121.4737,
-      latitude: 31.2304,
-      places: [
-        { id: 1, name: '中心附近', category: '景点', lat: 31.2304, lng: 121.4737 },
-        { id: 2, name: '远处', category: '景点', lat: 31.4, lng: 121.6 },
-      ],
-    });
-    page.locateNearby();
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    assert.equal(page.data.nearbyOpen, true, '用地图中心也应能出结果');
-    assert.equal(page.data.nearbyPlaces[0].id, 1);
-    assert.equal(toasts.at(-1), '按地图中心排序');
-  });
-
-  it('附近：定位流程抛异常时也要给出口（不允许"转圈后什么都没有"）', async () => {
-    const modals = [];
-    const toasts = [];
-    const runtime = createRuntime({
-      wx: {
-        // 让 getSetting 直接抛错，模拟定位链路里的意外异常
-        getSetting: () => {
-          throw new Error('模拟底层异常');
-        },
-        showLoading() {},
-        hideLoading() {},
-        showToast: (options) => toasts.push(options.title),
-        showModal: (options) => modals.push(options),
-      },
-    });
-    const page = runtime.page('pages/index/index.js');
-    page.setData({ places: [{ id: 1, name: '地点', category: '景点', lat: 31.2, lng: 121.4 }] });
-    page.locateNearby();
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    assert.equal(modals.length, 1, '异常时也必须弹出口提示');
-    assert.equal(page.data.nearbyOpen, false);
+  it('附近功能已下线：小程序不再包含任何定位相关代码或权限声明', () => {
+    // 需求变更（2026-10-12）：微信把位置能力划为需申请开通的接口，本账号两次申请被拒，
+    // 地图组件又不触发授权弹窗，因此整体下线「附近」，不再请求任何位置权限。
+    const files = [];
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(js|json|wxml|wxss)$/.test(entry.name)) files.push(full);
+      }
+    };
+    walk(miniRoot);
+    const offenders = [];
+    for (const file of files) {
+      const text = fs.readFileSync(file, 'utf8');
+      for (const token of ['locateNearby', 'show-location', 'userLocation', 'nearbyOpen', 'getLocation', 'chooseLocation']) {
+        if (text.includes(token)) offenders.push(`${path.relative(miniRoot, file)} → ${token}`);
+      }
+    }
+    assert.deepEqual(offenders, [], '下线后不应再出现定位相关代码或权限声明');
   });
 
   it('入口页：改昵称会先静默登录再落库，并同步页面与本地存储', async () => {
