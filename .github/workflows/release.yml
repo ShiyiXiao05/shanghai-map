@@ -1,0 +1,74 @@
+name: Publish Android and Windows preview
+on:
+  push:
+    tags: ['preview-*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing preview tag to publish
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: publish-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate release inputs
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^preview-[0-9]{4}-[0-9]{2}-[0-9]{2}([.-][a-zA-Z0-9]+)?$') { throw 'Invalid preview tag' }
+          if (!(Test-Path "docs/releases/$env:RELEASE_TAG.md")) { throw 'Release notes are missing' }
+      - run: npm --prefix server ci
+      - name: Verify Windows core and isolated API
+        shell: pwsh
+        run: |
+          $service = Start-Process node -ArgumentList 'windows/scripts/test-server.mjs' -PassThru -WindowStyle Hidden
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              try { Invoke-RestMethod http://127.0.0.1:47831/api/health | Out-Null; $ready = $true; break } catch { Start-Sleep -Seconds 1 }
+            }
+            if (!$ready) { throw 'Isolated server did not start' }
+            dotnet run --project windows/Modu.Tests/Modu.Tests.csproj -c Release -- http://127.0.0.1:47831
+            if ($LASTEXITCODE -ne 0) { throw 'Windows regressions failed' }
+          } finally { Stop-Process -Id $service.Id -ErrorAction SilentlyContinue }
+      - name: Build and stage packages
+        shell: pwsh
+        run: ./windows/scripts/stage-release.ps1
+      - name: Upload, verify and publish release
+        id: publish
+        shell: pwsh
+        run: ./windows/scripts/publish-release.ps1
+      - name: Record publication result
+        if: always()
+        shell: pwsh
+        env:
+          PUBLICATION_RESULT: ${{ steps.publish.outcome }}
+        run: |
+          $state = if ($env:PUBLICATION_RESULT -eq 'success') { 'published' } else { 'failed' }
+          $result = @{state=$state;tag=$env:RELEASE_TAG;commit=(git rev-parse HEAD);runUrl="$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID";recordedAt=[DateTimeOffset]::UtcNow.ToString('o')}
+          if (Test-Path 'windows/artifacts/release-publication.json') { $result.release = Get-Content 'windows/artifacts/release-publication.json' -Raw | ConvertFrom-Json }
+          $result | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 'release-status.json'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          $statusTag = "release-status/$env:RELEASE_TAG"
+          git tag --force --annotate $statusTag --file release-status.json
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to create publication receipt' }
+          git push --force origin "refs/tags/$statusTag"
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to save publication receipt' }
