@@ -151,7 +151,7 @@
       <view class="sheet-head">
         <view>
           <view class="sheet-title">◎ 离我最近</view>
-          <view class="sheet-sub">按当前位置的直线距离排序</view>
+          <view class="sheet-sub">{{nearbyScope}}</view>
         </view>
         <view class="sheet-close" bindtap="closeNearby">✕</view>
       </view>

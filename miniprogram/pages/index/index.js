@@ -61,6 +61,7 @@ Page({
     isDark: false, // 跟随系统深色，控制下拉刷新指示器配色
     showMyDot: false, // 打开地图定位点（自动定位尝试时打开，由地图组件弹授权）
     nearbyOpen: false,
+    nearbyScope: '按当前位置的直线距离排序', // 附近面板副标题（区分当前位置与地图中心）
     nearbyPlaces: [],
     randomOpen: false,
     randomDrawing: false,
@@ -247,33 +248,106 @@ Page({
     wx.showLoading({ title: '定位中…' });
     this.tryAutoLocate()
       .then((point) => {
-        if (point) this.showNearby(point);
-        else this.promptLocation();
+        if (point) {
+          this.showNearby(point, 'device');
+          return;
+        }
+        this.promptLocation();
       })
-      .finally(() => wx.hideLoading());
+      .finally(() => {
+        if (typeof wx.hideLoading === 'function') wx.hideLoading();
+      });
   },
 
-  // 定位不可用时的提示：能确定是用户拒绝就引导去设置，其余给可读原因
+  // 定位不可用时的出口（两个都要给，避免走进死路）：
+  //  · 去设置：用户拒绝过授权时，只有设置页能改
+  //  · 用地图中心：把地图拖到你所在位置，点这个也能得到"附近"（不依赖任何权限）
   promptLocation() {
-    if (this.lastLocationDenied) {
-      wx.showModal({
-        title: '需要位置权限',
-        content: '请在设置中允许使用位置信息，之后重新点「附近」。',
-        confirmText: '去设置',
-        success: (res) => {
-          if (res.confirm && typeof wx.openSetting === 'function') wx.openSetting({});
-        },
-      });
+    const useMapCenter = () => {
+      const point = { latitude: this.data.latitude, longitude: this.data.longitude };
+      this.showNearby(point, 'mapCenter');
+    };
+    if (typeof wx.showModal !== 'function') {
+      useMapCenter();
       return;
     }
-    wx.showToast({ title: '暂时定位不到，请稍后重试', icon: 'none' });
+    wx.showModal({
+      title: '没有获取到位置',
+      content: this.lastLocationDenied
+        ? '位置权限被拒绝了。可以点「去设置」重新允许，或把地图拖到你所在的位置后用地图中心排序。'
+        : '可以点「去设置」检查微信的位置权限，或把地图拖到你所在的位置后用地图中心排序。',
+      confirmText: '去设置',
+      cancelText: '用地图中心',
+      success: (res) => {
+        if (res.confirm) {
+          if (typeof wx.openSetting === 'function') wx.openSetting({});
+          return;
+        }
+        useMapCenter();
+      },
+      fail: useMapCenter,
+    });
   },
 
-  // 自动定位：地图组件自带定位（show-location + moveToLocation），不属于需要后台申请开通的
-  // 地理位置接口，只要用户同意授权即可。组件未生效（未授权/中心点没移动）时返回 null。
+  // 自动定位：地图组件自带定位（show-location + moveToLocation），
+  // 不属于需要后台申请开通的地理位置接口，只需用户同意位置授权。
+  //
+  // 注意：不要用 wx.authorize({scope:'scope.userLocation'}) —— 微信要求位置授权由
+  // 地理位置能力本身触发；该调用失败会被误判成"用户拒绝"，直接把用户送进设置页死路。
+  // 这里改为：打开地图定位点（由地图组件触发授权弹窗）→ 轮询授权结果 → 再读坐标。
   async tryAutoLocate() {
-    const authorized = await this.ensureLocationAuth();
-    if (!authorized) return null;
+    const state = await this.ensureLocationAuthorized();
+    if (state !== 'granted') {
+      this.lastLocationDenied = state === 'denied';
+      return null;
+    }
+    return this.readCurrentCenter();
+  },
+
+  // 已授权 → granted；明确拒绝 → denied；未决定 → 打开地图定位点触发微信授权弹窗并等待
+  async ensureLocationAuthorized({ timeoutMs = 8000 } = {}) {
+    const first = await this.readLocationAuth();
+    if (first === 'granted' || first === 'denied') return first;
+    // 未决定：打开定位点（地图组件会请求位置授权），同时尝试移动一次，双保险触发弹窗
+    await new Promise((resolve) => this.setData({ showMyDot: true }, resolve));
+    this.safeMoveToCurrent();
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const state = await this.readLocationAuth();
+      if (state === 'granted' || state === 'denied') return state;
+    }
+    return 'unknown';
+  },
+
+  readLocationAuth() {
+    return new Promise((resolve) => {
+      if (typeof wx.getSetting !== 'function') return resolve('granted');
+      wx.getSetting({
+        success: (res) => {
+          const state = res.authSetting ? res.authSetting['scope.userLocation'] : undefined;
+          if (state === true) return resolve('granted');
+          if (state === false) return resolve('denied');
+          resolve('unknown');
+        },
+        fail: () => resolve('unknown'),
+      });
+    });
+  },
+
+  safeMoveToCurrent() {
+    try {
+      const ctx = this.mapCtx || (this.mapCtx = wx.createMapContext('mainMap', this));
+      if (ctx && typeof ctx.moveToLocation === 'function') ctx.moveToLocation({});
+    } catch (err) {
+      // 忽略：下面读中心点时还会再判断
+    }
+  },
+
+  // 移动到当前位置后读地图中心点。已确认授权，因此不再用"是否移动过"来判定成败
+  // （用户本来就站在地图中心附近时，那种判定会误报失败）。
+  async readCurrentCenter() {
+    await new Promise((resolve) => this.setData({ showMyDot: true }, resolve));
     if (typeof wx.createMapContext !== 'function') return null;
     let ctx;
     try {
@@ -281,64 +355,30 @@ Page({
     } catch (err) {
       return null;
     }
-    if (!ctx || typeof ctx.moveToLocation !== 'function' || typeof ctx.getCenterLocation !== 'function') {
-      return null;
-    }
-    // moveToLocation 需要地图先打开定位点
-    await new Promise((resolve) => this.setData({ showMyDot: true }, resolve));
-    const before = { latitude: this.data.latitude, longitude: this.data.longitude };
+    if (!ctx || typeof ctx.getCenterLocation !== 'function') return null;
+    this.safeMoveToCurrent();
     return new Promise((resolve) => {
-      const done = (value) => resolve(value);
-      try {
-        ctx.moveToLocation({});
-      } catch (err) {
-        return done(null);
-      }
-      // 等地图动画结束再读中心点，此时中心点即当前位置
       setTimeout(() => {
-        ctx.getCenterLocation({
-          success: (center) => {
-            const latitude = Number(center.latitude);
-            const longitude = Number(center.longitude);
-            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return done(null);
-            const moved = haversineKm(before, { lat: latitude, lng: longitude }) > 0.2;
-            return done(moved ? { latitude, longitude } : null);
-          },
-          fail: () => done(null),
-        });
+        try {
+          ctx.getCenterLocation({
+            success: (center) => {
+              const latitude = Number(center.latitude);
+              const longitude = Number(center.longitude);
+              resolve(
+                Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null
+              );
+            },
+            fail: () => resolve(null),
+          });
+        } catch (err) {
+          resolve(null);
+        }
       }, 1200);
     });
   },
 
-  // 读取（必要时申请）地图定位所需的用户授权；明确拒绝过就不再弹
-  ensureLocationAuth() {
-    return new Promise((resolve) => {
-      if (typeof wx.getSetting !== 'function') return resolve(true);
-      wx.getSetting({
-        success: (res) => {
-          const state = res.authSetting ? res.authSetting['scope.userLocation'] : undefined;
-          if (state === true) return resolve(true);
-          if (state === false) {
-            this.lastLocationDenied = true; // 明确拒绝过：可以引导去设置页
-            return resolve(false);
-          }
-          if (typeof wx.authorize !== 'function') return resolve(true);
-          wx.authorize({
-            scope: 'scope.userLocation',
-            success: () => resolve(true),
-            fail: () => {
-              this.lastLocationDenied = true;
-              resolve(false);
-            },
-          });
-        },
-        fail: () => resolve(true),
-      });
-    });
-  },
-
   // 按当前位置算最近 5 个地点
-  showNearby(location) {
+  showNearby(location, source) {
     const nearest = this.data.places
       .filter((place) => Number.isFinite(Number(place.lng)) && Number.isFinite(Number(place.lat)))
       .map((place) => {
@@ -353,8 +393,13 @@ Page({
       latitude: location.latitude,
       nearbyPlaces: nearest,
       nearbyOpen: true,
+      nearbyScope:
+        source === 'mapCenter' ? '未获取到定位，按地图中心排序' : '按当前位置的直线距离排序',
     });
-    wx.showToast({ title: '已按当前位置排序', icon: 'none' });
+    wx.showToast({
+      title: source === 'mapCenter' ? '按地图中心排序' : '已按当前位置排序',
+      icon: 'none',
+    });
   },
 
   closeNearby() {
